@@ -2,10 +2,10 @@
 Pydantic schemas for Market Forecast API requests and responses.
 """
 
-from datetime import date as DateType
+from datetime import date as DateType, datetime
 from typing import List, Optional, Dict, Any
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
 
 class MarketObservationBase(BaseModel):
@@ -31,8 +31,8 @@ class MarketObservationCreate(MarketObservationBase):
 class MarketObservationResponse(MarketObservationBase):
     """Schema for market observation response."""
     id: int
-    created_at: DateType
-    updated_at: DateType
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -56,10 +56,14 @@ class MarketForecastResponse(BaseModel):
     commodity: str = Field(..., example="Paddy(Common)")
     market: Optional[str] = Field(None, example="Maddipadu APMC")
     state: Optional[str] = Field(None, example="Andhra Pradesh")
-    current_price: float = Field(..., gt=0, example=2800.0)
+    current_price: float = Field(..., ge=0, example=2800.0)
     forecast_horizon_days: int = Field(..., gt=0, example=7)
     forecast: List[ForecastPointResponse]
-    trend: str = Field(..., pattern="^(increasing|decreasing|stable)$", example="increasing")
+    trend: str = Field(
+        ...,
+        pattern="^(increasing|decreasing|stable|insufficient_data)$",
+        example="increasing"
+    )
     model: str = Field(..., example="ETS_add_none_no")
     metrics: Dict[str, float] = Field(
         ...,
@@ -108,15 +112,15 @@ class MarketTrendResponse(BaseModel):
     commodity: str = Field(..., example="Paddy(Common)")
     market: Optional[str] = Field(None, example="Maddipadu APMC")
     state: Optional[str] = Field(None, example="Andhra Pradesh")
-    trend: str = Field(..., pattern="^(increasing|decreasing|stable)$", example="increasing")
+    trend: str = Field(..., pattern="^(increasing|decreasing|stable|insufficient_data)$", example="increasing")
     recent_change_percent: float = Field(..., example=4.2)
     forecast_change_percent: float = Field(..., example=6.1)
     volatility: float = Field(..., example=3.5)
     signal_strength: float = Field(..., ge=0.0, le=1.0, example=0.8)
     data_points: int = Field(..., example=25)
     analysis_period_days: int = Field(..., example=30)
-    latest_price: float = Field(..., gt=0, example=2800.0)
-    latest_date: DateType = Field(..., example="2026-09-17")
+    latest_price: float = Field(..., ge=0, example=2800.0)
+    latest_date: Optional[DateType] = Field(None, example="2026-09-17")
 
 
 class MarketSignalsResponse(BaseModel):

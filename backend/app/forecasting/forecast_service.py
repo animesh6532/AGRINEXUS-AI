@@ -17,7 +17,11 @@ from .model import (
     BaseForecastModel,
     ForecastPoint,
     ForecastResult,
-    create_forecast_model
+    create_forecast_model,
+    NaiveForecastModel,
+    MovingAverageForecastModel,
+    ExponentialSmoothingForecastModel,
+    ARIMAForecastModel
 )
 
 
@@ -105,6 +109,24 @@ class ForecastService:
                 f"got {len(historical_data)}."
             )
 
+        # Forecasting needs genuinely distinct historical days. Many records
+        # sharing a single observation date cannot form a usable time series,
+        # so the minimum requirement is enforced on unique observation dates.
+        unique_dates = {
+            obs["observation_date"]
+            if isinstance(obs["observation_date"], date)
+            else date.fromisoformat(obs["observation_date"])
+            for obs in historical_data
+        }
+        if len(unique_dates) < settings.MIN_HISTORICAL_DAYS_REQUIRED:
+            raise ValueError(
+                "Insufficient historical data for forecasting. "
+                f"Need at least {settings.MIN_HISTORICAL_DAYS_REQUIRED} unique "
+                f"observation dates, got {len(unique_dates)} unique date(s) "
+                f"across {len(historical_data)} record(s) for the selected "
+                "commodity/location. Collect more daily market data first."
+            )
+
         # Prepare time-series data
         ts_data = self._prepare_time_series_data(historical_data)
 
@@ -186,7 +208,8 @@ class ForecastService:
             100  # Ensure we get reasonable amount of data
         )
 
-        observations = self.market_repo.get_observations_for_commodity(
+        # Get observations as model objects and convert to dictionaries
+        observation_models = self.market_repo.get_observations_for_commodity(
             commodity=commodity,
             start_date=None,  # Get all available data
             end_date=None,
@@ -195,6 +218,7 @@ class ForecastService:
             market=market,
             limit=limit
         )
+        observations = [obs.to_dict() for obs in observation_models]
 
         # Sort by date (oldest first)
         observations.sort(

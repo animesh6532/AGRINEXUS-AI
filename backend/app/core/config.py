@@ -3,10 +3,20 @@ Configuration module for the Market Forecast backend.
 Handles loading environment variables and application settings.
 """
 
+import os
+from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from typing import Optional
-import os
+
+
+# Determine the project root (where backend directory is located)
+# This file is at: <project-root>/backend/app/core/config.py
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+BACKEND_DIR = PROJECT_ROOT / "backend"
+
+# Load .env from backend directory (consistent location)
+ENV_FILE_PATH = BACKEND_DIR / ".env"
 
 
 class Settings(BaseSettings):
@@ -32,8 +42,8 @@ class Settings(BaseSettings):
     AGMARKNET_API_BASE_URL: str = "https://api.data.gov.in"
     DATA_GOV_IN_BASE_URL: str = "https://api.data.gov.in"
 
-    # Database Configuration
-    DATABASE_URL: str = "sqlite:///./backend/data/market/market_data.db"
+    # Database Configuration - will be overridden from .env
+    DATABASE_URL: str = ""
 
     # Caching Configuration
     CACHE_TTL_SECONDS: int = 300  # 5 minutes cache for market data
@@ -51,7 +61,7 @@ class Settings(BaseSettings):
         return v
 
     model_config = {
-        "env_file": ".env",
+        "env_file": str(ENV_FILE_PATH) if ENV_FILE_PATH.exists() else None,
         "env_file_encoding": "utf-8",
         "case_sensitive": True,
         "extra": "ignore"
@@ -60,3 +70,56 @@ class Settings(BaseSettings):
 
 # Global settings instance
 settings = Settings()
+
+
+def _resolve_database_url(url: str) -> str:
+    """Resolve database URL to absolute path based on backend directory."""
+    if not url or not url.startswith("sqlite:///"):
+        return url
+
+    # Extract the file path from sqlite:///path
+    relative_path = url[10:]  # Remove "sqlite:///" prefix
+
+    # If the path is already an absolute path, return as-is
+    if Path(relative_path).is_absolute():
+        return url
+
+    relative = Path(relative_path)
+
+    # Normalize the relative path: drop any leading "." components so that
+    # "./backend/..." and "backend/..." are detected the same way, regardless
+    # of how pathlib represents them on a given platform or version.
+    parts = [part for part in relative.parts if part != "."]
+
+    # Degenerate input (e.g. "sqlite:///.") - nothing to resolve.
+    if not parts:
+        return url
+
+    if parts[0] == "backend":
+        # Path written relative to the project root
+        # (e.g. sqlite:///./backend/data/market/market_data.db)
+        absolute_path = (PROJECT_ROOT / Path(*parts)).resolve()
+    else:
+        # Path written relative to the backend directory
+        # (e.g. sqlite:///./data/market/market_data.db)
+        absolute_path = (BACKEND_DIR / Path(*parts)).resolve()
+
+    return f"sqlite:///{absolute_path}"
+
+
+# Resolve the database URL to be absolute
+settings.DATABASE_URL = _resolve_database_url(settings.DATABASE_URL)
+
+
+# Ensure the market data directory exists
+def _ensure_market_data_dir():
+    """Ensure the market data directory exists."""
+    # Extract database path from DATABASE_URL
+    if settings.DATABASE_URL.startswith("sqlite:///"):
+        db_path = settings.DATABASE_URL[10:]  # Remove "sqlite:///" prefix
+        market_data_dir = Path(db_path).parent
+        market_data_dir.mkdir(parents=True, exist_ok=True)
+
+
+# Create directory on import
+_ensure_market_data_dir()

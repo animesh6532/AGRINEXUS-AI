@@ -4,15 +4,18 @@ Handles API requests to government data sources and data storage.
 """
 
 import asyncio
-from datetime import datetime
-from typing import List, Optional, Dict, Any
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, date
+from typing import List, Optional, Dict, Any, Tuple
 
-import httpx
 from dateutil.parser import parse
 
 from ..core.config import settings
 from ..core.logging import logger
-from ..database import connection, models, repository
+from ..database import connection, repository
 
 
 class MarketAPIClient:
@@ -47,6 +50,9 @@ class MarketAPIClient:
         """
         Fetch latest market data from data.gov.in API.
 
+        Uses Python urllib because httpx times out on the
+        data.gov.in API in the current Windows environment.
+
         Args:
             commodity: Filter by commodity name (optional)
             state: Filter by state name (optional)
@@ -75,54 +81,104 @@ class MarketAPIClient:
         params = {k: v for k, v in params.items() if v != ""}
 
         url = f"{self.base_url}/resource/{self.resource_id}"
+        query_string = urllib.parse.urlencode(params)
+        request_url = f"{url}?{query_string}"
 
         for attempt in range(self.max_retries):
             try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    response = await client.get(url, params=params)
-                    response.raise_for_status()
+                def make_request():
+                    request = urllib.request.Request(
+                        request_url,
+                        headers={
+                            "User-Agent": "AgriNexus-AI/1.0",
+                            "Accept": "application/json",
+                        },
+                        method="GET",
+                    )
 
-                    data = response.json()
+                    with urllib.request.urlopen(
+                        request,
+                        timeout=self.timeout
+                    ) as response:
+                        return response.read().decode("utf-8")
 
-                    if data.get("status") == "ok":
-                        records = data.get("records", [])
-                        logger.info(
-                            f"Fetched {len(records)} market records from API"
-                        )
-                        return self._transform_api_records(records)
-                    else:
-                        logger.error(
-                            f"API returned error status: {data.get('status')}"
-                        )
-                        return []
+                # Run blocking urllib request without blocking
+                # the FastAPI/async event loop.
+                response_text = await asyncio.to_thread(make_request)
 
-            except httpx.TimeoutException:
-                logger.warning(
-                    f"API request timeout (attempt {attempt + 1}/{self.max_retries})"
-                )
-                if attempt == self.max_retries - 1:
-                    logger.error("Max retries exceeded for API request")
+                data = json.loads(response_text)
+
+                if data.get("status") == "ok":
+                    records = data.get("records", [])
+
+                    logger.info(
+                        f"Fetched {len(records)} market records from API"
+                    )
+
+                    return self._transform_api_records(records)
+
+                else:
+                    logger.error(
+                        f"API returned error status: {data.get('status')}"
+                    )
                     return []
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
 
-            except httpx.HTTPStatusError as e:
+            except urllib.error.HTTPError as e:
                 logger.error(
-                    f"HTTP error fetching market data: {e.response.status_code}"
+                    f"HTTP error fetching market data: {e.code}"
                 )
-                if e.response.status_code == 401:
+
+                if e.code == 401:
                     logger.error("Invalid API key")
                     return []
-                elif e.response.status_code == 429:
+
+                if e.code == 429:
                     logger.warning("Rate limit exceeded")
+
                     if attempt < self.max_retries - 1:
                         await asyncio.sleep(2 ** attempt)
                         continue
+
+                return []
+
+            except urllib.error.URLError as e:
+                logger.warning(
+                    f"API connection error "
+                    f"(attempt {attempt + 1}/{self.max_retries}): {e}"
+                )
+
+                if attempt == self.max_retries - 1:
+                    logger.error("Max retries exceeded for API request")
+                    return []
+
+                await asyncio.sleep(2 ** attempt)
+
+            except TimeoutError:
+                logger.warning(
+                    f"API request timeout "
+                    f"(attempt {attempt + 1}/{self.max_retries})"
+                )
+
+                if attempt == self.max_retries - 1:
+                    logger.error("Max retries exceeded for API request")
+                    return []
+
+                await asyncio.sleep(2 ** attempt)
+
+            except json.JSONDecodeError as e:
+                logger.error(
+                    f"Invalid JSON response from API: {e}"
+                )
                 return []
 
             except Exception as e:
-                logger.error(f"Unexpected error fetching market data: {e}")
+                logger.error(
+                    f"Unexpected error fetching market data: {e}"
+                )
+
                 if attempt == self.max_retries - 1:
                     return []
+
                 await asyncio.sleep(2 ** attempt)
 
         return []

@@ -2,7 +2,7 @@
 Test API endpoints.
 """
 
-from starlette.testclient import TestClient
+from fastapi.testclient import TestClient
 from app.main import app
 
 # Create test client
@@ -11,7 +11,7 @@ test_client = TestClient(app)
 
 def test_root_endpoint():
     """Test root endpoint."""
-    response = test_test_client.get("/")
+    response = test_client.get("/")
     assert response.status_code == 200
     data = response.json()
     assert "message" in data

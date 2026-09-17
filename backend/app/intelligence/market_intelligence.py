@@ -3,7 +3,7 @@ Market intelligence layer for the Market Forecast backend.
 Derives actionable insights and signals from market data and forecasts.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import List, Optional, Dict, Any
 import logging
 
@@ -48,7 +48,7 @@ class MarketIntelligence:
             Dictionary containing trend analysis signals
         """
         end_date = date.today()
-        start_date = end_date - datetime.timedelta(days=lookback_days)
+        start_date = end_date - timedelta(days=lookback_days)
 
         # Get historical observations
         observations = self.market_service.get_historical_prices(
@@ -66,7 +66,8 @@ class MarketIntelligence:
                 "signal_strength": 0.0,
                 "recent_change_percent": 0.0,
                 "volatility": 0.0,
-                "data_points": len(observations)
+                "data_points": len(observations),
+                "analysis_period_days": lookback_days
             }
 
         # Extract prices and dates
@@ -210,7 +211,7 @@ class MarketIntelligence:
             "model_used": forecast_result.model_name
         }
 
-    def get_market_signals(
+    async def get_market_signals(
         self,
         commodity: str,
         state: Optional[str] = None,
@@ -254,10 +255,11 @@ class MarketIntelligence:
         )
 
         # Generate forecast
+        forecast_result = None
         try:
             from ..forecasting.forecast_service import ForecastService
             forecast_service = ForecastService(self.db)
-            forecast_result = forecast_service.generate_forecast(
+            forecast_result = await forecast_service.generate_forecast(
                 commodity=commodity,
                 horizon_days=forecast_horizon,
                 state=state,
@@ -265,21 +267,65 @@ class MarketIntelligence:
                 market=market,
                 model_type="ets"  # Default to ETS for intelligence layer
             )
+        except ValueError as e:
+            # Expected condition: not enough legitimate historical data.
+            # Do not fabricate a forecast; continue with the other signals.
+            logger.warning(f"Forecast skipped for market signals: {e}")
+            forecast_result = None
         except Exception as e:
             logger.error(f"Error generating forecast for market signals: {e}")
             # Create a minimal forecast result for error case
             forecast_result = None
 
-        # Analyze forecast outlook
+        # Analyze forecast outlook and build a response-ready forecast analysis
         if forecast_result:
-            forecast_analysis = self.analyze_forecast_outlook(forecast_result)
+            outlook = self.analyze_forecast_outlook(forecast_result)
+            forecast_points = [
+                {
+                    "date": point.date,
+                    "predicted_price": point.predicted_price,
+                    "confidence_lower": point.confidence_lower,
+                    "confidence_upper": point.confidence_upper,
+                }
+                for point in forecast_result.forecast
+            ]
+            forecast_model = forecast_result.model_name
+            forecast_metrics = forecast_result.metrics
         else:
-            forecast_analysis = {
-                "forecast_trend": "error",
+            outlook = {
+                "forecast_trend": "insufficient_data",
                 "forecast_change_percent": 0.0,
                 "forecast_confidence": "low",
-                "risk_level": "high"
+                "risk_level": "unknown",
             }
+            forecast_points = []
+            forecast_model = "ets"
+            forecast_metrics = {"mae": 0.0, "rmse": 0.0, "mape": 0.0}
+
+        # Map non-standard outlook trends to a response-valid trend value
+        outlook_trend = outlook.get("forecast_trend", "stable")
+        response_trend = (
+            outlook_trend
+            if outlook_trend in ("increasing", "decreasing", "stable")
+            else "stable"
+        )
+
+        forecast_analysis = {
+            "commodity": commodity,
+            "market": market,
+            "state": state,
+            "current_price": latest_price_data["modal_price"] if latest_price_data else 0.0,
+            "forecast_horizon_days": forecast_horizon,
+            "forecast": forecast_points,
+            "trend": response_trend,
+            "model": forecast_model,
+            "metrics": forecast_metrics,
+            # Additional outlook details consumed by signal generation
+            "forecast_trend": outlook_trend,
+            "forecast_change_percent": outlook.get("forecast_change_percent", 0.0),
+            "forecast_confidence": outlook.get("forecast_confidence", "low"),
+            "risk_level": outlook.get("risk_level", "unknown"),
+        }
 
         # Combine signals into actionable insights
         signals = self._generate_actionable_signals(

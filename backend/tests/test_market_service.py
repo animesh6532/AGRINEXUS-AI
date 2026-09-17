@@ -1,8 +1,14 @@
 """
 Test market service with mocked API calls.
+
+The MarketAPIClient uses urllib (not httpx) for data.gov.in requests,
+so these tests mock urllib.request.urlopen.
 """
 
-from unittest.mock import AsyncMock, patch
+import asyncio
+import json
+import urllib.error
+from unittest.mock import MagicMock, patch
 from datetime import date
 import pytest
 
@@ -67,13 +73,12 @@ class TestMarketAPIClient:
         client.api_key = "test_key"  # Set a test key
         return client
 
-    @patch('httpx.AsyncClient.get')
-    async def test_fetch_latest_market_data_success(self, mock_get, api_client):
-        """Test successful API data fetch."""
-        # Mock response
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+    @patch('urllib.request.urlopen')
+    def test_fetch_latest_market_data_success(self, mock_urlopen, api_client):
+        """Test successful API data fetch via the urllib client."""
+        # Mock response (urlopen is used as a context manager)
+        mock_response = MagicMock()
+        mock_response.read.return_value.decode.return_value = json.dumps({
             "status": "ok",
             "records": [
                 {
@@ -89,14 +94,14 @@ class TestMarketAPIClient:
                     "modal_price": 2800
                 }
             ]
-        }
-        mock_get.return_value = mock_response
+        })
+        mock_urlopen.return_value.__enter__.return_value = mock_response
 
         # Call the method
-        records = await api_client.fetch_latest_market_data(
+        records = asyncio.run(api_client.fetch_latest_market_data(
             commodity="Paddy(Common)",
             limit=10
-        )
+        ))
 
         # Verify
         assert len(records) == 1
@@ -106,38 +111,43 @@ class TestMarketAPIClient:
         assert record["modal_price"] == 2800.0
         assert record["observation_date"] == date(2026, 9, 17)
 
-    @patch('httpx.AsyncClient.get')
-    async def test_fetch_latest_market_data_api_error(self, mock_get, api_client):
+    @patch('urllib.request.urlopen')
+    def test_fetch_latest_market_data_api_error(self, mock_urlopen, api_client):
         """Test API error handling."""
         # Mock response with error status
-        mock_response = AsyncMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
+        mock_response = MagicMock()
+        mock_response.read.return_value.decode.return_value = json.dumps({
             "status": "error",
             "error": "Invalid API key"
-        }
-        mock_get.return_value = mock_response
+        })
+        mock_urlopen.return_value.__enter__.return_value = mock_response
 
         # Call the method
-        records = await api_client.fetch_latest_market_data(
+        records = asyncio.run(api_client.fetch_latest_market_data(
             commodity="Paddy(Common)",
             limit=10
-        )
+        ))
 
         # Verify
         assert len(records) == 0  # Should return empty list on error
 
-    @patch('httpx.AsyncClient.get')
-    async def test_fetch_latest_market_data_http_error(self, mock_get, api_client):
-        """Test HTTP error handling."""
-        # Mock HTTP error
-        mock_get.side_effect = Exception("HTTP 401 Unauthorized")
+    @patch('urllib.request.urlopen')
+    def test_fetch_latest_market_data_http_error(self, mock_urlopen, api_client):
+        """Test HTTP error handling (e.g. invalid API key)."""
+        # Mock HTTP 401 error raised by urllib
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "https://api.data.gov.in/resource/test",
+            401,
+            "Unauthorized",
+            None,
+            None
+        )
 
         # Call the method
-        records = await api_client.fetch_latest_market_data(
+        records = asyncio.run(api_client.fetch_latest_market_data(
             commodity="Paddy(Common)",
             limit=10
-        )
+        ))
 
         # Verify
         assert len(records) == 0  # Should return empty list on error

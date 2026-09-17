@@ -129,3 +129,57 @@ def test_create_forecast_model_factory():
     # Test default fallback
     unknown_model = create_forecast_model("unknown")
     assert isinstance(unknown_model, NaiveForecastModel)  # Should default to naive
+
+
+def test_generate_forecast_rejects_single_unique_date():
+    """Forecasting must refuse to run when records share one observation date.
+
+    Many records on a single day cannot form a historical time series, so the
+    service must raise a controlled ValueError (translated to HTTP 400 by the
+    API layer) instead of producing a meaningless forecast.
+    """
+    import asyncio
+    from datetime import date
+
+    import pytest
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.database import models
+    from app.forecasting.forecast_service import ForecastService
+
+    engine = create_engine("sqlite:///:memory:")
+    models.Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+
+    # 40 records for the same series, but ALL on a single observation date
+    for i in range(40):
+        db.add(models.MarketObservation(
+            state="Maharashtra",
+            district="Ahilyanagar",
+            market="Rahuri(Vambori)",
+            commodity="Maize",
+            variety=None,
+            grade=None,
+            min_price=2400.0 + i,
+            max_price=2450.0 + i,
+            modal_price=2425.0 + i,
+            observation_date=date.today(),
+        ))
+    db.commit()
+
+    service = ForecastService(db)
+
+    with pytest.raises(ValueError) as exc_info:
+        asyncio.run(service.generate_forecast(
+            commodity="Maize",
+            horizon_days=7,
+            state="Maharashtra",
+            district="Ahilyanagar",
+            market="Rahuri(Vambori)",
+            model_type="ets",
+            use_cache=False,
+        ))
+
+    assert "unique observation dates" in str(exc_info.value)
+    db.close()

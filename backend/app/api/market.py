@@ -327,7 +327,7 @@ async def get_market_signals(
     )
 
     try:
-        signals_data = intel_svc.get_market_signals(
+        signals_data = await intel_svc.get_market_signals(
             commodity=commodity,
             state=state,
             district=district,
@@ -343,7 +343,22 @@ async def get_market_signals(
             district=signals_data["district"],
             timestamp=signals_data["timestamp"],
             latest_price=schemas.MarketObservationResponse(**signals_data["latest_price"]) if signals_data["latest_price"] else None,
-            trend_analysis=schemas.MarketTrendResponse(**signals_data["trend_analysis"]),
+            trend_analysis=schemas.MarketTrendResponse(
+                commodity=signals_data["commodity"],
+                market=signals_data["market"],
+                state=signals_data["state"],
+                trend=signals_data["trend_analysis"]["trend"],
+                recent_change_percent=signals_data["trend_analysis"]["recent_change_percent"],
+                forecast_change_percent=signals_data["forecast_analysis"].get(
+                    "forecast_change_percent", 0.0
+                ),
+                volatility=signals_data["trend_analysis"]["volatility"],
+                signal_strength=signals_data["trend_analysis"]["signal_strength"],
+                data_points=signals_data["trend_analysis"]["data_points"],
+                analysis_period_days=signals_data["trend_analysis"]["analysis_period_days"],
+                latest_price=signals_data["latest_price"]["modal_price"] if signals_data["latest_price"] else 0.0,
+                latest_date=date.fromisoformat(signals_data["latest_price"]["observation_date"]) if signals_data["latest_price"] and signals_data["latest_price"].get("observation_date") else date.today()
+            ),
             forecast_analysis=schemas.MarketForecastResponse(**signals_data["forecast_analysis"]),
             actionable_signals=signals_data["actionable_signals"],
             forecast_horizon_days=signals_data["forecast_horizon_days"]
