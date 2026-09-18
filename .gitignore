@@ -71,3 +71,6 @@ backend/.env
 backend/data/market/*.db
 backend/*.log
 backend/.pytest_cache/
+Assests/Video/
+Assests/Images/
+Assests/CSV/
