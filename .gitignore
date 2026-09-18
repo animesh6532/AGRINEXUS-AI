@@ -55,3 +55,19 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# AgriNexus-AI backend local files
+backend/.env
+backend/data/market/*.db
+backend/*.log
+backend/.pytest_cache/
