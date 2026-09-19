@@ -34,15 +34,24 @@ backend/
 │   ├── main.py              # FastAPI application entry point
 │   ├── api/
 │   │   └── market.py        # Market forecast API endpoints
+│   │   ├── weather.py       # Weather intelligence API endpoints
+│   │   └── crop_calendar.py # Crop calendar API endpoints
 │   ├── services/
-│   │   └── market_service.py# Market data service and API client
+│   │   ├── market_service.py# Market data service and API client
+│   │   ├── weather_service.py# Weather data service (Open-Meteo)
+│   │   ├── crop_calendar_service.py# Crop calendar data service
+│   │   └── crop_calendar_reference_data.py# Bundled reference dataset
 │   ├── forecasting/
 │   │   ├─ forecast_service.py# Forecasting service
 │   │   └─ model.py          # Forecasting models
 │   ├── intelligence/
-│   │   └─ market_intelligence.py# Market intelligence layer
+│   │   ├── market_intelligence.py# Market intelligence layer
+│   │   ├── weather_intelligence.py# Weather intelligence layer
+│   │   └── crop_calendar_intelligence.py# Crop calendar intelligence
 │   ├── schemas/
-│   │   └─ market.py         # Pydantic schemas for API
+│   │   ├── market.py         # Pydantic schemas for API
+│   │   ├── weather.py        # Pydantic schemas for API
+│   │   └── crop_calendar.py  # Pydantic schemas for API
 │   ├── database/
 │   │   ├─ connection.py     # Database connection
 │   │   ├─ models.py         # SQLAlchemy models
@@ -245,6 +254,138 @@ Primary data source: [data.gov.in AGMARKNET resource](https://data.gov.in/catalo
 - Forecasting accuracy depends on data quality and market stability
 - Models are simplified for university project scope
 - Real-world deployment would require additional robustness and monitoring
+
+## Crop Calendar Module
+
+The Crop Calendar backend provides agricultural calendar information for
+supported crops: sowing windows, crop duration, growth stages with
+durations and reference activities, derived stage schedules from a
+sowing date, the current growth stage, an approximate harvest window and
+upcoming activities.
+
+### Data Source and Provenance
+
+- **No external crop-calendar API is configured or verified in this
+  project.** By default the module serves a small, generalised,
+  **non-authoritative reference dataset** bundled at
+  `app/services/crop_calendar_reference_data.py`
+  (India-generic; crops: rice, wheat, maize, cotton).
+- Every response built from it is explicitly labelled with
+  `is_reference_data: true`, `data_source: "reference_dataset"` and
+  `region_scope: "india_generic"`. **Static reference data is never
+  presented as an authoritative or real-time prediction.**
+- A verified external provider can be plugged in through the optional
+  client (`ExternalCropCalendarClient`) without changing the API,
+  schema, or intelligence layers.
+
+### API Endpoints
+
+All Crop Calendar endpoints are prefixed with `/api/crop-calendar`.
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/crop-calendar` | Crop catalogue (crops, aliases, seasons, durations) |
+| `GET /api/crop-calendar/health` | Module health + data-source configuration status |
+| `GET /api/crop-calendar/{crop}` | Static/reference calendar for a crop and season |
+| `GET /api/crop-calendar/{crop}/schedule` | Stage schedule derived from a sowing date |
+
+### Example Requests
+
+```bash
+# Crop catalogue
+curl "http://localhost:8000/api/crop-calendar"
+
+# Static calendar (rice, kharif)
+curl "http://localhost:8000/api/crop-calendar/rice?season=kharif&location=West%20Bengal"
+
+# Derived schedule from a sowing date
+curl "http://localhost:8000/api/crop-calendar/rice/schedule?sowing_date=2026-06-15&as_of_date=2026-07-01"
+```
+
+### Parameters
+
+- **Path**: `crop` - crop name or common alias (e.g. `rice`, `paddy`),
+  case-insensitive.
+- `season` (optional) - `kharif`, `rabi` or `zaid`. On the static
+  endpoint it defaults to the crop's primary season; on the schedule
+  endpoint it is inferred from the crop's sowing windows and then from
+  the sowing month.
+- `sowing_date` (required on `/schedule`) - ISO date
+  (`YYYY-MM-DD`); malformed or impossible dates return `422`.
+- `as_of_date` (optional on `/schedule`) - reference date for
+  current-stage determination; defaults to today (server date).
+- `location` (optional) - informational label echoed in the response.
+  The active data source is region-general, so location is NOT used to
+  select or validate data.
+
+### Response Structure (schedule endpoint, abridged)
+
+```json
+{
+  "crop": "rice",
+  "season": "kharif",
+  "season_source": "inferred_from_sowing_window",
+  "sowing_window": {"start": "06-01", "end": "07-15"},
+  "crop_duration_days": 135,
+  "growth_stages": [{"stage": "tillering", "duration_days": 30, "activities": ["..."]}],
+  "sowing_date": "2026-06-15",
+  "as_of_date": "2026-07-01",
+  "scheduled_growth_stages": [
+    {"stage": "nursery_sowing", "start_date": "2026-06-15", "end_date": "2026-07-09",
+     "duration_days": 25, "activities": ["..."], "is_current": true}
+  ],
+  "current_stage": "nursery_sowing",
+  "current_stage_progress_percent": 68.0,
+  "next_stage": "transplanting",
+  "harvest_window": {"start_date": "2026-10-17", "end_date": "2026-11-06"},
+  "upcoming_activities": [{"stage": "nursery_sowing", "activities": ["..."]}],
+  "sowing_window_compliant": true,
+  "warnings": [],
+  "data_source": "reference_dataset",
+  "is_reference_data": true,
+  "data_timestamp": "2026-09-19T10:30:00+00:00"
+}
+```
+
+### Error Handling
+
+| Status | Meaning |
+| --- | --- |
+| 400 | Invalid parameters (unsupported season for the crop, invalid season name, over-long location) |
+| 404 | Unsupported crop (see the catalogue for supported crops) |
+| 422 | Request validation failures (missing `sowing_date`, malformed dates) |
+| 500 | Unexpected internal errors (no stack trace exposed) |
+| 502 | External provider failure (only possible when a provider is configured) |
+
+### Environment Variables
+
+```env
+# Optional external crop-calendar provider (NO verified provider exists
+# in this project; the bundled reference dataset is used by default).
+# Set these only after the team verifies a real provider.
+CROP_CALENDAR_API_BASE_URL=
+CROP_CALENDAR_API_KEY=
+```
+
+- The API key is **backend-only**: sent as an `X-API-Key` header, never
+  logged, never included in URLs, and never returned by any endpoint
+  (health reports only a boolean `external_api_key_configured`).
+- When `CROP_CALENDAR_API_BASE_URL` is set, `CROP_CALENDAR_API_KEY`
+  becomes required and the external provider replaces the reference
+  dataset as the active source.
+
+### Limitations
+
+- The reference dataset is approximate, generalised (India-generic)
+  data for demonstration/testing - NOT authoritative agronomy, NOT
+  variety-, soil-, or weather-specific.
+- Stage dates are deterministic date arithmetic from the supplied
+  sowing date; they are not weather-adjusted predictions (weather-aware
+  adjustments are intentionally out of scope for now).
+- Location is informational only; region-specific calendars require a
+  verified external provider.
+- The catalogue reflects the bundled dataset even when an external
+  provider is configured.
 
 ## Contributing
 

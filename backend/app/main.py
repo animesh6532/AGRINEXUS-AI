@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .core import dependencies, config, logging
-from .api import market, weather
+from .api import crop_calendar, market, weather
 from .database import connection
 
 
@@ -18,8 +18,9 @@ logger = logging.setup_logging()
 app = FastAPI(
     title=config.settings.PROJECT_NAME,
     description=(
-        "AgriNexus-AI backend: Market Forecast and Weather Intelligence "
-        "(external API integration layer, university project)"
+        "AgriNexus-AI backend: Market Forecast, Weather Intelligence, "
+        "and Crop Calendar (external API integration layer, university "
+        "project)"
     ),
     version=config.settings.VERSION,
     docs_url="/docs",
@@ -40,6 +41,7 @@ app.add_middleware(
 # Include API routers
 app.include_router(market.router)
 app.include_router(weather.router)
+app.include_router(crop_calendar.router)
 
 
 # Startup event
