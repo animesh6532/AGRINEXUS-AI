@@ -122,7 +122,8 @@ class MarketTrendResponse(BaseModel):
     data_points: int = Field(..., example=25)
     analysis_period_days: int = Field(..., example=30)
     latest_price: float = Field(..., ge=0, example=2800.0)
-    latest_date: Optional[DateType] = Field(None, example="2026-09-17")
+    latest_date: Optional[date] = Field(None, example="2026-09-17")
+
 
 
 class MarketSignalsResponse(BaseModel):
