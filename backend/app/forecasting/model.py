@@ -12,10 +12,19 @@ import logging
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.exponential_smoothing.ets import ETSModel
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
-from statsmodels.tsa.seasonal import seasonal_decompose
+try:
+    from statsmodels.tsa.arima.model import ARIMA
+    from statsmodels.tsa.exponential_smoothing.ets import ETSModel
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+    from statsmodels.tsa.seasonal import seasonal_decompose
+    HAS_STATSMODELS = True
+except ImportError:
+    ARIMA = None
+    ETSModel = None
+    ExponentialSmoothing = None
+    seasonal_decompose = None
+    HAS_STATSMODELS = False
+
 
 from ..core.logging import logger
 

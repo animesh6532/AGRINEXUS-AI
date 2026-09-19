@@ -2,7 +2,7 @@
 Pydantic schemas for Market Forecast API requests and responses.
 """
 
-from datetime import date as DateType, datetime
+from datetime import date, datetime
 from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
@@ -19,7 +19,8 @@ class MarketObservationBase(BaseModel):
     min_price: float = Field(..., gt=0, example=2800.0)
     max_price: float = Field(..., gt=0, example=2800.0)
     modal_price: float = Field(..., gt=0, example=2800.0)
-    observation_date: DateType = Field(..., example="2026-09-17")
+    observation_date: date = Field(..., example="2026-09-17")
+
     source: str = Field(default="data.gov.in", example="data.gov.in")
 
 
@@ -40,7 +41,8 @@ class MarketObservationResponse(MarketObservationBase):
 
 class ForecastPointBase(BaseModel):
     """Schema for a single forecast point."""
-    date: DateType = Field(..., example="2026-09-24")
+    date: date = Field(..., example="2026-09-24")
+
     predicted_price: float = Field(..., gt=0, example=2850.0)
     confidence_lower: Optional[float] = Field(None, example=2800.0)
     confidence_upper: Optional[float] = Field(None, example=2900.0)
