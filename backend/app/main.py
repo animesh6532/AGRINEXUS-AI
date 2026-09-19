@@ -1,6 +1,6 @@
 """
 Main FastAPI application for AgriNexus-AI Master Backend.
-Integrates Market Intelligence and Frozen ML Model Services with Live OpenCV Computer Vision.
+Integrates Market Intelligence, Weather, Crop Calendar, and Frozen ML Model Services with Live OpenCV Computer Vision.
 """
 
 from fastapi import FastAPI, Request, status
@@ -124,4 +124,4 @@ async def health_check():
         "service": "agrinexus-ai-master-backend",
         "version": config.settings.VERSION,
         "models": m_health["models"]
-    }
+    }
