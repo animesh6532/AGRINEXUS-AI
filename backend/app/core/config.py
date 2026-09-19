@@ -56,7 +56,8 @@ class Settings(BaseSettings):
     DATA_GOV_IN_BASE_URL: str = "https://api.data.gov.in"
 
     # Database Configuration - will be overridden from .env
-    DATABASE_URL: str = ""
+    DATABASE_URL: str = "sqlite:///./data/market/market_data.db"
+
 
     # Caching Configuration
     CACHE_TTL_SECONDS: int = 300  # 5 minutes cache for market data
