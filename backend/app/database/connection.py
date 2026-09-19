@@ -56,7 +56,7 @@ def create_tables():
         raise
 
 
-# Optional: Enable foreign key constraints for SQLite
+# Enable foreign key constraints for SQLite
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     """Enable foreign key constraints for SQLite."""
@@ -64,3 +64,10 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+
+# Ensure tables exist on import
+try:
+    create_tables()
+except Exception as _e:
+    pass
