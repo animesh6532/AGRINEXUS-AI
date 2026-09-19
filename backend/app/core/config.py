@@ -55,6 +55,47 @@ class Settings(BaseSettings):
     AGMARKNET_API_BASE_URL: str = "https://api.data.gov.in"
     DATA_GOV_IN_BASE_URL: str = "https://api.data.gov.in"
 
+    # Crop Calendar Configuration (external provider: Spora)
+    # Official provider documentation (https://spora.engineer/docs):
+    # - Base URL: https://api.spora.engineer
+    # - Auth: "X-Api-Key" request header (key alone is sufficient; no
+    #   username/password). Keys look like "spk_live_..." and are issued
+    #   at https://spora.engineer/request
+    # - Calendar endpoint: GET /harvest/{location} (lowercase country
+    #   slug, e.g. "italy", "france", "kenya", "india")
+    # When SPORA_API_KEY is unset, the Crop Calendar module serves the
+    # bundled reference dataset. When set, the module fetches calendar
+    # data from the Spora /harvest endpoint. The key is backend-only:
+    # it is never logged, never returned in responses, and never stored
+    # in code.
+    SPORA_API_BASE_URL: str = Field(
+        default="https://api.spora.engineer",
+        description=(
+            "Base URL of the Spora crop-calendar provider (official "
+            "documented default; override only for testing)."
+        ),
+    )
+    SPORA_API_KEY: Optional[str] = Field(
+        default=None,
+        description=(
+            "API key for the Spora crop-calendar provider "
+            "(backend-only; never exposed in responses or logs)."
+        ),
+    )
+    # Safe fallback behaviour: when the external provider is configured
+    # but unreachable/failing, the Crop Calendar module serves the
+    # bundled reference dataset instead of failing the request, and
+    # labels the response with fallback_used/fallback_reason. No
+    # fabricated external data is ever returned.
+    CROP_CALENDAR_FALLBACK_TO_REFERENCE_DATA: bool = Field(
+        default=True,
+        description=(
+            "Fall back to the bundled reference dataset when the "
+            "external crop-calendar provider is unavailable "
+            "(default: true)."
+        ),
+    )
+
     # Database Configuration - will be overridden from .env
     DATABASE_URL: str = ""
 
