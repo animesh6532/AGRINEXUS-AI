@@ -64,6 +64,9 @@ htmlcov/
 
 # Logs
 *.log
+
+
+
 logs/
 
 # AgriNexus-AI backend local files
