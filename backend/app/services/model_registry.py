@@ -93,9 +93,9 @@ class ModelRegistry:
         if settings.MODEL_DIR:
             candidate_dirs.append(Path(settings.MODEL_DIR))
 
-        # Check Notebook/models first, then root models/
-        candidate_dirs.append(PROJECT_ROOT / "Notebook" / "models")
+        # Check root models/ first, then Notebook/models/
         candidate_dirs.append(PROJECT_ROOT / "models")
+        candidate_dirs.append(PROJECT_ROOT / "Notebook" / "models")
         candidate_dirs.append(PROJECT_ROOT / "backend" / "models")
 
         for d in candidate_dirs:
@@ -228,7 +228,7 @@ class ModelRegistry:
             meta.last_error = str(e)
             logger.error(f"Failed loading disease model: {e}")
 
-    def predict_disease(self, image_bytes: bytes) -> Dict[str, Any]:
+    def predict_disease(self, image_bytes: bytes, include_gradcam: bool = False) -> Dict[str, Any]:
         if self.models_meta["disease"].status != "READY":
             raise RuntimeError("Disease Detection model is UNAVAILABLE.")
 
@@ -255,10 +255,10 @@ class ModelRegistry:
             for i in top_k_indices
         ]
 
-        # 4. Optional Grad-CAM Heatmap
+        # 4. Optional Grad-CAM Heatmap (Only generated when explicitly requested)
         gradcam_b64 = None
         gradcam_avail = False
-        if self.disease_gradcam is not None:
+        if include_gradcam and self.disease_gradcam is not None:
             gradcam_b64 = self.disease_gradcam.generate_heatmap_base64(
                 input_tensor=tensor,
                 pil_image=pil_img,
@@ -274,6 +274,7 @@ class ModelRegistry:
             "gradcam_available": gradcam_avail,
             "gradcam_heatmap": gradcam_b64
         }
+
 
     # ------------------------------------------------------------------
     # 3. FERTILIZER RECOMMENDATION
@@ -407,7 +408,8 @@ class ModelRegistry:
             "wilting_point": thresholds["wilting_point"],
             "critical_threshold": crit_thresh,
             "irrigation_needed": need_irrigation,
-            "status_message": msg
+            "status_message": msg,
+            "decision_note": "Threshold status evaluates ML predicted 3-hour SWC against critical threshold. Note that Persistence Baseline (SWC_t+3h = SWC_t) is the primary benchmark reference."
         }
 
         return {
@@ -415,6 +417,7 @@ class ModelRegistry:
             "persistence_swc_3h": round(curr_swc, 4),
             "agronomic_status": agronomic_status
         }
+
 
     # ------------------------------------------------------------------
     # 5. PEST PREDICTION (Visual + Environmental)

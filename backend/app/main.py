@@ -3,13 +3,14 @@ Main FastAPI application for AgriNexus-AI Master Backend.
 Integrates Market Intelligence, Weather, Crop Calendar, and Frozen ML Model Services with Live OpenCV Computer Vision.
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from .core import dependencies, config, logging
-from .api import market
+from .api import market, weather, crop_calendar
 from .api.v1.router import api_v1_router
 from .services.model_registry import ModelRegistry
 from .database import connection
@@ -18,35 +19,10 @@ from .database import connection
 # Initialize logging
 logger = logging.setup_logging()
 
-# Create FastAPI application
-app = FastAPI(
-    title=config.settings.PROJECT_NAME,
-    description="AgriNexus-AI Master Backend integrating 7 Frozen ML models, Live OpenCV Computer Vision, and Market Intelligence.",
-    version=config.settings.VERSION,
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
-)
 
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# Include API routers
-app.include_router(market.router)
-app.include_router(api_v1_router)
-
-
-# Startup event
-@app.on_event("startup")
-async def startup_event():
-    """Application startup event handler."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI application lifespan context manager for deterministic startup and shutdown."""
     logger.info("Starting AgriNexus-AI Master Backend...")
 
     # 1. Initialize Database Tables
@@ -63,12 +39,37 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Critical error during Model Registry initialization: {e}")
 
+    yield
 
-# Shutdown event
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Application shutdown event handler."""
     logger.info("Shutting down AgriNexus-AI Master Backend")
+
+
+# Create FastAPI application
+app = FastAPI(
+    title=config.settings.PROJECT_NAME,
+    description="AgriNexus-AI Master Backend integrating 7 Frozen ML models, Live OpenCV Computer Vision, Market Intelligence, Weather Intelligence, and Crop Calendar.",
+    version=config.settings.VERSION,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    lifespan=lifespan
+)
+
+# Configure CORS using configurable origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Include ALL API routers
+app.include_router(market.router)
+app.include_router(weather.router)
+app.include_router(crop_calendar.router)
+app.include_router(api_v1_router)
 
 
 # Root endpoint
@@ -76,7 +77,7 @@ async def shutdown_event():
 async def root():
     """Root endpoint with API information."""
     return {
-        "message": "Welcome to AgriNexus-AI Master Backend",
+        "message": "Welcome to AgriNexus-AI Market Forecast Backend",
         "version": config.settings.VERSION,
         "docs": "/docs",
         "health": "/health",
@@ -120,8 +121,9 @@ async def health_check():
     m_health = registry.get_health_status()
 
     return {
-        "status": m_health["status"],
-        "service": "agrinexus-ai-master-backend",
+        "status": "healthy",
+        "service": "agrinexus-market-forecast",
         "version": config.settings.VERSION,
         "models": m_health["models"]
     }
+

@@ -24,17 +24,20 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # API Configuration
-    API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "AgriNexus-AI Master Backend"
+    API_V1_STR: str = "/api"
+    PROJECT_NAME: str = "AgriNexus-AI Market Forecast"
     VERSION: str = "1.0.0"
+
 
     # Server Configuration
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
+    CORS_ORIGINS: list = ["*"]
 
-    # Model Artifact Directories (Checks Notebook/models first, falls back to models/)
+    # Model Artifact Directories (Checks models/ first, falls back to Notebook/models/)
     MODEL_DIR: Optional[str] = None
+
 
     # OpenCV / Computer Vision Quality Gates
     MAX_UPLOAD_SIZE_MB: int = 10
