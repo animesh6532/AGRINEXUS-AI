@@ -2,7 +2,8 @@
 Pydantic schemas for Market Forecast API requests and responses.
 """
 
-from datetime import date, datetime
+from datetime import date as dt_date, datetime
+
 from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field
@@ -19,7 +20,7 @@ class MarketObservationBase(BaseModel):
     min_price: float = Field(..., gt=0, example=2800.0)
     max_price: float = Field(..., gt=0, example=2800.0)
     modal_price: float = Field(..., gt=0, example=2800.0)
-    observation_date: date = Field(..., example="2026-09-17")
+    observation_date: dt_date = Field(..., example="2026-09-17")
 
     source: str = Field(default="data.gov.in", example="data.gov.in")
 
@@ -41,7 +42,7 @@ class MarketObservationResponse(MarketObservationBase):
 
 class ForecastPointBase(BaseModel):
     """Schema for a single forecast point."""
-    date: date = Field(..., example="2026-09-24")
+    date: dt_date = Field(..., example="2026-09-24")
 
     predicted_price: float = Field(..., gt=0, example=2850.0)
     confidence_lower: Optional[float] = Field(None, example=2800.0)
@@ -122,7 +123,7 @@ class MarketTrendResponse(BaseModel):
     data_points: int = Field(..., example=25)
     analysis_period_days: int = Field(..., example=30)
     latest_price: float = Field(..., ge=0, example=2800.0)
-    latest_date: Optional[date] = Field(None, example="2026-09-17")
+    latest_date: Optional[dt_date] = Field(None, example="2026-09-17")
 
 
 
@@ -174,8 +175,8 @@ class MarketDataRequest(BaseModel):
     state: Optional[str] = Field(None, example="Andhra Pradesh")
     district: Optional[str] = Field(None, example="Prakasam")
     market: Optional[str] = Field(None, example="Maddipadu APMC")
-    start_date: Optional[date] = Field(None, example="2026-09-01")
-    end_date: Optional[date] = Field(None, example="2026-09-17")
+    start_date: Optional[dt_date] = Field(None, example="2026-09-01")
+    end_date: Optional[dt_date] = Field(None, example="2026-09-17")
     limit: int = Field(default=100, ge=1, le=1000)
 
 

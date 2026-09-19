@@ -2,7 +2,8 @@
 Pydantic schemas for Backend & Model Health APIs.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -11,7 +12,8 @@ class ModelHealthStatus(BaseModel):
     task: str
     artifact_path: str
     framework: str
-    last_error: str = None
+    last_error: Optional[str] = None
+
 
 
 class ModelsHealthResponse(BaseModel):
