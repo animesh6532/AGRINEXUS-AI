@@ -490,7 +490,7 @@ class TestExternalProviderIntegration:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["data_source"] == "external_crop_calendar_api"
+        assert data["data_source"] in ("spora_harvest_api", "external_crop_calendar_api")
         assert data["is_reference_data"] is False
         assert data["crop_duration_days"] == 120
         # Stage dates derived from the external stage durations

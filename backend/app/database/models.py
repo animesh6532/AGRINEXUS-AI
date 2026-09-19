@@ -1,5 +1,5 @@
 """
-Database models for the Market Forecast backend.
+Database models for the AgriNexus-AI backend.
 Defines SQLAlchemy models for storing agricultural market data.
 """
 

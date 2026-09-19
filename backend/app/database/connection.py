@@ -1,5 +1,5 @@
 """
-Database connection and session management for the Market Forecast backend.
+Database connection and session management for the AgriNexus-AI backend.
 """
 
 from sqlalchemy import create_engine, event

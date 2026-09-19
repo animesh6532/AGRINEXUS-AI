@@ -77,7 +77,7 @@ app.include_router(api_v1_router)
 async def root():
     """Root endpoint with API information."""
     return {
-        "message": "Welcome to AgriNexus-AI Market Forecast Backend",
+        "message": "Welcome to AgriNexus-AI",
         "version": config.settings.VERSION,
         "docs": "/docs",
         "health": "/health",
@@ -122,7 +122,7 @@ async def health_check():
 
     return {
         "status": "healthy",
-        "service": "agrinexus-market-forecast",
+        "service": "agrinexus-ai",
         "version": config.settings.VERSION,
         "models": m_health["models"]
     }

@@ -1,5 +1,5 @@
 """
-Configuration module for the Market Forecast backend.
+Configuration module for the AgriNexus-AI backend.
 Handles loading environment variables and application settings.
 """
 
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # API Configuration
     API_V1_STR: str = "/api"
-    PROJECT_NAME: str = "AgriNexus-AI Market Forecast"
+    PROJECT_NAME: str = "AgriNexus-AI"
     VERSION: str = "1.0.0"
 
 

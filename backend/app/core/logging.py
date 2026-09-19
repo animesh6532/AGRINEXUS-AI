@@ -1,5 +1,5 @@
 """
-Logging configuration for the Market Forecast backend.
+Logging configuration for the AgriNexus-AI backend.
 """
 
 import logging

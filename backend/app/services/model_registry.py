@@ -135,11 +135,10 @@ class ModelRegistry:
             with open(path, "rb") as f:
                 self.crop_artifact = pickle.load(f)
 
-            # Smoke Test
+            # Smoke Test (ExtraTrees champion model was trained on RAW feature values)
             feats = self.crop_artifact["feature_cols"]
             sample_df = pd.DataFrame([[90.0, 42.0, 43.0, 20.87, 82.0, 6.5, 202.9]], columns=feats)
-            scaled = self.crop_artifact["scaler"].transform(sample_df)
-            pred = self.crop_artifact["model"].predict(scaled)
+            pred = self.crop_artifact["model"].predict(sample_df)
 
             meta.status = "READY"
             logger.info("Loaded crop_recommendation model successfully.")
@@ -156,9 +155,8 @@ class ModelRegistry:
         row = [features_dict[k] for k in feats]
         df = pd.DataFrame([row], columns=feats)
 
-        # 1. Scaler + Model prediction
-        scaled = self.crop_artifact["scaler"].transform(df)
-        probs = self.crop_artifact["model"].predict_proba(scaled)[0]
+        # 1. Model prediction on raw features (ExtraTrees model trained on unscaled features)
+        probs = self.crop_artifact["model"].predict_proba(df)[0]
         class_names = self.crop_artifact["class_names"]
 
         top_idx = np.argmax(probs)
@@ -255,16 +253,21 @@ class ModelRegistry:
             for i in top_k_indices
         ]
 
-        # 4. Optional Grad-CAM Heatmap (Only generated when explicitly requested)
+        # 4. Optional Grad-CAM Heatmap (Only generated when explicitly requested; failures cleanly log warning)
         gradcam_b64 = None
         gradcam_avail = False
         if include_gradcam and self.disease_gradcam is not None:
-            gradcam_b64 = self.disease_gradcam.generate_heatmap_base64(
-                input_tensor=tensor,
-                pil_image=pil_img,
-                target_class_idx=top_idx
-            )
-            gradcam_avail = (gradcam_b64 is not None)
+            try:
+                gradcam_b64 = self.disease_gradcam.generate_heatmap_base64(
+                    input_tensor=tensor,
+                    pil_image=pil_img,
+                    target_class_idx=top_idx
+                )
+                gradcam_avail = (gradcam_b64 is not None)
+            except Exception as cam_err:
+                logger.warning(f"GradCAM generation error: {cam_err}")
+                gradcam_b64 = None
+                gradcam_avail = False
 
         return {
             "predicted_disease": pred_label,

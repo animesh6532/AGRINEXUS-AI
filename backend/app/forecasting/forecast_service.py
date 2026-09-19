@@ -1,5 +1,5 @@
 """
-Forecasting service for the Market Forecast backend.
+Forecasting service for the AgriNexus-AI backend.
 Handles forecasting agricultural market prices using time-series models.
 """
 

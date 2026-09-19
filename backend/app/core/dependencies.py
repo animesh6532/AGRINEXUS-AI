@@ -1,5 +1,5 @@
 """
-Dependency injection providers for the Market Forecast backend.
+Dependency injection providers for the AgriNexus-AI backend.
 """
 
 from typing import Generator

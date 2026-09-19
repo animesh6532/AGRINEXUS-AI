@@ -1,1 +1,1 @@
-"""AgriNexus-AI Market Forecast Backend Application Package."""
+"""AgriNexus-AI Backend Application Package."""

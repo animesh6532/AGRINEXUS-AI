@@ -1,6 +1,6 @@
-# AgriNexus-AI Market Forecast Backend
+# AgriNexus-AI Backend
 
-This is the backend implementation for the Market Forecast module of the AgriNexus-AI university final-year project.
+This is the backend implementation for AgriNexus-AI, integrating 7 Frozen ML Model services, Live OpenCV Computer Vision, Market Intelligence, Weather Intelligence, and Crop Calendar services.
 
 ## Overview
 
