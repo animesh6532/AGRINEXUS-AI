@@ -19,18 +19,31 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 ENV_FILE_PATH = BACKEND_DIR / ".env"
 
 
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # API Configuration
-    API_V1_STR: str = "/api"
-    PROJECT_NAME: str = "AgriNexus-AI Market Forecast"
+    API_V1_STR: str = "/api/v1"
+    PROJECT_NAME: str = "AgriNexus-AI Master Backend"
     VERSION: str = "1.0.0"
 
     # Server Configuration
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
+
+    # Model Artifact Directories (Checks Notebook/models first, falls back to models/)
+    MODEL_DIR: Optional[str] = None
+
+    # OpenCV / Computer Vision Quality Gates
+    MAX_UPLOAD_SIZE_MB: int = 10
+    ALLOWED_IMAGE_TYPES: list = ["image/jpeg", "image/png", "image/webp", "image/bmp"]
+    CV_BLUR_THRESHOLD: float = 50.0       # Minimum Laplacian variance for sharp frame
+    CV_BRIGHTNESS_LOW: float = 30.0       # Minimum mean brightness
+    CV_BRIGHTNESS_HIGH: float = 225.0     # Maximum mean brightness
+    LIVE_FRAME_SAMPLING_FPS: int = 10     # Cap live streaming frame evaluation rate
+    SMOOTHING_BUFFER_SIZE: int = 5        # Rolling buffer length for temporal smoothing
 
     # API Keys (Government of India)
     DATA_GOV_API_KEY: Optional[str] = Field(
@@ -58,6 +71,7 @@ class Settings(BaseSettings):
         """Ensure API key is provided in production."""
         if not v and os.getenv("ENVIRONMENT", "development") == "production":
             raise ValueError("DATA_GOV_API_KEY must be set in production")
+
         return v
 
     model_config = {
