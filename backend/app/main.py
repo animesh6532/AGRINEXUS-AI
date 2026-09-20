@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .core import dependencies, config, logging
-from .api import crop_calendar, market, weather
+from .api import crop_calendar, decision, market, weather
 from .database import connection
 
 
@@ -42,6 +42,7 @@ app.add_middleware(
 app.include_router(market.router)
 app.include_router(weather.router)
 app.include_router(crop_calendar.router)
+app.include_router(decision.router)
 
 
 # Startup event
