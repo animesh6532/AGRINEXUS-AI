@@ -265,15 +265,22 @@ upcoming activities.
 
 ### Data Source and Provenance
 
-- **No external crop-calendar API is configured or verified in this
-  project.** By default the module serves a small, generalised,
-  **non-authoritative reference dataset** bundled at
+- The verified external crop-calendar provider is **Spora**
+  (`SPORA_API_BASE_URL=https://api.spora.engineer`,
+  endpoint `GET /harvest/{location}` with a lowercase country slug such
+  as `india`, authenticated with the backend-only `X-Api-Key` header).
+  When `SPORA_API_KEY` is set, Spora (`data_source: "spora_harvest_api"`,
+  `is_reference_data: false`) is the active source.
+- When the key is unset - or when the provider is unreachable, errors,
+  returns malformed data, or lacks the requested crop - the module serves
+  a small, generalised, **non-authoritative reference dataset** bundled at
   `app/services/crop_calendar_reference_data.py`
   (India-generic; crops: rice, wheat, maize, cotton).
 - Every response built from it is explicitly labelled with
   `is_reference_data: true`, `data_source: "reference_dataset"` and
-  `region_scope: "india_generic"`. **Static reference data is never
-  presented as an authoritative or real-time prediction.**
+  `region_scope: "india_generic"` (plus `fallback_used`/`fallback_reason`
+  when it substitutes for a failed provider call). **Static reference data
+  is never presented as an authoritative or real-time prediction.**
 - A verified external provider can be plugged in through the optional
   client (`ExternalCropCalendarClient`) without changing the API,
   schema, or intelligence layers.
@@ -360,19 +367,31 @@ curl "http://localhost:8000/api/crop-calendar/rice/schedule?sowing_date=2026-06-
 ### Environment Variables
 
 ```env
-# Optional external crop-calendar provider (NO verified provider exists
-# in this project; the bundled reference dataset is used by default).
-# Set these only after the team verifies a real provider.
-CROP_CALENDAR_API_BASE_URL=
-CROP_CALENDAR_API_KEY=
+# Verified external crop-calendar provider: Spora.
+# Docs: https://spora.engineer/docs
+#   Base URL: https://api.spora.engineer  (documented default)
+#   Auth:     "X-Api-Key" request header (key alone is sufficient)
+#   Endpoint: GET /harvest/{location} (lowercase country slug, e.g. india)
+# When SPORA_API_KEY is unset the bundled reference dataset is used.
+# When it is set, the Spora /harvest calendar is preferred and the
+# reference dataset remains as labelled fallback.
+SPORA_API_BASE_URL=https://api.spora.engineer
+SPORA_API_KEY=your_spora_api_key_here
+# CROP_CALENDAR_FALLBACK_TO_REFERENCE_DATA=True
 ```
 
-- The API key is **backend-only**: sent as an `X-API-Key` header, never
+- The API key is **backend-only**: sent as an `X-Api-Key` header, never
   logged, never included in URLs, and never returned by any endpoint
-  (health reports only a boolean `external_api_key_configured`).
-- When `CROP_CALENDAR_API_BASE_URL` is set, `CROP_CALENDAR_API_KEY`
-  becomes required and the external provider replaces the reference
-  dataset as the active source.
+  (health reports only booleans `external_provider_configured` /
+  `external_api_key_configured` plus optional `external_connectivity`).
+- When `SPORA_API_KEY` is set, it becomes required for the external
+  provider and Spora (`spora_harvest_api`) replaces the reference
+  dataset as the active source, with the reference dataset kept as
+  explicitly labelled fallback (`fallback_used`/`fallback_reason`).
+- The provider returns one annual planting/harvest window per crop (no
+  kharif/rabi/zaid splits, no growth-stage breakdown). Responses carry
+  `notes` explaining derivation/provenance; season-specific provider
+  data is never fabricated.
 
 ### Limitations
 
@@ -382,10 +401,26 @@ CROP_CALENDAR_API_KEY=
 - Stage dates are deterministic date arithmetic from the supplied
   sowing date; they are not weather-adjusted predictions (weather-aware
   adjustments are intentionally out of scope for now).
-- Location is informational only; region-specific calendars require a
-  verified external provider.
+- Location is informational only in reference mode; with Spora active the
+  location slug selects the provider calendar (`/harvest/india` by
+  default). Region-specific calendars otherwise require a verified
+  external provider.
 - The catalogue reflects the bundled dataset even when an external
   provider is configured.
+- Spora publishes one annual planting/harvest window per crop (no
+  kharif/rabi/zaid splits, no stage breakdown); the module reports a
+  single aggregate growing-period stage and discloses this in `notes`.
+
+### Testing
+
+- Unit/integration tests use mocks only (`urllib.request.urlopen` is
+  patched; fake services stand in for the provider) and never require a
+  real `SPORA_API_KEY` or network access:
+  `python -m pytest tests/test_crop_calendar_service.py
+  tests/test_crop_calendar_api.py
+  tests/test_crop_calendar_intelligence.py -q`.
+- Live Spora verification is a separate explicit step using
+  `backend/.env` (never printed, logged, or committed).
 
 ## Contributing
 

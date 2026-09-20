@@ -39,6 +39,21 @@ def clean_dependency_overrides():
     app.dependency_overrides.clear()
 
 
+@pytest.fixture(autouse=True)
+def force_reference_mode(monkeypatch):
+    """Force reference mode for tests using the real service.
+
+    A developer's ``backend/.env`` may contain a real ``SPORA_API_KEY``,
+    which would otherwise flip the default service into external mode
+    (live network calls, month-based season inference). Unit tests must be
+    deterministic and offline, so the key is neutralised here. Tests for
+    the external path use explicit fakes/mocked urllib instead.
+    """
+    from app.core.config import settings as app_settings
+
+    monkeypatch.setattr(app_settings, "SPORA_API_KEY", None)
+
+
 def override_services(service=None, intelligence=None):
     """Register dependency overrides for the crop calendar endpoints."""
     if service is not None:
@@ -122,7 +137,7 @@ class FakeCropCalendarService:
 
     def get_active_data_source(self):
         return (
-            "external_crop_calendar_api"
+            "spora_harvest_api"
             if self.is_external_provider_configured
             else "reference_dataset"
         )
@@ -190,7 +205,7 @@ class TestCropCalendarHealthEndpoint:
     def test_health_does_not_expose_secrets(self):
         response = test_client.get("/api/crop-calendar/health")
         assert FAKE_API_KEY not in response.text
-        assert "CROP_CALENDAR_API_KEY=" not in response.text
+        assert "SPORA_API_KEY=" not in response.text
 
     def test_health_external_mode_configured_and_reachable(self):
         fake = FakeCropCalendarService(
@@ -205,7 +220,7 @@ class TestCropCalendarHealthEndpoint:
         assert data["external_provider_configured"] is True
         assert data["external_api_key_configured"] is True
         assert data["external_connectivity"] is True
-        assert data["data_source_active"] == "external_crop_calendar_api"
+        assert data["data_source_active"] == "spora_harvest_api"
         # The key value itself must never appear.
         assert FAKE_API_KEY not in response.text
 
@@ -472,15 +487,22 @@ class TestExternalProviderIntegration:
     """End-to-end API tests for the configured-external-provider path."""
 
     def test_external_success_via_mocked_urllib(self):
+        # Spora-shaped payload: /harvest/india returns the location
+        # calendar; the requested crop is filtered locally.
         payload = {
-            "crop": "rice",
-            "season": "kharif",
-            "crop_duration_days": 120,
-            "sowing_window": {"start": "06-01", "end": "07-15"},
-            "growth_stages": [
-                {"stage": "stage_a", "duration_days": 120},
+            "id": "india",
+            "location": "India",
+            "crops": [
+                {
+                    "crop_name": "Rice",
+                    "planting_start_date": "6/1",
+                    "planting_end_date": "7/15",
+                    "harvest_start_date": "10/8",
+                    "harvest_end_date": "10/18",
+                    "season_length_days": 120,
+                    "source": "MWCACP",
+                }
             ],
-            "seasons_available": ["kharif"],
         }
         service = CropCalendarServiceIntegrationStub(payload)
         override_services(service=service)
@@ -490,7 +512,7 @@ class TestExternalProviderIntegration:
         )
         assert response.status_code == 200
         data = response.json()
-        assert data["data_source"] == "external_crop_calendar_api"
+        assert data["data_source"] == "spora_harvest_api"
         assert data["is_reference_data"] is False
         assert data["crop_duration_days"] == 120
         # Stage dates derived from the external stage durations

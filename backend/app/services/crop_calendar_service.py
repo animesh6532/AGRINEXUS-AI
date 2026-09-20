@@ -197,10 +197,14 @@ class CropCalendarServiceError(Exception):
     """
 
 
-class CropNotFoundError(LookupError):
+class CropNotFoundError(CropCalendarServiceError, LookupError):
     """
     Raised when the requested crop (or alias) is not available from the
     active data source. The API layer maps this to HTTP 404.
+
+    It subclasses CropCalendarServiceError so provider failures surface
+    through the service's existing fallback path while still mapping to
+    the module's 404 contract at the API layer.
     """
 
 
@@ -366,6 +370,12 @@ class ExternalCropCalendarClient:
                     data, crop, season, location
                 )
 
+            except CropNotFoundError:
+                # Crop/location filter miss: a 404 contract, never a
+                # retryable provider failure. Listed BEFORE the base
+                # CropCalendarServiceError (its parent) so the 404
+                # contract is never re-wrapped as a 502.
+                raise
             except CropCalendarServiceError:
                 # Already logged/handled; do not retry or re-wrap.
                 raise
@@ -383,13 +393,22 @@ class ExternalCropCalendarClient:
                     f"External crop-calendar API HTTP error: {e.code} "
                     f"(provider error: {provider_error or 'unknown'})"
                 )
-                if e.code in (401, 403):
-                    # Credentials problem: report the provider's machine
-                    # error code only - never the key value itself.
+                if e.code == 401:
+                    # Authentication failure: invalid/missing/expired key.
+                    # Report the credential problem only - never the key.
                     raise CropCalendarServiceError(
                         "External crop-calendar provider rejected the "
-                        "configured credentials "
-                        f"(provider error: {provider_error or 'unknown'})"
+                        "configured API key "
+                        f"(HTTP 401; provider error: "
+                        f"{provider_error or 'invalid_api_key'})"
+                    ) from e
+                if e.code == 403:
+                    # Plan/quota failure: authenticated but not authorized.
+                    raise CropCalendarServiceError(
+                        "External crop-calendar provider denied the "
+                        "request for the current plan/quota "
+                        f"(HTTP 403; provider error: "
+                        f"{provider_error or 'plan_not_supported'})"
                     ) from e
                 if e.code == 404:
                     # Provider has no calendar for this location (or the
@@ -399,7 +418,8 @@ class ExternalCropCalendarClient:
                         "No crop calendar returned by the external "
                         f"provider for location "
                         f"'{self._location_slug(location)}' "
-                        f"(provider error: {provider_error or 'not_found'})"
+                        f"(HTTP 404 not found; provider error: "
+                        f"{provider_error or 'not_found'})"
                     ) from e
                 if e.code == 429:
                     # Documented rate-limit response (X-RateLimit-Reset /
@@ -513,7 +533,7 @@ class ExternalCropCalendarClient:
             end_doy_key="harvest_end_doy",
         )
 
-        crop_duration = self._derive_duration_days(
+        crop_duration, duration_mismatch_note = self._derive_duration_days(
             entry, planting_window, harvest_window
         )
         if crop_duration is None:
@@ -556,6 +576,7 @@ class ExternalCropCalendarClient:
         normalization_notes = self._build_normalization_notes(
             entry, crop_duration, planting_window,
             resolved_season if season is not None else None,
+            duration_mismatch_note,
         )
 
         normalized = {
@@ -683,7 +704,7 @@ class ExternalCropCalendarClient:
         entry: Dict[str, Any],
         planting_window: "Optional[tuple[str, str]]",
         harvest_window: "Optional[tuple[str, str]]",
-    ) -> Optional[int]:
+    ) -> "tuple[Optional[int], Optional[str]]":
         """
         Derive the crop duration in days.
 
@@ -693,16 +714,40 @@ class ExternalCropCalendarClient:
         2. inclusive day count from planting start to harvest end
            (calendar-year wrap aware, for winter crops such as India's
            winter rapeseed)
+
+        Returns ``(duration_days, mismatch_note)`` where ``mismatch_note``
+        describes a ``season_length_days``/window-span disagreement (or
+        ``None`` when they agree / no comparison is possible).
         """
         season_length = entry.get("season_length_days")
+        window_span: Optional[int] = None
+        if planting_window and harvest_window:
+            window_span = _days_between_mmdd(
+                planting_window[0], harvest_window[1]
+            )
+        elif planting_window:
+            window_span = _days_between_mmdd(
+                planting_window[0], planting_window[1]
+            )
+        elif harvest_window:
+            window_span = _days_between_mmdd(
+                harvest_window[0], harvest_window[1]
+            )
         if isinstance(season_length, (int, float)) and season_length >= 1:
-            return int(round(season_length))
-        for window in (planting_window, harvest_window):
-            if window:
-                days = _days_between_mmdd(window[0], window[1])
-                if days:
-                    return days
-        return None
+            duration = int(round(season_length))
+            mismatch_note = None
+            if window_span and abs(duration - window_span) > 7:
+                mismatch_note = (
+                    "The provider's season_length_days "
+                    f"({duration} days) does not match the "
+                    "planting-to-harvest window span "
+                    f"({window_span} days); season_length_days is used "
+                    "for crop_duration_days."
+                )
+            return duration, mismatch_note
+        if window_span:
+            return window_span, None
+        return None, None
 
     @staticmethod
     def _build_normalization_notes(
@@ -710,6 +755,7 @@ class ExternalCropCalendarClient:
         crop_duration: int,
         planting_window: "Optional[tuple[str, str]]",
         requested_season: Optional[str],
+        duration_mismatch_note: Optional[str] = None,
     ) -> List[str]:
         """Provenance/derivation notes disclosed in every response."""
         notes: List[str] = []
@@ -732,6 +778,8 @@ class ExternalCropCalendarClient:
                 "planting/harvest windows (inclusive day count, "
                 "calendar-year wrap aware)."
             )
+        if duration_mismatch_note:
+            notes.append(duration_mismatch_note)
         if planting_window:
             notes.append(
                 "Sowing window derived from the provider planting "
@@ -1112,11 +1160,23 @@ class CropCalendarService:
                     season=normalized_season,
                     location=normalized_location,
                 )
+            except CropNotFoundError as e:
+                # The requested crop is not available upstream. Serve the
+                # labelled reference calendar when it covers this crop;
+                # otherwise surface the provider's 404 unchanged.
+                if not settings.CROP_CALENDAR_FALLBACK_TO_REFERENCE_DATA:
+                    raise
+                try:
+                    return self._build_reference_calendar(
+                        crop, season, location,
+                        fallback_reason=self._safe_fallback_reason(e),
+                    )
+                except (CropNotFoundError, ValueError):
+                    raise e from None
             except CropCalendarServiceError as e:
-                # The provider could not be used. Distinguish "our only
-                # upstream data source is broken" from "this crop simply
-                # does not exist upstream" (CropNotFoundError is *not*
-                # caught here: it propagates as a 404 contract).
+                # The provider could not be used (network/auth/rate-limit/
+                # malformed payload). Serve labelled reference data when
+                # enabled; otherwise propagate.
                 reason = self._safe_fallback_reason(e)
                 if not settings.CROP_CALENDAR_FALLBACK_TO_REFERENCE_DATA:
                     raise
