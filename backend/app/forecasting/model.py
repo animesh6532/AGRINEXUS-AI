@@ -1,5 +1,5 @@
 """
-Forecasting models for the Market Forecast backend.
+Forecasting models for the AgriNexus-AI backend.
 Implements various time-series forecasting algorithms for agricultural prices.
 """
 
@@ -12,10 +12,19 @@ import logging
 import numpy as np
 import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-from statsmodels.tsa.arima.model import ARIMA
-from statsmodels.tsa.exponential_smoothing.ets import ETSModel
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
-from statsmodels.tsa.seasonal import seasonal_decompose
+try:
+    from statsmodels.tsa.arima.model import ARIMA
+    from statsmodels.tsa.exponential_smoothing.ets import ETSModel
+    from statsmodels.tsa.holtwinters import ExponentialSmoothing
+    from statsmodels.tsa.seasonal import seasonal_decompose
+    HAS_STATSMODELS = True
+except ImportError:
+    ARIMA = None
+    ETSModel = None
+    ExponentialSmoothing = None
+    seasonal_decompose = None
+    HAS_STATSMODELS = False
+
 
 from ..core.logging import logger
 
@@ -229,6 +238,9 @@ class ExponentialSmoothingForecastModel(BaseForecastModel):
                     self.seasonal = None
                     self.seasonal_periods = None
 
+            if ExponentialSmoothing is None:
+                raise ImportError("statsmodels is not installed")
+
             # Fit the model
             self.model = ExponentialSmoothing(
                 self.training_data,
@@ -243,33 +255,28 @@ class ExponentialSmoothingForecastModel(BaseForecastModel):
         except Exception as e:
             logger.warning(
                 f"Failed to fit ETS model ({self.name}): {e}. "
-                f"Falling back to simple exponential smoothing."
+                f"Falling back to simple naive forecast."
             )
-            # Fall back to simple exponential smoothing
-            self.model = ExponentialSmoothing(
-                self.training_data,
-                trend=None,
-                seasonal=None
-            )
-            self.model_fit = self.model.fit()
-            self.name = "ETS_simple"
             self.is_fitted = True
+            self.model_fit = None
 
     def predict(self, steps: int) -> List[float]:
         """Generate forecasts using the fitted ETS model."""
-        if not self.is_fitted or self.model_fit is None:
+        if not self.is_fitted:
             raise RuntimeError("Model must be fitted before prediction")
+
+        if self.model_fit is None or not hasattr(self.model_fit, "forecast"):
+            last_value = self.training_data.iloc[-1] if self.training_data is not None and len(self.training_data) > 0 else 0.0
+            return [float(last_value)] * steps
 
         try:
             forecast_obj = self.model_fit.forecast(steps)
-            # Ensure we return a list of floats
             if hasattr(forecast_obj, 'tolist'):
                 return [float(x) for x in forecast_obj.tolist()]
             else:
                 return [float(forecast_obj)] * steps
         except Exception as e:
             logger.error(f"Error generating ETS forecast: {e}")
-            # Fall back to last value
             last_value = self.training_data.iloc[-1] if self.training_data is not None else 0.0
             return [float(last_value)] * steps
 
@@ -279,8 +286,12 @@ class ExponentialSmoothingForecastModel(BaseForecastModel):
         confidence_interval: float = 0.95
     ) -> Tuple[List[float], List[float], List[float]]:
         """Generate forecasts with confidence intervals."""
-        if not self.is_fitted or self.model_fit is None:
+        if not self.is_fitted:
             raise RuntimeError("Model must be fitted before prediction")
+
+        if self.model_fit is None or not hasattr(self.model_fit, "forecast"):
+            forecasts = self.predict(steps)
+            return forecasts, [None] * len(forecasts), [None] * len(forecasts)
 
         try:
             forecast_obj = self.model_fit.forecast(steps)
@@ -295,7 +306,6 @@ class ExponentialSmoothingForecastModel(BaseForecastModel):
             return forecasts, lower_bounds, upper_bounds
         except Exception as e:
             logger.error(f"Error generating ETS forecast with confidence: {e}")
-            # Fall back to point forecasts without confidence
             forecasts = self.predict(steps)
             return forecasts, [None] * len(forecasts), [None] * len(forecasts)
 
@@ -326,7 +336,9 @@ class ARIMAForecastModel(BaseForecastModel):
         self.training_data = data.copy()
 
         try:
-            # Handle case where we might need to difference the data
+            if ARIMA is None:
+                raise ImportError("statsmodels is not installed")
+
             self.model = ARIMA(
                 self.training_data,
                 order=self.order,
@@ -341,31 +353,28 @@ class ARIMAForecastModel(BaseForecastModel):
         except Exception as e:
             logger.warning(
                 f"Failed to fit ARIMA model ({self.name}): {e}. "
-                f"Falling back to simpler model."
+                f"Falling back to simple naive forecast."
             )
-            # Fall back to ARIMA(0,1,0) which is random walk
-            self.order = (0, 1, 0)
-            self.seasonal_order = None
-            self.model = ARIMA(self.training_data, order=self.order)
-            self.model_fit = self.model.fit()
-            self.name = "ARIMA_010"
             self.is_fitted = True
+            self.model_fit = None
 
     def predict(self, steps: int) -> List[float]:
         """Generate forecasts using the fitted ARIMA model."""
-        if not self.is_fitted or self.model_fit is None:
+        if not self.is_fitted:
             raise RuntimeError("Model must be fitted before prediction")
+
+        if self.model_fit is None or not hasattr(self.model_fit, "forecast"):
+            last_value = self.training_data.iloc[-1] if self.training_data is not None and len(self.training_data) > 0 else 0.0
+            return [float(last_value)] * steps
 
         try:
             forecast_obj = self.model_fit.forecast(steps)
-            # Ensure we return a list of floats
             if hasattr(forecast_obj, 'tolist'):
                 return [float(x) for x in forecast_obj.tolist()]
             else:
                 return [float(forecast_obj)] * steps
         except Exception as e:
             logger.error(f"Error generating ARIMA forecast: {e}")
-            # Fall back to last value (naive forecast)
             last_value = self.training_data.iloc[-1] if self.training_data is not None else 0.0
             return [float(last_value)] * steps
 
@@ -375,8 +384,13 @@ class ARIMAForecastModel(BaseForecastModel):
         confidence_interval: float = 0.95
     ) -> Tuple[List[float], List[float], List[float]]:
         """Generate forecasts with confidence intervals."""
-        if not self.is_fitted or self.model_fit is None:
+        if not self.is_fitted:
             raise RuntimeError("Model must be fitted before prediction")
+
+        if self.model_fit is None or not hasattr(self.model_fit, "forecast"):
+            forecasts = self.predict(steps)
+            return forecasts, [None] * len(forecasts), [None] * len(forecasts)
+
 
         try:
             forecast_obj = self.model_fit.forecast(steps)

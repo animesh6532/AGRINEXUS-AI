@@ -1,5 +1,5 @@
 """
-Configuration module for the Market Forecast backend.
+Configuration module for the AgriNexus-AI backend.
 Handles loading environment variables and application settings.
 """
 
@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Any, Optional
 
 
 # Determine the project root (where backend directory is located)
@@ -19,18 +19,34 @@ BACKEND_DIR = PROJECT_ROOT / "backend"
 ENV_FILE_PATH = BACKEND_DIR / ".env"
 
 
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # API Configuration
     API_V1_STR: str = "/api"
-    PROJECT_NAME: str = "AgriNexus-AI Market Forecast"
+    PROJECT_NAME: str = "AgriNexus-AI"
     VERSION: str = "1.0.0"
+
 
     # Server Configuration
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
+    CORS_ORIGINS: Any = ["*"]
+
+    # Model Artifact Directories (Checks models/ first, falls back to Notebook/models/)
+    MODEL_DIR: Optional[str] = None
+
+
+    # OpenCV / Computer Vision Quality Gates
+    MAX_UPLOAD_SIZE_MB: int = 10
+    ALLOWED_IMAGE_TYPES: list = ["image/jpeg", "image/png", "image/webp", "image/bmp"]
+    CV_BLUR_THRESHOLD: float = 50.0       # Minimum Laplacian variance for sharp frame
+    CV_BRIGHTNESS_LOW: float = 30.0       # Minimum mean brightness
+    CV_BRIGHTNESS_HIGH: float = 225.0     # Maximum mean brightness
+    LIVE_FRAME_SAMPLING_FPS: int = 10     # Cap live streaming frame evaluation rate
+    SMOOTHING_BUFFER_SIZE: int = 5        # Rolling buffer length for temporal smoothing
 
     # API Keys (Government of India)
     DATA_GOV_API_KEY: Optional[str] = Field(
@@ -84,7 +100,8 @@ class Settings(BaseSettings):
     )
 
     # Database Configuration - will be overridden from .env
-    DATABASE_URL: str = ""
+    DATABASE_URL: str = "sqlite:///./data/market/market_data.db"
+
 
     # Caching Configuration
     CACHE_TTL_SECONDS: int = 300  # 5 minutes cache for market data
@@ -93,12 +110,25 @@ class Settings(BaseSettings):
     DEFAULT_FORECAST_HORIZON_DAYS: int = 7
     MIN_HISTORICAL_DAYS_REQUIRED: int = 30
 
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS origins from JSON array or comma-separated string."""
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, ValueError):
+                return [x.strip() for x in v.split(",") if x.strip()]
+        return v
+
     @field_validator("DATA_GOV_API_KEY")
     @classmethod
     def api_key_must_be_set(cls, v):
         """Ensure API key is provided in production."""
         if not v and os.getenv("ENVIRONMENT", "development") == "production":
             raise ValueError("DATA_GOV_API_KEY must be set in production")
+
         return v
 
     model_config = {

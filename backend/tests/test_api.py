@@ -15,7 +15,7 @@ def test_root_endpoint():
     assert response.status_code == 200
     data = response.json()
     assert "message" in data
-    assert "AgriNexus-AI Market Forecast Backend" in data["message"]
+    assert "Welcome to AgriNexus-AI" in data["message"]
     assert "docs" in data
     assert "health" in data
 

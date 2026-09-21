@@ -1,5 +1,5 @@
 """
-Market intelligence layer for the Market Forecast backend.
+Market intelligence layer for the AgriNexus-AI backend.
 Derives actionable insights and signals from market data and forecasts.
 """
 

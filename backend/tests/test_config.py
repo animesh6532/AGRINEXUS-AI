@@ -20,7 +20,7 @@ def test_settings_loads():
         settings = Settings(_env_file=temp_env_path)
         assert settings.DATA_GOV_API_KEY == "test_key"
         assert settings.DEBUG == True
-        assert settings.PROJECT_NAME == "AgriNexus-AI Market Forecast"
+        assert settings.PROJECT_NAME == "AgriNexus-AI"
     finally:
         # Clean up temp file
         os.unlink(temp_env_path)
@@ -29,7 +29,7 @@ def test_settings_loads():
 def test_settings_defaults():
     """Test that default settings work."""
     settings = Settings()
-    assert settings.PROJECT_NAME == "AgriNexus-AI Market Forecast"
+    assert settings.PROJECT_NAME == "AgriNexus-AI"
     assert settings.VERSION == "1.0.0"
     assert settings.API_V1_STR == "/api"
     assert settings.HOST == "0.0.0.0"

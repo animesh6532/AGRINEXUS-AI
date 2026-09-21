@@ -1,1 +1,1 @@
-"""API module for AgriNexus-AI Market Forecast Backend."""
+"""API module for AgriNexus-AI Backend."""

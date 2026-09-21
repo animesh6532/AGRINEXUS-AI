@@ -295,7 +295,7 @@ class ExternalCropCalendarClient:
             )
         if not self.api_key or not self.api_key.strip():
             raise CropCalendarServiceError(
-                "SPORA_API_KEY is required to use the external "
+                "CROP_CALENDAR_API_KEY / SPORA_API_KEY is required to use the external "
                 "crop-calendar provider"
             )
 
@@ -322,12 +322,14 @@ class ExternalCropCalendarClient:
         """
         Build the provider request URL (never includes the key).
 
-        GET /harvest/{location} is a location-level endpoint: crop and
-        season are NOT provider parameters; the requested crop is
-        filtered from the location calendar locally.
+        GET /harvest/{location} is a location-level endpoint that returns
+        the calendar for ALL crops at that location; crop and season are
+        filtered locally from the response (the endpoint takes no crop or
+        season parameter).
         """
         slug = self._location_slug(location)
-        return f"{self.base_url.rstrip('/')}/harvest/{slug}"
+        url = f"{self.base_url.rstrip('/')}/harvest/{slug}"
+        return url
 
     async def fetch_crop_calendar(
         self,
@@ -472,22 +474,8 @@ class ExternalCropCalendarClient:
         location: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Normalize a Spora ``/harvest/{location}`` payload into the
-        internal calendar format for the requested crop.
-
-        The provider returns the planting/harvest calendar for ALL crops
-        at the requested location; the requested crop is filtered
-        locally. The provider publishes a single annual window per crop
-        without a growth-stage breakdown, so ``crop_duration_days`` is
-        derived from ``season_length_days`` (fallback: planting/harvest
-        window arithmetic) and the growing period is modelled as ONE
-        aggregate stage. Every derivation is disclosed in ``notes`` and
-        the result is labelled ``is_reference_data=False``.
-
-        Raises:
-            CropCalendarServiceError: unusable/invalid provider payload
-            CropNotFoundError: requested crop not available from the
-                provider for this location
+        Normalize a Spora ``/harvest/{location}`` payload or flat single-crop payload
+        into the internal calendar format for the requested crop.
         """
         if not isinstance(data, dict):
             raise CropCalendarServiceError(
@@ -496,115 +484,169 @@ class ExternalCropCalendarClient:
             )
 
         crops_raw = data.get("crops")
-        if not isinstance(crops_raw, list) or not crops_raw:
-            raise CropCalendarServiceError(
-                "External crop-calendar provider response did not "
-                "contain a 'crops' list"
+
+        # Scenario 1: Spora location payload with 'crops' list
+        if isinstance(crops_raw, list) and crops_raw:
+            entry = self._find_provider_crop(crops_raw, crop)
+            if entry is None:
+                available = sorted({
+                    str(c.get("crop_name") or c.get("crop")).strip().lower()
+                    for c in crops_raw
+                    if isinstance(c, dict)
+                    and (c.get("crop_name") or c.get("crop"))
+                })
+                raise CropNotFoundError(
+                    f"Crop '{crop}' is not available from the external "
+                    f"provider for location "
+                    f"'{self._location_slug(location)}'. Crops available "
+                    f"from the provider at this location: "
+                    f"{', '.join(available) if available else 'none listed'}"
+                )
+
+            planting_window = self._extract_window_mmdd(
+                entry,
+                start_keys=("planting_start_date", "sow_start"),
+                end_keys=("planting_end_date", "sow_end"),
+                start_doy_key="planting_start_doy",
+                end_doy_key="planting_end_doy",
+            )
+            harvest_window = self._extract_window_mmdd(
+                entry,
+                start_keys=("harvest_start_date", "harvest_start"),
+                end_keys=("harvest_end_date", "harvest_end"),
+                start_doy_key="harvest_start_doy",
+                end_doy_key="harvest_end_doy",
             )
 
-        entry = self._find_provider_crop(crops_raw, crop)
-        if entry is None:
-            available = sorted({
-                str(c.get("crop_name") or c.get("crop")).strip().lower()
-                for c in crops_raw
-                if isinstance(c, dict)
-                and (c.get("crop_name") or c.get("crop"))
-            })
-            raise CropNotFoundError(
-                f"Crop '{crop}' is not available from the external "
-                f"provider for location "
-                f"'{self._location_slug(location)}'. Crops available "
-                f"from the provider at this location: "
-                f"{', '.join(available) if available else 'none listed'}"
+            crop_duration, duration_mismatch_note = self._derive_duration_days(
+                entry, planting_window, harvest_window
+            )
+            if crop_duration is None:
+                raise CropCalendarServiceError(
+                    "External crop-calendar provider response did not "
+                    "contain a usable season length or planting/harvest "
+                    "windows"
+                )
+
+            response_crop = str(
+                entry.get("crop_name") or entry.get("crop") or crop
+            ).strip().lower()
+
+            provider_notes_raw = entry.get("notes")
+            if isinstance(provider_notes_raw, str) and provider_notes_raw.strip():
+                stage_activities: List[str] = [provider_notes_raw.strip()]
+            elif isinstance(provider_notes_raw, list):
+                stage_activities = [
+                    str(n) for n in provider_notes_raw if str(n).strip()
+                ]
+            else:
+                stage_activities = []
+
+            growth_stages_raw = entry.get("growth_stages")
+            if isinstance(growth_stages_raw, list) and growth_stages_raw:
+                growth_stages = growth_stages_raw
+            else:
+                growth_stages = [{
+                    "stage": "growing_period",
+                    "duration_days": crop_duration,
+                    "activities": stage_activities,
+                }]
+
+            if season is not None:
+                resolved_season = self._normalize_season(season)
+                season_source = "provided"
+            else:
+                resolved_season = "annual"
+                season_source = "default"
+
+            normalization_notes = self._build_normalization_notes(
+                entry, crop_duration, planting_window,
+                resolved_season if season is not None else None,
+                duration_mismatch_note,
             )
 
-        planting_window = self._extract_window_mmdd(
-            entry,
-            start_keys=("planting_start_date", "sow_start"),
-            end_keys=("planting_end_date", "sow_end"),
-            start_doy_key="planting_start_doy",
-            end_doy_key="planting_end_doy",
+            return {
+                "crop": response_crop,
+                "aliases": [],
+                "season": resolved_season,
+                "season_source": season_source,
+                "seasons_available": ["annual"],
+                "sowing_window": (
+                    {"start": planting_window[0], "end": planting_window[1]}
+                    if planting_window else None
+                ),
+                "crop_duration_days": crop_duration,
+                "growth_stages": growth_stages,
+                "notes": normalization_notes,
+                "region_scope": "external_provider",
+                "data_source": EXTERNAL_DATA_SOURCE,
+                "is_reference_data": False,
+                "reference_note": None,
+                "data_timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+        # Scenario 2: Flat direct crop response dictionary
+        if "growth_stages" in data or "crop_duration_days" in data or "crop" in data:
+            growth_stages_raw = data.get("growth_stages")
+            if not isinstance(growth_stages_raw, list) or not growth_stages_raw:
+                raise CropCalendarServiceError(
+                    "External crop-calendar provider response missing valid growth stages"
+                )
+
+            crop_duration = data.get("crop_duration_days")
+            if not isinstance(crop_duration, (int, float)) or crop_duration <= 0:
+                raise CropCalendarServiceError(
+                    "External crop-calendar provider response missing valid crop_duration_days"
+                )
+            crop_duration = int(crop_duration)
+
+            validated_stages = []
+            stage_duration_sum = 0
+            for stage_entry in growth_stages_raw:
+                if not isinstance(stage_entry, dict):
+                    raise CropCalendarServiceError(
+                        "External provider returned invalid growth stage format"
+                    )
+                dur = stage_entry.get("duration_days")
+                if not isinstance(dur, (int, float)) or dur <= 0:
+                    raise CropCalendarServiceError(
+                        "External provider returned invalid growth stage duration"
+                    )
+                validated_stages.append(stage_entry)
+                stage_duration_sum += int(dur)
+
+            notes = list(data.get("notes", [])) if isinstance(data.get("notes"), list) else []
+            if stage_duration_sum != crop_duration:
+                notes.append(
+                    f"Growth stage duration sum ({stage_duration_sum}) does not match crop duration ({crop_duration})"
+                )
+
+            res_season = season if season else data.get("season", "annual")
+            try:
+                res_season = self._normalize_season(res_season)
+            except ValueError:
+                res_season = "annual"
+
+            return {
+                "crop": str(data.get("crop", crop)).strip().lower(),
+                "aliases": data.get("aliases", []),
+                "season": res_season,
+                "season_source": "provided" if season else "default",
+                "seasons_available": data.get("seasons_available", [res_season]),
+                "sowing_window": data.get("sowing_window"),
+                "crop_duration_days": crop_duration,
+                "growth_stages": validated_stages,
+                "notes": notes,
+                "region_scope": "external_provider",
+                "data_source": EXTERNAL_DATA_SOURCE,
+                "is_reference_data": False,
+                "reference_note": None,
+                "data_timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+
+        raise CropCalendarServiceError(
+            "External crop-calendar provider response did not contain a 'crops' list or valid crop data"
         )
-        harvest_window = self._extract_window_mmdd(
-            entry,
-            start_keys=("harvest_start_date", "harvest_start"),
-            end_keys=("harvest_end_date", "harvest_end"),
-            start_doy_key="harvest_start_doy",
-            end_doy_key="harvest_end_doy",
-        )
-
-        crop_duration, duration_mismatch_note = self._derive_duration_days(
-            entry, planting_window, harvest_window
-        )
-        if crop_duration is None:
-            raise CropCalendarServiceError(
-                "External crop-calendar provider response did not "
-                "contain a usable season length or planting/harvest "
-                "windows"
-            )
-
-        response_crop = str(
-            entry.get("crop_name") or entry.get("crop") or crop
-        ).strip().lower()
-
-        # The provider publishes no stage-level breakdown, so the whole
-        # growing period is reported as ONE aggregate stage. Provider
-        # notes (documented optional field) become stage activities.
-        provider_notes_raw = entry.get("notes")
-        if isinstance(provider_notes_raw, str) and provider_notes_raw.strip():
-            stage_activities: List[str] = [provider_notes_raw.strip()]
-        elif isinstance(provider_notes_raw, list):
-            stage_activities = [
-                str(n) for n in provider_notes_raw if str(n).strip()
-            ]
-        else:
-            stage_activities = []
-
-        growth_stages: List[Dict[str, Any]] = [{
-            "stage": "growing_period",
-            "duration_days": crop_duration,
-            "activities": stage_activities,
-        }]
-
-        if season is not None:
-            resolved_season = self._normalize_season(season)
-            season_source = "provided"
-        else:
-            resolved_season = "annual"
-            season_source = "default"
-
-        normalization_notes = self._build_normalization_notes(
-            entry, crop_duration, planting_window,
-            resolved_season if season is not None else None,
-            duration_mismatch_note,
-        )
-
-        normalized = {
-            "crop": response_crop,
-            "aliases": [],
-            "season": resolved_season,
-            "season_source": season_source,
-            "seasons_available": ["annual"],
-            "sowing_window": (
-                {"start": planting_window[0], "end": planting_window[1]}
-                if planting_window else None
-            ),
-            "crop_duration_days": crop_duration,
-            "growth_stages": growth_stages,
-            "notes": normalization_notes,
-            "region_scope": "external_provider",
-            "data_source": EXTERNAL_DATA_SOURCE,
-            "is_reference_data": False,
-            "reference_note": None,
-            "data_timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-        logger.debug(
-            f"Normalized external crop calendar for crop={crop}, "
-            f"duration={crop_duration} days"
-        )
-        return normalized
-
     @staticmethod
     def _normalize_season(season: str) -> str:
         """Normalize a season name; raises ValueError on unknown names."""
@@ -861,11 +903,17 @@ class CropCalendarService:
     def __init__(
         self,
         external_client: Optional[ExternalCropCalendarClient] = None,
+        fallback_to_reference_data: Optional[bool] = None,
     ):
         self.external_client = (
             external_client
             if external_client is not None
             else ExternalCropCalendarClient()
+        )
+        self.fallback_to_reference_data = (
+            fallback_to_reference_data
+            if fallback_to_reference_data is not None
+            else settings.CROP_CALENDAR_FALLBACK_TO_REFERENCE_DATA
         )
         logger.debug("Initialized CropCalendarService")
 
@@ -1178,7 +1226,7 @@ class CropCalendarService:
                 # malformed payload). Serve labelled reference data when
                 # enabled; otherwise propagate.
                 reason = self._safe_fallback_reason(e)
-                if not settings.CROP_CALENDAR_FALLBACK_TO_REFERENCE_DATA:
+                if not self.fallback_to_reference_data:
                     raise
                 logger.warning(
                     "External crop-calendar provider unavailable "

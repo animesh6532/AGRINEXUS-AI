@@ -1,1 +1,1 @@
-"""Tests for AgriNexus-AI Market Forecast Backend."""
+"""Tests for AgriNexus-AI Backend."""

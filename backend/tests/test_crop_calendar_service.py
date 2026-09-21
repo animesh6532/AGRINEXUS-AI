@@ -60,7 +60,11 @@ EXTERNAL_PAYLOAD = {
             "harvest_end_doy": 362,
             "harvest_start_date": "9/12",
             "harvest_end_date": "12/28",
-            "season_length_days": 126,
+            "season_length_days": 135,
+            "growth_stages": [
+                {"stage": "nursery", "duration_days": 25},
+                {"stage": "growing", "duration_days": 110},
+            ],
             "source": "MWCACP",
             "notes": "provider note",
         },
@@ -250,12 +254,10 @@ class TestExternalCropCalendarClient:
         assert result["data_source"] == EXTERNAL_DATA_SOURCE
         assert result["is_reference_data"] is False
         assert result["region_scope"] == "external_provider"
-        # season_length_days drives the duration for the Spora contract.
-        assert result["crop_duration_days"] == 126
+        assert result["crop_duration_days"] == 135
         assert result["sowing_window"] == {"start": "06-01", "end": "07-31"}
-        # The provider publishes one annual window: a single aggregate stage.
-        assert len(result["growth_stages"]) == 1
-        assert result["growth_stages"][0]["duration_days"] == 126
+        assert len(result["growth_stages"]) == 2
+        assert result["growth_stages"][0]["duration_days"] == 25
 
     @patch("urllib.request.urlopen")
     def test_request_url_excludes_api_key(self, mock_urlopen, external_client):
@@ -536,6 +538,7 @@ class TestCropCalendarServiceExternal:
                 raise CropCalendarServiceError("provider down")
 
         external_service.external_client = FailingClient()
+        external_service.fallback_to_reference_data = False
         with pytest.raises(CropCalendarServiceError, match="provider down"):
             asyncio.run(
                 external_service.get_crop_calendar("rice", season="kharif")

@@ -1,5 +1,5 @@
 """
-Database repository for Market Forecast backend.
+Database repository for AgriNexus-AI backend.
 Handles data access operations for market observations and forecasts.
 """
 
