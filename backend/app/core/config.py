@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Any, Optional
 
 
 # Determine the project root (where backend directory is located)
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = False
-    CORS_ORIGINS: list = ["*"]
+    CORS_ORIGINS: Any = ["*"]
 
     # Model Artifact Directories (Checks models/ first, falls back to Notebook/models/)
     MODEL_DIR: Optional[str] = None
@@ -109,6 +109,18 @@ class Settings(BaseSettings):
     # Forecasting Configuration
     DEFAULT_FORECAST_HORIZON_DAYS: int = 7
     MIN_HISTORICAL_DAYS_REQUIRED: int = 30
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        """Parse CORS origins from JSON array or comma-separated string."""
+        if isinstance(v, str):
+            import json
+            try:
+                return json.loads(v)
+            except (json.JSONDecodeError, ValueError):
+                return [x.strip() for x in v.split(",") if x.strip()]
+        return v
 
     @field_validator("DATA_GOV_API_KEY")
     @classmethod

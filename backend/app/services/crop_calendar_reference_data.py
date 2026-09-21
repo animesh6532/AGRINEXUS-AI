@@ -15,9 +15,9 @@ without a verified external provider.
   ``region_scope="india_generic"`` so it is never presented as an
   authoritative or real-time prediction.
 
-A verified external crop-calendar provider (configured through
-CROP_CALENDAR_API_BASE_URL / CROP_CALENDAR_API_KEY) should replace this
-dataset as the active source once the team approves one.
+A verified external crop-calendar provider (Spora, configured through
+SPORA_API_BASE_URL / SPORA_API_KEY) is the active source when configured;
+otherwise this dataset is the fallback source.
 
 All stage durations are in days and are intended to sum exactly to the
 crop duration for each season (validated by tests and service checks).
