@@ -1,0 +1,108 @@
+﻿=== FIELDS ===
+FarmContext {
+ "location": "str | None",
+ "latitude": "float | None",
+ "longitude": "float | None",
+ "crop": "str | None",
+ "variety": "str | None",
+ "season": "str | None",
+ "sowing_date": "datetime.date | None",
+ "current_growth_stage": "str | None",
+ "weather_context": "app.schemas.decision.WeatherContext | None",
+ "market_context": "app.schemas.decision.MarketContext | None",
+ "crop_calendar_context": "app.schemas.decision.CropCalendarContext | None",
+ "ml_predictions": "typing.List[app.schemas.decision.MLPrediction]",
+ "farmer_context": "typing.Dict[str, typing.Any] | None",
+ "data_freshness": "typing.Dict[str, str] | None",
+ "as_of_date": "datetime.date | None"
+}
+WeatherContext {
+ "latitude": "float | None",
+ "longitude": "float | None",
+ "current_temperature": "float | None",
+ "current_humidity": "float | None",
+ "current_precipitation": "float | None",
+ "precipitation_probability": "float | None",
+ "forecast_precipitation_sum": "float | None",
+ "temperature_max_forecast": "float | None",
+ "temperature_min_forecast": "float | None",
+ "wind_speed_max_forecast": "float | None",
+ "severe_weather_indicators": "typing.List[str]",
+ "forecast_horizon_days": "int | None",
+ "weather_data_freshness": "str | None",
+ "is_weather_data_available": "<class 'bool'>"
+}
+MarketContext {
+ "commodity": "str | None",
+ "current_price": "float | None",
+ "recent_trend": "str | None",
+ "forecast_trend": "str | None",
+ "recent_change_percent": "float | None",
+ "forecast_change_percent": "float | None",
+ "volatility": "float | None",
+ "signal_strength": "float | None",
+ "analysis_period_days": "int | None",
+ "market_data_freshness": "str | None",
+ "is_market_data_available": "<class 'bool'>"
+}
+CropCalendarContext {
+ "crop": "str | None",
+ "season": "str | None",
+ "sowing_date": "datetime.date | None",
+ "current_growth_stage": "str | None",
+ "stage_progress_percent": "float | None",
+ "next_stage": "str | None",
+ "expected_harvest_window_start": "datetime.date | None",
+ "expected_harvest_window_end": "datetime.date | None",
+ "days_to_next_stage": "int | None",
+ "calendar_confidence": "str | None",
+ "is_crop_calendar_available": "<class 'bool'>"
+}
+MLPrediction {
+ "model_name": "<class 'str'>",
+ "prediction": "str | None",
+ "confidence": "float | None",
+ "top_predictions": "typing.List[typing.Dict[str, typing.Any]] | None",
+ "probability": "float | None",
+ "unit": "str | None",
+ "timestamp": "str | None",
+ "model_version": "str | None",
+ "status": "<enum 'MLPredictionStatus'>",
+ "metadata": "typing.Dict[str, typing.Any] | None"
+}
+Decision {
+ "id": "<class 'str'>",
+ "decision_type": "<enum 'DecisionType'>",
+ "status": "<enum 'DecisionStatus'>",
+ "priority": "<enum 'Priority'>",
+ "severity": "str | None",
+ "title": "<class 'str'>",
+ "summary": "<class 'str'>",
+ "reason": "<class 'str'>",
+ "crop": "str | None",
+ "growth_stage": "str | None",
+ "location": "str | None",
+ "confidence": "float | None",
+ "confidence_rationale": "str | None",
+ "contributing_sources": "typing.List[app.schemas.decision.ContributingSource]",
+ "supporting_signals": "typing.List[app.schemas.decision.SupportingSignal]",
+ "warnings": "typing.List[app.schemas.decision.DecisionWarning]",
+ "created_at": "<class 'str'>"
+}
+DecisionResponse {
+ "status": "<enum 'DecisionStatus'>",
+ "data_quality": "<class 'app.schemas.decision.DataQuality'>",
+ "decisions": "typing.List[app.schemas.decision.Decision]",
+ "warnings": "typing.List[app.schemas.decision.DecisionWarning]",
+ "engine_version": "<class 'str'>",
+ "ruleset_version": "<class 'str'>",
+ "evaluation_timestamp": "<class 'str'>",
+ "total_decisions": "<class 'int'>"
+}
+=== SAMPLE ANALYSIS ===
+status: DecisionStatus.partial_context
+risks: [('Elevated Disease Pressure', 'medium', 'medium', <ConfidenceLevel.HIGH: 'high'>, ['disease_model_elevated_probability'], ['disease_detection'])]
+opps: []
+dq_notices: [('missing_data', 'weather', 'Weather data was unavailable; weather-related risks and opportunities were skipped (no values were substituted).'), ('missing_data', 'market', 'Market data was unavailable; market risks and opportunities were skipped (no prices were substituted).'), ('missing_data', 'crop_calendar', 'Crop calendar data was unavailable; crop-stage-specific risk and opportunity analysis was skipped (no stage was assumed).'), ('missing_data', 'decision_engine', 'Decision Engine output was not supplied; upstream decisions were not attributed and the analysis ran on direct signals only.')]
+conflicts: []
+summary: risk_count=1 opportunity_count=0 data_quality_notice_count=4 conflict_notice_count=0 risk_count_by_category={'disease': 1} opportunity_count_by_category={} highest_risk_severity=<SeverityLevel.MEDIUM: 'medium'> highest_risk_priority=<PriorityLevel.MEDIUM: 'medium'> highest_opportunity_priority=None

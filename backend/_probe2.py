@@ -1,0 +1,1 @@
+"""Temporary ground-truth probe for writing test_risk_opportunity.py."""
