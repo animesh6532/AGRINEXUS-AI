@@ -85,8 +85,19 @@ EXTERNAL_PAYLOAD = {
 }
 
 
+@pytest.fixture(autouse=True)
+def force_reference_fallback(monkeypatch):
+    """Unit tests must never depend on a developer's real SPORA_API_KEY."""
+    monkeypatch.setattr(
+        "app.services.crop_calendar_service.settings."
+        "CROP_CALENDAR_FALLBACK_TO_REFERENCE_DATA",
+        True,
+        raising=False,
+    )
+
+
 @pytest.fixture
-def api_client():
+def external_client():
     """Create an external client with no retry sleeping for fast tests."""
     return ExternalCropCalendarClient(
         base_url=TEST_BASE_URL,
@@ -206,9 +217,10 @@ class TestCropCalendarServiceReference:
 class TestExternalCropCalendarClient:
     """Test the external provider client (mocked urllib)."""
 
-    def test_not_configured_by_default(self):
+    def test_not_configured_by_default(self, external_client):
         client = ExternalCropCalendarClient(base_url=None, api_key=None)
         assert client.is_configured is False
+
 
     def test_fetch_without_base_url_raises(self):
         client = ExternalCropCalendarClient(base_url=None, api_key="k")
@@ -221,20 +233,21 @@ class TestExternalCropCalendarClient:
         client = ExternalCropCalendarClient(
             base_url=TEST_BASE_URL, api_key=None
         )
-        with patch("urllib.request.urlopen") as mock_urlopen:
-            with pytest.raises(
-                CropCalendarServiceError, match="CROP_CALENDAR_API_KEY"
-            ):
-                asyncio.run(client.fetch_crop_calendar("rice"))
-        mock_urlopen.assert_not_called()
+        with pytest.raises(
+            CropCalendarServiceError, match="SPORA_API_KEY"
+        ):
+            asyncio.run(
+                client.fetch_crop_calendar(crop="rice", season="kharif")
+            )
+        client._last_request_call = None
 
     @patch("urllib.request.urlopen")
-    def test_fetch_success_and_normalization(self, mock_urlopen, api_client):
+    def test_fetch_success_and_normalization(self, mock_urlopen, external_client):
         mock_urlopen.return_value.__enter__.return_value = _payload_response(
             EXTERNAL_PAYLOAD
         )
 
-        result = asyncio.run(api_client.fetch_crop_calendar("rice", "kharif"))
+        result = asyncio.run(external_client.fetch_crop_calendar("rice", "kharif"))
 
         assert result["crop"] == "rice"
         assert result["season"] == "kharif"
@@ -247,66 +260,96 @@ class TestExternalCropCalendarClient:
         assert result["growth_stages"][0]["duration_days"] == 25
 
     @patch("urllib.request.urlopen")
-    def test_request_url_excludes_api_key(self, mock_urlopen, api_client):
+    def test_request_url_excludes_api_key(self, mock_urlopen, external_client):
         """The API key must never appear in the request URL."""
         mock_urlopen.return_value.__enter__.return_value = _payload_response(
             EXTERNAL_PAYLOAD
         )
 
-        asyncio.run(api_client.fetch_crop_calendar("rice", "kharif"))
+        asyncio.run(external_client.fetch_crop_calendar("rice", "kharif"))
 
         request = mock_urlopen.call_args[0][0]
         assert TEST_API_KEY not in request.full_url
-        assert "crop=rice" in request.full_url
+        # GET /harvest/{location}: no crop parameter, location-only path.
+        assert request.full_url == f"{TEST_BASE_URL}/harvest/india"
         assert request.get_header("X-api-key") == TEST_API_KEY
 
     @patch("urllib.request.urlopen")
-    def test_fetch_network_failure(self, mock_urlopen, api_client):
+    def test_fetch_network_failure(self, mock_urlopen, external_client):
         mock_urlopen.side_effect = urllib.error.URLError("connection refused")
 
         with pytest.raises(CropCalendarServiceError, match="unreachable"):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
 
     @patch("urllib.request.urlopen")
-    def test_fetch_timeout(self, mock_urlopen, api_client):
+    def test_fetch_timeout(self, mock_urlopen, external_client):
         mock_urlopen.side_effect = TimeoutError("timed out")
 
         with pytest.raises(CropCalendarServiceError, match="unreachable"):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
 
     @patch("urllib.request.urlopen")
-    def test_fetch_auth_failure_no_retry(self, mock_urlopen, api_client):
+    def test_fetch_auth_failure_no_retry(self, mock_urlopen, external_client):
         mock_urlopen.side_effect = urllib.error.HTTPError(
             TEST_BASE_URL, 401, "Unauthorized", {}, None
         )
 
-        with pytest.raises(CropCalendarServiceError, match="credentials"):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
+        with pytest.raises(
+            CropCalendarServiceError, match="401|API key|credential"
+        ):
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
         assert mock_urlopen.call_count == 1
 
     @patch("urllib.request.urlopen")
-    def test_fetch_rate_limit_no_retry(self, mock_urlopen, api_client):
+    def test_fetch_http_403_plan_not_supported(
+        self, mock_urlopen, external_client
+    ):
+        """HTTP 403 (plan/quota) must fail fast with a clear error."""
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            TEST_BASE_URL, 403, "Forbidden", {}, None
+        )
+
+        with pytest.raises(
+            CropCalendarServiceError, match="403|quota|plan"
+        ):
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
+        assert mock_urlopen.call_count == 1
+
+    @patch("urllib.request.urlopen")
+    def test_fetch_rate_limit_no_retry(self, mock_urlopen, external_client):
         mock_urlopen.side_effect = urllib.error.HTTPError(
             TEST_BASE_URL, 429, "Too Many Requests", {}, None
         )
 
         with pytest.raises(CropCalendarServiceError, match="rate limit"):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
 
     @patch("urllib.request.urlopen")
     def test_fetch_server_error_retries_then_fails(
-        self, mock_urlopen, api_client
+        self, mock_urlopen, external_client
     ):
         mock_urlopen.side_effect = urllib.error.HTTPError(
             TEST_BASE_URL, 500, "Server Error", {}, None
         )
 
         with pytest.raises(CropCalendarServiceError, match="HTTP 500"):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
-        assert mock_urlopen.call_count == api_client.max_retries
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
+        assert mock_urlopen.call_count == external_client.max_retries
 
     @patch("urllib.request.urlopen")
-    def test_fetch_invalid_json(self, mock_urlopen, api_client):
+    def test_fetch_crop_not_found_after_filtering(
+        self, mock_urlopen, external_client
+    ):
+        """Unknown crops raise CropNotFoundError (maps to HTTP 404)."""
+        mock_urlopen.return_value.__enter__.return_value = _payload_response(
+            EXTERNAL_PAYLOAD
+        )
+
+        with pytest.raises(CropNotFoundError, match="not available"):
+            asyncio.run(external_client.fetch_crop_calendar("sugarcane"))
+
+    @patch("urllib.request.urlopen")
+    def test_fetch_invalid_json(self, mock_urlopen, external_client):
         mock_response = MagicMock()
         mock_response.read.return_value.decode.return_value = "not-json{"
         mock_urlopen.return_value.__enter__.return_value = mock_response
@@ -314,100 +357,125 @@ class TestExternalCropCalendarClient:
         with pytest.raises(
             CropCalendarServiceError, match="invalid response"
         ):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
 
     @patch("urllib.request.urlopen")
-    def test_fetch_missing_growth_stages(self, mock_urlopen, api_client):
+    def test_fetch_missing_growth_stages(self, mock_urlopen, external_client):
         mock_urlopen.return_value.__enter__.return_value = _payload_response(
-            {"crop": "rice", "crop_duration_days": 135}
+            {"location": "India"}
         )
 
-        with pytest.raises(CropCalendarServiceError, match="growth stages"):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
+        with pytest.raises(CropCalendarServiceError, match="crops"):
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
 
     @patch("urllib.request.urlopen")
-    def test_fetch_invalid_stage_entry(self, mock_urlopen, api_client):
+    def test_fetch_invalid_stage_entry(self, mock_urlopen, external_client):
+        mock_urlopen.return_value.__enter__.return_value = _payload_response(
+            {"crops": "not-a-list"}
+        )
+
+        with pytest.raises(
+            CropCalendarServiceError, match="crops"
+        ):
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
+
+    @patch("urllib.request.urlopen")
+    def test_fetch_missing_duration(self, mock_urlopen, external_client):
         mock_urlopen.return_value.__enter__.return_value = _payload_response(
             {
-                "crop": "rice",
-                "crop_duration_days": 135,
-                "growth_stages": [{"stage": "x", "duration_days": -1}],
+                "id": "india",
+                "location": "India",
+                "crops": [
+                    {
+                        "crop": "Rice",
+                        "crop_name": "Rice",
+                        "planting_start_date": "not-a-date",
+                        "planting_end_date": "also-bad",
+                        "harvest_start_date": "",
+                        "harvest_end_date": "",
+                    }
+                ],
             }
         )
 
         with pytest.raises(
-            CropCalendarServiceError, match="invalid growth stage"
+            CropCalendarServiceError, match="planting/harvest"
         ):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
 
     @patch("urllib.request.urlopen")
-    def test_fetch_missing_duration(self, mock_urlopen, api_client):
-        mock_urlopen.return_value.__enter__.return_value = _payload_response(
-            {
-                "crop": "rice",
-                "growth_stages": [{"stage": "x", "duration_days": 10}],
-            }
-        )
-
-        with pytest.raises(
-            CropCalendarServiceError, match="crop_duration_days"
-        ):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
-
-    @patch("urllib.request.urlopen")
-    def test_duration_mismatch_adds_note(self, mock_urlopen, api_client):
+    def test_duration_mismatch_adds_note(self, mock_urlopen, external_client):
         payload = {
-            "crop": "rice",
-            "crop_duration_days": 100,
-            "growth_stages": [
-                {"stage": "a", "duration_days": 60},
-                {"stage": "b", "duration_days": 60},
+            "id": "india",
+            "location": "India",
+            "crops": [
+                {
+                    "crop": "Rice",
+                    "crop_name": "Rice",
+                    "planting_start_date": "6/1",
+                    "planting_end_date": "6/10",
+                    "harvest_start_date": "9/12",
+                    "harvest_end_date": "9/20",
+                    # season_length_days (200) disagrees with the
+                    # planting-start -> harvest-end span, so the
+                    # normalization note path is exercised.
+                    "season_length_days": 200,
+                    "source": "MWCACP",
+                }
             ],
         }
         mock_urlopen.return_value.__enter__.return_value = _payload_response(
             payload
         )
 
-        result = asyncio.run(api_client.fetch_crop_calendar("rice"))
+        result = asyncio.run(external_client.fetch_crop_calendar("rice"))
         assert any("does not match" in n for n in result["notes"])
 
     @patch("urllib.request.urlopen")
-    def test_api_key_never_logged(self, mock_urlopen, api_client, caplog):
+    def test_api_key_never_logged(self, mock_urlopen, external_client, caplog):
         """The API key must not appear in any log record."""
         caplog.set_level(logging.DEBUG)
         mock_urlopen.side_effect = urllib.error.URLError("boom")
 
         with pytest.raises(CropCalendarServiceError):
-            asyncio.run(api_client.fetch_crop_calendar("rice"))
+            asyncio.run(external_client.fetch_crop_calendar("rice"))
 
         assert TEST_API_KEY not in caplog.text
 
     @patch("urllib.request.urlopen")
-    def test_check_connectivity_success(self, mock_urlopen, api_client):
+    def test_check_connectivity_success(self, mock_urlopen, external_client):
         mock_urlopen.return_value.__enter__.return_value = _payload_response(
             {}
         )
-        assert asyncio.run(api_client.check_connectivity()) is True
+        assert asyncio.run(external_client.check_connectivity()) is True
 
     @patch("urllib.request.urlopen")
     def test_check_connectivity_http_error_is_reachable(
-        self, mock_urlopen, api_client
+        self, mock_urlopen, external_client
     ):
         mock_urlopen.side_effect = urllib.error.HTTPError(
             TEST_BASE_URL, 404, "Not Found", {}, None
         )
-        assert asyncio.run(api_client.check_connectivity()) is True
+        assert asyncio.run(external_client.check_connectivity()) is True
 
     @patch("urllib.request.urlopen")
     def test_check_connectivity_network_failure(
-        self, mock_urlopen, api_client
+        self, mock_urlopen, external_client
     ):
         mock_urlopen.side_effect = urllib.error.URLError("no route")
-        assert asyncio.run(api_client.check_connectivity()) is False
+        assert asyncio.run(external_client.check_connectivity()) is False
 
     def test_check_connectivity_not_configured(self):
         client = ExternalCropCalendarClient(base_url=None)
         assert asyncio.run(client.check_connectivity()) is False
+
+    def external_client(request):
+        """A fake (not real) SPORA_API_KEY for the network-call verification test."""
+        return ExternalCropCalendarClient(
+            base_url=TEST_BASE_URL,
+            api_key=TEST_API_KEY,
+            retry_delay=0.0,
+        )
 
 
 class TestCropCalendarServiceExternal:
@@ -452,8 +520,17 @@ class TestCropCalendarServiceExternal:
         assert result["location"] is None
 
     def test_get_crop_calendar_external_failure_propagates(
-        self, external_service
+        self, external_service, monkeypatch
     ):
+        # External failures must surface as 502 via the service unless
+        # reference fallback is available; disable fallback here so the
+        # provider error propagates for this unit test.
+        from app.core.config import settings as app_settings
+
+        monkeypatch.setattr(
+            app_settings, "CROP_CALENDAR_FALLBACK_TO_REFERENCE_DATA", False
+        )
+
         class FailingClient:
             is_configured = True
 
@@ -471,6 +548,125 @@ class TestCropCalendarServiceExternal:
         catalog = external_service.get_supported_crops()
         assert catalog["external_provider_configured"] is True
         assert "reference dataset" in catalog["note"]
+
+    @patch("urllib.request.urlopen")
+    def test_external_failure_falls_back_to_reference(
+        self, mock_urlopen, external_service
+    ):
+        """Provider failures fall back to labelled reference data."""
+        mock_urlopen.side_effect = urllib.error.URLError("provider down")
+
+        result = asyncio.run(
+            external_service.get_crop_calendar("rice", season="kharif")
+        )
+
+        assert result["crop"] == "rice"
+        assert result["is_reference_data"] is True
+        assert result["data_source"] == REFERENCE_DATA_SOURCE
+        assert result["fallback_used"] is True
+        assert result["fallback_reason"]
+        assert any(
+            "REFERENCE DATA FALLBACK" in n for n in result["notes"]
+        )
+
+    @patch("urllib.request.urlopen")
+    def test_external_malformed_response_falls_back_to_reference(
+        self, mock_urlopen, external_service
+    ):
+        mock_response = MagicMock()
+        mock_response.read.return_value.decode.return_value = "not-json{"
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        result = asyncio.run(
+            external_service.get_crop_calendar("rice", season="kharif")
+        )
+
+        assert result["is_reference_data"] is True
+        assert result["fallback_used"] is True
+
+    @patch("urllib.request.urlopen")
+    def test_external_unknown_crop_falls_back_to_reference(
+        self, mock_urlopen, external_service
+    ):
+        """Unknown provider crop + unknown reference crop -> 404 contract."""
+        mock_urlopen.return_value.__enter__.return_value = _payload_response(
+            EXTERNAL_PAYLOAD
+        )
+
+        with pytest.raises(CropNotFoundError):
+            asyncio.run(
+                external_service.get_crop_calendar(
+                    "sugarcane", season="kharif"
+                )
+            )
+
+    @patch("urllib.request.urlopen")
+    def test_external_missing_key_falls_back_to_reference_data(
+        self, mock_urlopen
+    ):
+        """A whitespace-only SPORA_API_KEY disables external mode.
+
+        The service treats it as plain reference mode (no fallback label),
+        never contacts the network, and never leaks the key.
+        """
+        service = CropCalendarService(
+            external_client=ExternalCropCalendarClient(
+                base_url=TEST_BASE_URL,
+                api_key="   ",
+                retry_delay=0.0,
+            )
+        )
+
+        result = asyncio.run(
+            service.get_crop_calendar("rice", season="kharif")
+        )
+
+        mock_urlopen.assert_not_called()
+        assert result["is_reference_data"] is True
+        assert result["data_source"] == REFERENCE_DATA_SOURCE
+
+    @patch("urllib.request.urlopen")
+    def test_external_whitespaceless_key_used_for_network_call(
+        self, mock_urlopen,
+        # The external_client fixture takes the key from constructor args, so
+        # this test verifies a configured key reaches the request header.
+        external_client,
+    ):
+        """A real-looking (but fake) SPORA_API_KEY must be used for the call."""
+        EXTERNAL_PAYLOAD = {
+            "id": "india",
+            "location": "India",
+            "crops": [
+                {
+                    "crop": "Rice",
+                    "crop_name": "Rice",
+                    "source": "https://spora.engineer",
+                    "planting_start_date": "06-01",
+                    "planting_end_date": "07-31",
+                    "harvest_start_date": "09-20",
+                    "harvest_end_date": "10-15",
+                    "season_length_days": 120,
+                }
+            ],
+        }
+
+        service = CropCalendarService(external_client=external_client)
+
+        mock_urlopen.return_value.__enter__.return_value = _payload_response(
+            EXTERNAL_PAYLOAD
+        )
+
+        result = asyncio.run(
+            service.get_crop_calendar("rice", season="kharif")
+        )
+
+        request = mock_urlopen.call_args[0][0]
+        assert request.get_header("X-api-key") == TEST_API_KEY
+        assert "SPORA_API_KEY" not in request.full_url
+        assert result["is_reference_data"] is False
+        assert result["data_source"] == EXTERNAL_DATA_SOURCE
+        assert result["fallback_used"] is False
+        assert result["fallback_reason"] is None
 
 
 

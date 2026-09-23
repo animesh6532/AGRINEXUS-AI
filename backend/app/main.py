@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from .core import dependencies, config, logging
-from .api import market, weather, crop_calendar
+from .api import market, weather, crop_calendar, decision
 from .api.v1.router import api_v1_router
 from .services.model_registry import ModelRegistry
 from .database import connection
@@ -69,7 +69,16 @@ app.add_middleware(
 app.include_router(market.router)
 app.include_router(weather.router)
 app.include_router(crop_calendar.router)
+app.include_router(decision.router)
 app.include_router(api_v1_router)
+
+
+# NOTE: Startup/shutdown behavior is fully handled by the ``lifespan``
+# context manager above (database initialization + frozen ML model
+# loading). The legacy ``@app.on_event`` startup/shutdown handlers from
+# the Market Forecast backend performed the same database initialization
+# and were consolidated into the lifespan to avoid duplicate work - no
+# functionality is lost.
 
 
 # Root endpoint
@@ -127,4 +136,3 @@ async def health_check():
         "models_status": m_health["status"],
         "models": m_health["models"]
     }
-
