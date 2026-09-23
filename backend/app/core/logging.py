@@ -17,7 +17,7 @@ def setup_logging() -> logging.Logger:
         logging.Logger: Configured root logger
     """
     # Create logger
-    logger = logging.getLogger("agrinexus_market")
+    logger = logging.getLogger("agrinexus_ai")
     logger.setLevel(logging.DEBUG if settings.DEBUG else logging.INFO)
 
     # Prevent duplicate handlers
@@ -39,7 +39,7 @@ def setup_logging() -> logging.Logger:
     # File handler (optional, for production)
     if not settings.DEBUG:
         try:
-            file_handler = logging.FileHandler("market_forecast.log")
+            file_handler = logging.FileHandler("agrinexus_ai.log")
             file_handler.setLevel(logging.INFO)
             file_handler.setFormatter(formatter)
             logger.addHandler(file_handler)
