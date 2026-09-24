@@ -31,3 +31,62 @@ class CropRecommendationResponse(BaseModel):
     anomaly_status: str = Field("Plausible input", description="Description of input plausibility")
     warnings: List[str] = Field(default_factory=list)
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+# --- SMART CROP ADVISOR SCHEMAS ---
+
+class LocationInput(BaseModel):
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Latitude coordinate", json_schema_extra={"example": 22.72})
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Longitude coordinate", json_schema_extra={"example": 88.48})
+    displayName: Optional[str] = Field(None, description="Location display name")
+    city: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = "India"
+    source: Optional[str] = Field("MAP_SELECTION", description="GPS, MAP_SELECTION, SEARCH, SAVED_LOCATION, MANUAL")
+
+
+class SoilInput(BaseModel):
+    nitrogen: Optional[float] = Field(None, ge=0.0, le=300.0, description="Measured Soil N (mg/kg)")
+    phosphorus: Optional[float] = Field(None, ge=0.0, le=300.0, description="Measured Soil P (mg/kg)")
+    potassium: Optional[float] = Field(None, ge=0.0, le=300.0, description="Measured Soil K (mg/kg)")
+    ph: Optional[float] = Field(None, ge=0.0, le=14.0, description="Measured Soil pH")
+
+
+class WeatherOverrideInput(BaseModel):
+    temperature: Optional[float] = Field(None, description="Temperature override °C")
+    humidity: Optional[float] = Field(None, description="Relative humidity override %")
+    rainfall: Optional[float] = Field(None, description="Rainfall override mm")
+
+
+class FarmInput(BaseModel):
+    area_acres: Optional[float] = Field(None, ge=0.0, le=10000.0, description="Farm size in acres")
+    water_availability: Optional[str] = Field("unknown", description="Rainfed, Limited Irrigation, Irrigated, unknown")
+
+
+class PreferencesInput(BaseModel):
+    category: Optional[str] = Field("all", description="Crop category filter")
+
+
+class SmartCropRequest(BaseModel):
+    mode: str = Field("auto", description="auto, hybrid, manual")
+    location: LocationInput
+    soil: Optional[SoilInput] = Field(default_factory=SoilInput)
+    weather_override: Optional[WeatherOverrideInput] = None
+    farm: Optional[FarmInput] = Field(default_factory=FarmInput)
+    preferences: Optional[PreferencesInput] = Field(default_factory=PreferencesInput)
+
+
+class SmartCropResponse(BaseModel):
+    success: bool = True
+    engine_version: str = "1.0.0"
+    mode: str
+    data_completeness: float = Field(..., description="Completeness score (0.0 to 1.0)")
+    location: Dict[str, Any]
+    season: Dict[str, Any]
+    weather: Dict[str, Any]
+    soil: Dict[str, Any]
+    ml_status: Dict[str, Any]
+    farm: Dict[str, Any]
+    recommendations: List[Dict[str, Any]]
+

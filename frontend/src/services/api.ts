@@ -24,6 +24,8 @@ import type {
   MarketSignalsResponse,
   CropCalendarItem,
   CropScheduleResponse,
+  SmartCropRequest,
+  SmartCropResponse,
 } from '../types/api';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -90,6 +92,16 @@ export const api = {
     });
     return handleResponse<CropRecommendationResponse>(res);
   },
+
+  async predictCropSmart(payload: SmartCropRequest): Promise<SmartCropResponse> {
+    const res = await fetch(`${BASE_URL}/api/v1/crop/recommend-smart`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<SmartCropResponse>(res);
+  },
+
 
   async predictDisease(file: File, includeGradcam: boolean = false): Promise<DiseasePredictResponse> {
     const formData = new FormData();

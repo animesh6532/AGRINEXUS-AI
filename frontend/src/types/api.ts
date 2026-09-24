@@ -418,3 +418,148 @@ export interface AppHealthResponse {
   models_status?: string;
   models: Record<string, string>;
 }
+
+// ------------------------------------------------------------------
+// 13. SMART CROP ADVISOR
+// ------------------------------------------------------------------
+export interface SmartCropLocationInput {
+  latitude: number;
+  longitude: number;
+  displayName?: string;
+  city?: string;
+  district?: string;
+  state?: string;
+  country?: string;
+  source?: string;
+}
+
+export interface SmartCropSoilInput {
+  nitrogen?: number | null;
+  phosphorus?: number | null;
+  potassium?: number | null;
+  ph?: number | null;
+}
+
+export interface SmartCropWeatherOverrideInput {
+  temperature?: number | null;
+  humidity?: number | null;
+  rainfall?: number | null;
+}
+
+export interface SmartCropFarmInput {
+  area_acres?: number | null;
+  water_availability?: string;
+}
+
+export interface SmartCropPreferencesInput {
+  category?: string;
+}
+
+export interface SmartCropRequest {
+  mode: "auto" | "hybrid" | "manual";
+  location: SmartCropLocationInput;
+  soil?: SmartCropSoilInput;
+  weather_override?: SmartCropWeatherOverrideInput;
+  farm?: SmartCropFarmInput;
+  preferences?: SmartCropPreferencesInput;
+}
+
+export interface SmartCropFactorScores {
+  season: number;
+  temperature: number;
+  rainfall: number;
+  ph: number;
+  texture: number;
+  region: number;
+  ml?: number;
+}
+
+export interface SmartCropRecommendationItem {
+  crop: string;
+  display_name: string;
+  scientific_name: string;
+  ml_supported: boolean;
+  category: string;
+  suitability_score: number;
+  suitability_level: "Highly Suitable" | "Suitable" | "Conditionally Suitable" | "Low Suitability" | "Insufficient Data";
+  ml_prediction?: {
+    supported: boolean;
+    probability: number | null;
+  };
+  factor_scores: SmartCropFactorScores;
+  reasons: string[];
+  warnings: string[];
+  missing_data: string[];
+  data_sources: { domain: string; source: string }[];
+  profile_details: Record<string, any>;
+}
+
+export interface SmartCropSoilParameter {
+  value: number | null;
+  unit: string;
+  label: string;
+  provenance: string;
+  source_description: string;
+  is_estimated: boolean;
+}
+
+export interface SmartCropResponse {
+  success: boolean;
+  engine_version: string;
+  mode: string;
+  data_completeness: number;
+  location: {
+    latitude: number;
+    longitude: number;
+    display_name: string;
+    district?: string;
+    state?: string;
+    country?: string;
+  };
+  season: {
+    season: string;
+    regional_season: string;
+    sowing_window: string;
+    harvest_window: string;
+    current_month: string;
+    state: string;
+    source: string;
+    data_status: string;
+  };
+  weather: {
+    current_temperature?: number;
+    current_humidity?: number;
+    current_rainfall?: number;
+    recent_rainfall_14d?: number;
+    recent_temperature_14d?: number;
+    forecast_temperature_mean?: number;
+    forecast_rainfall_sum?: number;
+    rain_probability_max?: number;
+    wind_speed?: number;
+    et0?: number;
+    data_available: boolean;
+    source: string;
+    error_message?: string;
+  };
+  soil: {
+    ph?: SmartCropSoilParameter;
+    nitrogen?: SmartCropSoilParameter;
+    phosphorus?: SmartCropSoilParameter;
+    potassium?: SmartCropSoilParameter;
+    soil_texture: string;
+    organic_carbon_g_kg?: number;
+    soil_depth_layer: string;
+    data_source: string;
+    data_completeness: number;
+  };
+  ml_status: {
+    available: boolean;
+    anomaly_status: string;
+  };
+  farm: {
+    area_acres?: number;
+    water_availability: string;
+  };
+  recommendations: SmartCropRecommendationItem[];
+}
+
