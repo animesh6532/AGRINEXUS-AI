@@ -66,7 +66,7 @@ export const WeatherSky: React.FC<WeatherSkyProps> = ({
 
   return (
     <div
-      className={`absolute inset-0 bg-gradient-to-b ${getSkyGradient()} transition-colors duration-1000 overflow-hidden pointer-events-none`}
+      className={`absolute inset-0 z-0 bg-gradient-to-b ${getSkyGradient()} transition-colors duration-1000 overflow-hidden pointer-events-none`}
     >
       {/* Sun / Celestial Glow (Daytime) */}
       {isDay && sunVisibility > 0.05 && (

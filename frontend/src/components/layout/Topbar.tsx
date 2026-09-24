@@ -95,7 +95,7 @@ export const Topbar: React.FC = () => {
   };
 
   return (
-    <header className="h-20 px-4 sm:px-8 bg-[#FAFBF7]/85 backdrop-blur-xl border-b border-[#E2E7DA] sticky top-0 z-20 flex items-center justify-between shadow-sm">
+    <header className="h-20 px-4 sm:px-8 bg-[#FAFBF7]/85 backdrop-blur-xl border-b border-[#E2E7DA] sticky top-0 z-30 flex items-center justify-between shadow-sm">
       {/* Title & Context */}
       <div className="min-w-0 pr-2">
         <span className="text-[10px] font-bold uppercase tracking-widest text-[#536056] block truncate">

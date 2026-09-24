@@ -4,14 +4,8 @@ import {
   AlertTriangle,
   Layers,
   Sparkles,
-  Sliders,
-  Calculator,
-  Search,
   CheckCircle2,
   RefreshCw,
-  Info,
-  MapPin,
-  ShieldAlert,
   Scale
 } from 'lucide-react';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
@@ -24,8 +18,9 @@ import { ScopeWarning } from '../components/intelligence/ScopeWarning';
 import { useLocationContext } from '../context/LocationContext';
 import { useSmartCropRecommendation, RecommendationMode } from '../hooks/useSmartCropRecommendation';
 import { CropModeSwitcher } from '../components/crop/CropModeSwitcher';
-import { FieldContextPanels } from '../components/crop/FieldContextPanels';
-import { CropResultCard } from '../components/crop/CropResultCard';
+import { FieldSnapshotPanel } from '../components/crop/FieldSnapshotPanel';
+import { FeaturedCropCard } from '../components/crop/FeaturedCropCard';
+import { AlternativeCropCard } from '../components/crop/AlternativeCropCard';
 import { CropDetailModal } from '../components/crop/CropDetailModal';
 import { CropCompareModal } from '../components/crop/CropCompareModal';
 import { HybridOverrideDrawer } from '../components/crop/HybridOverrideDrawer';
@@ -35,7 +30,7 @@ import { api } from '../services/api';
 import { CropRecommendationResponse, SmartCropRecommendationItem } from '../types/api';
 
 export const CropPage: React.FC = () => {
-  const { location, openPicker, isPickerOpen } = useLocationContext();
+  const { location, openPicker } = useLocationContext();
 
   const {
     mode,
@@ -55,7 +50,7 @@ export const CropPage: React.FC = () => {
     analyzeField,
   } = useSmartCropRecommendation();
 
-  // Selected crop detail modal
+  // Selected crop detail modal / drawer
   const [selectedCropDetail, setSelectedCropDetail] = useState<SmartCropRecommendationItem | null>(null);
 
   // Multi-Crop Comparison State
@@ -65,7 +60,7 @@ export const CropPage: React.FC = () => {
   // Hybrid override drawer visibility
   const [isOverrideDrawerOpen, setIsOverrideDrawerOpen] = useState<boolean>(false);
 
-  // Manual Mode State (Preserved original workflow)
+  // Manual Mode State
   const [manualFormData, setManualFormData] = useState({
     N: 90.0,
     P: 42.0,
@@ -112,7 +107,7 @@ export const CropPage: React.FC = () => {
     setComparedCrops((prev) => prev.filter((c) => c.crop !== cropKey));
   };
 
-  // Automatically trigger smart analysis when location is available on mount or mode change
+  // Automatically trigger smart analysis when location is available on mount
   useEffect(() => {
     if (location && mode !== 'manual' && !smartResult && !isAnalyzing) {
       analyzeField(location);
@@ -121,15 +116,15 @@ export const CropPage: React.FC = () => {
 
   return (
     <div className="space-y-8 selection:bg-[#D4E768] selection:text-[#0B1C10]">
-      {/* Editorial Page Hero */}
+      {/* Compact Editorial Hero Header */}
       <AgriculturalPageHero
         category="AGRICULTURAL SUITABILITY ADVISOR"
         title="Know What Your Field Can Grow."
-        description="AgriNexus-AI combines your field location, weather, soil and seasonal conditions with agricultural intelligence to identify suitable crop options."
+        description="AgriNexus-AI combines field location, weather, soil and seasonal conditions to identify suitable crop options."
         imageSrc="/images/crop-intelligence.webp"
       />
 
-      {/* Mode Switcher */}
+      {/* Segmented Mode Control & Direct Analyze Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E7DA] pb-6">
         <CropModeSwitcher mode={mode} onModeChange={setMode} />
 
@@ -141,7 +136,7 @@ export const CropPage: React.FC = () => {
             className="shadow-sm hover:shadow-glow self-start sm:self-auto"
             isLoading={isAnalyzing}
             onClick={() => analyzeField(location)}
-            icon={<Sparkles className="w-4 h-4" />}
+            icon={<Sparkles className="w-4 h-4 text-[#0B1C10]" />}
           >
             ANALYZE FIELD
           </Button>
@@ -153,17 +148,17 @@ export const CropPage: React.FC = () => {
       {/* ============================================================ */}
       {mode !== 'manual' && (
         <div className="space-y-8">
-          {/* Field Context Panels */}
-          <FieldContextPanels
+          {/* Unified Field Intelligence Snapshot Panel (Replaces 4 repetitive cards) */}
+          <FieldSnapshotPanel
             location={location}
             smartResponse={smartResult}
             onOpenLocationPicker={openPicker}
             onOpenHybridEdit={() => setIsOverrideDrawerOpen(true)}
           />
 
-          {/* Analysis Experience Stage Progress Bar */}
+          {/* Pipeline Stage Progress Bar During Analysis */}
           {isAnalyzing && (
-            <GlassCard variant="solid" className="p-6 space-y-4 animate-fade-in border-[#2F6B3C]/30">
+            <GlassCard variant="solid" className="p-6 space-y-4 border-[#2F6B3C]/30 bg-white">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-widest text-[#2F6B3C] flex items-center gap-2">
                   <RefreshCw className="w-4 h-4 animate-spin text-[#2F6B3C]" />
@@ -203,7 +198,7 @@ export const CropPage: React.FC = () => {
             </GlassCard>
           )}
 
-          {/* Error Banner */}
+          {/* Error State Banner */}
           {smartError && (
             <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
@@ -222,13 +217,13 @@ export const CropPage: React.FC = () => {
             </div>
           )}
 
-          {/* RESULTS SECTION */}
+          {/* RECOMMENDATION RESULTS */}
           {smartResult && (
-            <div className="space-y-6 pt-2">
+            <div className="space-y-8 pt-2">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E2E7DA] pb-4">
                 <div>
-                  <h2 className="text-2xl font-black font-editorial text-[#0B1C10]">
-                    SUITABLE CROP OPTIONS FOR YOUR FIELD
+                  <h2 className="text-2xl font-black font-editorial text-[#0B1C10] tracking-tight">
+                    CROPS SUITED TO YOUR FIELD
                   </h2>
                   <p className="text-xs text-[#536056] mt-0.5">
                     Evaluated against field location ({smartResult.location.display_name}), weather, soil, and seasonal conditions ({smartResult.season.season}).
@@ -256,7 +251,7 @@ export const CropPage: React.FC = () => {
 
               {/* Multi-Crop Comparison Floating Action Bar */}
               {comparedCrops.length > 0 && (
-                <div className="sticky top-4 z-30 p-4 rounded-2xl bg-[#0B1C10] text-white shadow-2xl flex items-center justify-between gap-4 border border-[#2F6B3C]/50 animate-fade-in">
+                <div className="sticky top-4 z-40 p-4 rounded-2xl bg-[#0B1C10] text-white shadow-2xl flex items-center justify-between gap-4 border border-[#2F6B3C]/50 animate-fade-in">
                   <div className="flex items-center gap-3">
                     <Scale className="w-5 h-5 text-[#D4E768]" />
                     <div>
@@ -289,17 +284,12 @@ export const CropPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Ranked Crop List - Hierarchical Display */}
+              {/* Hierarchical Recommendation Presentation */}
               {smartResult.recommendations.length > 0 && (
-                <div className="space-y-6">
-                  {/* Primary Top Recommendation (#1) */}
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold uppercase tracking-widest text-[#2F6B3C] flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 text-[#2F6B3C]" />
-                      TOP SUITED CROP RECOMMENDATION
-                    </span>
-                    <CropResultCard
-                      rank={1}
+                <div className="space-y-8">
+                  {/* FEATURED TOP RECOMMENDATION (#1) */}
+                  <div className="space-y-3">
+                    <FeaturedCropCard
                       item={smartResult.recommendations[0]}
                       onOpenDetail={setSelectedCropDetail}
                       isCompared={comparedCrops.some((c) => c.crop === smartResult.recommendations[0].crop)}
@@ -307,21 +297,21 @@ export const CropPage: React.FC = () => {
                     />
                   </div>
 
-                  {/* Alternative Suitable Crops Grid (#2 to #N) */}
+                  {/* ALTERNATIVE CROP OPTIONS GRID (#2 to #N) */}
                   {smartResult.recommendations.length > 1 && (
-                    <div className="space-y-3 pt-4 border-t border-[#E2E7DA]">
+                    <div className="space-y-4 pt-6 border-t border-[#E2E7DA]">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-widest text-[#536056]">
-                          ALTERNATIVE SUITABLE CROP OPTIONS ({smartResult.recommendations.length - 1})
-                        </span>
+                        <h3 className="text-xs font-bold uppercase tracking-widest text-[#536056]">
+                          OTHER SUITABLE CROP OPTIONS ({smartResult.recommendations.length - 1})
+                        </h3>
                         <span className="text-xs text-[#536056]">
-                          Click "Compare" to select crops for side-by-side analysis
+                          Click "Compare" to analyze crops side-by-side
                         </span>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {smartResult.recommendations.slice(1).map((item, idx) => (
-                          <CropResultCard
+                          <AlternativeCropCard
                             key={item.crop}
                             rank={idx + 2}
                             item={item}
@@ -336,7 +326,7 @@ export const CropPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Transparent Data Sources & Disclaimers */}
+              {/* Data Provenance & Engine Sources */}
               <GlassCard variant="solid" className="p-6 space-y-4 text-xs bg-[#FAFBF7]">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-[#536056] border-b border-[#E2E7DA] pb-2">
                   TRANSPARENT DATA PROVENANCE & ENGINE SOURCES
@@ -367,10 +357,9 @@ export const CropPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Disclaimers & Trust Statement */}
                 <div className="pt-2 text-[11px] text-[#536056] space-y-1 border-t border-[#E2E7DA]/60 leading-relaxed">
                   <p>• <strong>Decision Support:</strong> AgriNexus-AI suitability scores are decision support indicators, not farming guarantees.</p>
-                  <p>• <strong>Soil Data:</strong> Geospatial soil information represents a 250m regional estimate. Important NPK and pH values should be verified with a lab soil test.</p>
+                  <p>• <strong>Soil Data:</strong> Geospatial soil information represents a 250m regional estimate. NPK and pH values should be verified with a lab soil test.</p>
                   <p>• <strong>ML Model:</strong> Machine learning recommendations are limited to the 22 supported model classes. Environmental suitability evaluates the full 26-crop catalogue.</p>
                 </div>
               </GlassCard>
@@ -380,12 +369,12 @@ export const CropPage: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* 2. MANUAL MODE (Preserved Original Form) */}
+      {/* 2. MANUAL MODE (Legacy ML Form) */}
       {/* ============================================================ */}
       {mode === 'manual' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-6">
-            <GlassCard variant="solid" className="p-6 sm:p-8 space-y-5">
+            <GlassCard variant="solid" className="p-6 sm:p-8 space-y-5 bg-white">
               <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-4">
                 <Layers className="w-5 h-5 text-[#2F6B3C]" />
                 <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
@@ -470,7 +459,7 @@ export const CropPage: React.FC = () => {
                   size="lg"
                   className="w-full mt-2 shadow-md hover:shadow-glow"
                   isLoading={manualLoading}
-                  icon={<Sprout className="w-4 h-4" />}
+                  icon={<Sprout className="w-4 h-4 text-[#0B1C10]" />}
                 >
                   RECOMMEND CROPS
                 </Button>
@@ -492,7 +481,7 @@ export const CropPage: React.FC = () => {
             )}
 
             {manualResult ? (
-              <GlassCard variant="solid" className="p-6 sm:p-8 space-y-6">
+              <GlassCard variant="solid" className="p-6 sm:p-8 space-y-6 bg-white">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E7DA] pb-6">
                   <div>
                     <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">

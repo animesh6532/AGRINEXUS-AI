@@ -44,7 +44,7 @@ export const WeatherClouds: React.FC<WeatherCloudsProps> = ({
     : 'bg-slate-700/50';
 
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none transition-opacity duration-1000">
+    <div className="absolute inset-0 z-1 overflow-hidden pointer-events-none transition-opacity duration-1000">
       {/* Layer 1: Far Distance Clouds */}
       {farOpacity > 0.05 && (
         <div

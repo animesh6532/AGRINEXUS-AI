@@ -98,7 +98,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
 
   return (
     <aside
-      className={`shrink-0 bg-[#0B1C10] text-[#FAFBF7] h-screen sticky top-0 flex flex-col justify-between border-r border-[#E2E7DA]/10 hidden md:flex z-30 overflow-y-auto selection:bg-[#D4E768] selection:text-[#0B1C10] transition-all duration-300 ease-in-out ${
+      className={`shrink-0 bg-[#0B1C10] text-[#FAFBF7] h-screen sticky top-0 flex flex-col justify-between border-r border-[#E2E7DA]/10 hidden md:flex z-40 overflow-y-auto selection:bg-[#D4E768] selection:text-[#0B1C10] transition-all duration-300 ease-in-out ${
         collapsed ? 'w-20 p-3' : 'w-64 p-5'
       }`}
     >
