@@ -409,6 +409,338 @@ SPORA_API_KEY=your_spora_api_key_here
 - Live Spora verification is a separate explicit step using
   `backend/.env` (never printed, logged, or committed).
 
+## Risk & Opportunity Analysis Module
+
+**Risk & Opportunity Analysis is a deterministic decision-intelligence
+layer and is not a machine-learning model.** It sits AFTER the Context /
+Decision Engine and BEFORE the future Smart Alerts, Personalized Action
+Plan and AI Farming Assistant layers. It never trains, replaces or
+reimplements any of the project's 7 ML models, introduces no new
+external API or API key, and never fabricates weather data, market
+prices, crop stages, ML predictions, disease/pest probabilities, yield
+values, soil measurements or confidence scores - unavailable inputs are
+REPORTED as data-quality notices instead of being substituted.
+
+### Architecture
+
+```text
+Weather Intelligence
+        \
+Market Forecast
+         \
+Crop Calendar
+          \
+Farm Context ---------> Decision Engine
+          /
+Friend's ML outputs /
+                    v
+        Risk & Opportunity Analysis   (this module)
+                    v
+              Smart Alerts                (future)
+                    v
+        Personalized Action Plan          (future)
+                    v
+          AI Farming Assistant            (future)
+```
+
+The module consumes the SAME normalized contracts the project already
+exposes (`FarmContext`, `DecisionResponse`, the standardized
+`MLPrediction` contract) - it does not duplicate the Decision Engine,
+does not redefine upstream schemas, and does not recompute conditions
+the Decision Engine already identified (upstream priority/confidence
+are reused with attribution).
+
+### Files
+
+| File | Role |
+| --- | --- |
+| `app/schemas/risk_opportunity.py` | Input context, Risk/Opportunity objects, data-quality/conflict notices, responses |
+| `app/intelligence/risk_opportunity.py` | Deterministic rule engine: rules, multi-source consolidation, severity/priority/confidence grading |
+| `app/services/risk_opportunity_service.py` | Reusable service layer (validation, health, Decision Engine adapters) |
+| `app/api/risk_opportunity.py` | FastAPI router (`/api/risk-opportunity`) |
+
+### Inputs
+
+`RiskOpportunityContext`:
+
+- `farm_context` (required) - normalized farm context: crop, location,
+  sowing date, as-of date, weather/market/crop-calendar signals,
+  standardized ML predictions (all 7 contracts), optional
+  `data_freshness` timestamps.
+- `decision_engine_output` (optional) - Decision Engine response for
+  the same context; consumed and attributed, never recomputed. When
+  absent, the analysis runs on direct signals and reports the absence.
+- `source_metadata` (optional) - free-form source metadata.
+
+### Outputs
+
+`RiskOpportunityResponse`:
+
+- `status` - reuses the documented context-status vocabulary
+  (`complete_context`, `partial_context`, `insufficient_context`,
+  `conflicting_signals`).
+- `risks` / `opportunities` - structured, consolidated, sorted
+  deterministically (risks by severity then priority; opportunities by
+  priority then confidence).
+- `data_quality` - deterministic assessment (same completeness/staleness
+  methodology as the Decision Engine).
+- `data_quality_notices` - what was skipped and why (missing data,
+  stale data, unavailable models, missing fields, insufficient
+  baseline).
+- `conflict_notices` - conflicting upstream signals, never silently
+  resolved, with `detected_by` attribution.
+- `summary` - counts, per-category counts, highest severity/priority.
+- `engine_version`, `ruleset_version`, `analysis_timestamp`,
+  `total_risks`, `total_opportunities`.
+
+Each risk carries: `id`, `category`, `title`, `description`,
+`severity`, `priority`, `status` (`active`/`monitoring`), `confidence`,
+`numerical_confidence`, `confidence_source`, `confidence_rationale`,
+`affected_crop`, `affected_stage`, `evidence` (traceable signals),
+`contributing_sources`, `contributing_signals`, `reasoning`,
+`recommended_follow_up`, `detected_at`, `valid_until`.
+
+Each opportunity carries: `id`, `category`, `title`, `description`,
+`priority`, `status`, `confidence` (+ numeric/source/rationale),
+`affected_crop`, `affected_stage`, `evidence`,
+`contributing_sources`, `contributing_signals`, `reasoning`,
+`suggested_action`, `time_window`, `detected_at`.
+
+### Risk categories
+
+`weather`, `irrigation`, `disease`, `pest`, `soil`, `fertilizer`,
+`market`, `yield`, `crop_stage`, `data_quality`, `system`.
+
+### Opportunity categories
+
+`weather`, `market`, `irrigation`, `crop_stage`, `disease`, `pest`,
+`fertilizer`, `yield`, `harvest`, `data`.
+
+### Severity logic (deterministic, documented - NOT calibrated probabilities)
+
+Inputs: `n` = number of independent corroborating sources (weather,
+market, ML models; the crop calendar supplies context and the Decision
+Engine supplies attribution, neither counts as corroboration);
+`elevated` = a strong single signal (heavy rainfall, extreme heat,
+frost, strong wind, severe-weather indicator, model probability >= 0.6,
+market move >= 3%); `sensitive` = sensitive growth stage; `ts` =
+time-sensitive; `severe` = severe-weather indicator; `upstream` =
+priority reported by the Decision Engine for the same condition
+(attributed, never recomputed).
+
+1. **CRITICAL**: `n >= 2` and `upstream == critical` (attributed)
+2. **CRITICAL**: severe-weather indicator in a sensitive stage
+3. **CRITICAL**: `n >= 3` and (`sensitive` or `ts`)
+4. **CRITICAL**: `n >= 2` and `elevated` and `ts`
+5. **HIGH**: `n >= 2` and (`elevated` or `sensitive` or `ts`)
+6. **HIGH**: `n == 1` and `elevated` and `sensitive`
+7. **MEDIUM**: `n >= 2`
+8. **MEDIUM**: `elevated`
+9. **LOW**: otherwise (single, low-impact signal)
+
+These levels are deterministic rules, not statistically calibrated
+probabilities.
+
+### Priority logic (deterministic)
+
+Risks:
+
+- **CRITICAL**: severity CRITICAL
+- **HIGH**: severity HIGH and (time-sensitive or sensitive stage)
+- **MEDIUM**: severity HIGH without urgency, or severity MEDIUM with an
+  actionable follow-up
+- **LOW**: everything else
+
+Opportunities:
+
+- **HIGH**: `n >= 2` and bound to a specific time window
+- **MEDIUM**: `n >= 2`, or bound to a time window
+- **LOW**: otherwise
+
+### Confidence handling (never fabricated)
+
+1. A numeric confidence already produced upstream is REUSED verbatim
+   with attribution: first the Decision Engine decision confidence for
+   the same condition (`confidence_source: decision_engine`), otherwise
+   the ML model's own reported probability/confidence when the model is
+   the item's only corroborating source (`confidence_source: ml_model`).
+2. Otherwise, when `n >= 2` independent sources agree, the documented
+   deterministic method (identical to the Decision Engine's) is applied:
+   `0.5 + 0.1` per source beyond the second, `+0.1` when an ML model
+   reported a probability, capped at `0.9`
+   (`confidence_source: risk_opportunity`).
+3. Otherwise `confidence = insufficient_evidence` and
+   `numerical_confidence = null`.
+
+Category mapping: `>= 0.75` high, `>= 0.50` medium, else low. Every
+value carries a `confidence_rationale` explaining the derivation.
+Confidence is never invented - "three signals agree" never becomes an
+arbitrary percentage.
+
+### Missing-data behavior
+
+Rules only fire on supplied data. When a source is missing the module:
+
+- skips the affected rule groups (no weather data -> no weather risk;
+  no market data -> no market risk/opportunity; no disease model ->
+  no disease status claimed; no crop stage -> no stage-specific rules),
+- emits a `data_quality` notice stating WHAT was skipped and WHY
+  (e.g. "Crop calendar data was unavailable; crop-stage-specific risk
+  and opportunity analysis was skipped (no stage was assumed)."),
+- reports unavailable/errored ML models with an
+  `unavailable_model` notice ("its signal was not fabricated").
+
+### Stale-data behavior
+
+Staleness uses the Decision Engine's existing
+`STALENESS_DAYS_THRESHOLD` (3 days) applied to caller-provided
+`data_freshness` timestamps only. Sources without a timestamp are never
+marked stale. When a contributing source is stale: a `stale_data`
+notice is emitted, dependent items get `status: monitoring`, and their
+confidence category is downgraded one step (the numeric value is not
+altered).
+
+### Conflict handling
+
+Conflicts are surfaced explicitly and never silently resolved:
+
+- `rainfall_vs_irrigation_need` - weather forecasts rainfall while the
+  irrigation model reports irrigation need for the same window (the
+  water-stress rule stays silent and the conflict path reports the
+  disagreement instead).
+- `market_vs_yield` - the yield model's comparative signal points the
+  opposite way from the market trend.
+
+Every conflict becomes ONE consolidated `data_quality` risk
+("Conflicting Signals Detected") plus a `conflict_notice` carrying
+`conflicting_signals`, `unresolved_reason`, `recommended_action` and
+`detected_by` (`risk_opportunity`, or `decision_engine` when the
+Decision Engine already reported the same conflict - never duplicated).
+
+### Multi-source correlation & duplicate suppression
+
+Related signals describing the SAME underlying condition are merged
+into ONE item with combined evidence/sources (one consolidation key per
+condition), e.g. high humidity + rain forecast + elevated disease
+model + susceptible stage -> a single "Elevated Disease Pressure" risk
+with all evidence attached - not four separate alerts.
+
+### API Endpoints
+
+All Risk & Opportunity endpoints are prefixed with
+`/api/risk-opportunity`:
+
+| Endpoint | Description |
+| --- | --- |
+| `GET /api/risk-opportunity/health` | Service status, version, ruleset version, supported categories, dependency readiness (no secrets) |
+| `POST /api/risk-opportunity/analyze` | Run the deterministic analysis over a normalized context |
+| `GET /api/risk-opportunity/categories` | Documented vocabulary: categories, severity/priority levels, conflict types, data-quality issue types |
+
+Error handling: `400` invalid request caught at the service layer,
+`422` request body validation failures (FastAPI/Pydantic), `500`
+unexpected internal errors (no stack trace exposed).
+
+### Example Request
+
+```bash
+curl -X POST "http://localhost:8000/api/risk-opportunity/analyze" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "farm_context": {
+      "crop": "rice",
+      "location": "West Bengal",
+      "sowing_date": "2026-06-15",
+      "as_of_date": "2026-09-19",
+      "current_growth_stage": "flowering",
+      "weather_context": {
+        "is_weather_data_available": true,
+        "precipitation_probability": 85.0,
+        "forecast_precipitation_sum": 60.0,
+        "current_humidity": 90.0,
+        "temperature_max_forecast": 30.0,
+        "temperature_min_forecast": 20.0,
+        "wind_speed_max_forecast": 10.0,
+        "forecast_horizon_days": 7
+      },
+      "ml_predictions": [
+        {
+          "model_name": "disease_detection",
+          "prediction": "rice blast",
+          "probability": 0.82,
+          "status": "available"
+        }
+      ]
+    }
+  }'
+```
+
+### Example Response (abridged)
+
+```json
+{
+  "status": "partial_context",
+  "risks": [
+    {
+      "id": "ro-risk-1c8d00b0d9b3",
+      "category": "disease",
+      "title": "Elevated Disease Pressure",
+      "severity": "high",
+      "priority": "high",
+      "status": "active",
+      "confidence": "medium",
+      "numerical_confidence": 0.6,
+      "confidence_source": "risk_opportunity",
+      "confidence_rationale": "2 independent sources agree plus a model-reported probability; deterministic method documented in this module (base 0.5, +0.1 per extra source, cap 0.9).",
+      "affected_crop": "rice",
+      "affected_stage": "flowering",
+      "evidence": [
+        {"signal": "disease_model_elevated_probability", "source": "disease_detection", "description": "Disease model reports elevated probability (0.82) for rice blast", "value": 0.82},
+        {"signal": "high_humidity", "source": "weather", "description": "Current humidity: 90%", "value": 90.0}
+      ],
+      "contributing_sources": [
+        {"source": "disease_detection", "source_type": "ml_model", "detail": "Disease Detection ML prediction (diagnosis source; friend's ML layer)"},
+        {"source": "weather", "source_type": "external_data", "detail": "Weather Intelligence signals (current/forecast)"}
+      ],
+      "reasoning": "The disease detection model reports elevated probability (0.82) for rice blast and the weather module reports conditions (high_humidity, ...) favourable for disease development. ...",
+      "recommended_follow_up": "Increase scouting frequency for disease symptoms during the flowering stage.",
+      "detected_at": "2026-09-19T10:30:00+00:00",
+      "valid_until": "2026-09-26T10:30:00+00:00"
+    }
+  ],
+  "opportunities": [],
+  "data_quality": {"status": "partial_context", "completeness_percent": 30.0, "missing_sources": ["market"], "stale_sources": [], "conflicts": [], "unavailable_ml_models": [], "missing_critical_fields": []},
+  "data_quality_notices": [
+    {"type": "missing_data", "source": "market", "message": "Market data was unavailable; market risks and opportunities were skipped (no prices were substituted)."}
+  ],
+  "conflict_notices": [],
+  "summary": {"risk_count": 2, "opportunity_count": 0, "data_quality_notice_count": 2, "conflict_notice_count": 0},
+  "engine_version": "1.0.0",
+  "ruleset_version": "1.0.0",
+  "analysis_timestamp": "2026-09-19T10:30:00+00:00",
+  "total_risks": 2,
+  "total_opportunities": 0
+}
+```
+
+### Testing
+
+Deterministic unit/API tests with no live external APIs and no ML
+model execution:
+
+```bash
+python -m pytest tests/test_risk_opportunity.py -q
+```
+
+Covers: health/categories/analyze endpoints, empty and complete
+inputs, weather/irrigation/disease/pest/market/yield/fertilizer/crop-stage
+rules, multi-source correlation, duplicate suppression, conflict
+detection, missing/stale data handling, severity/priority/confidence
+ladders, evidence traceability, API validation errors and existing
+backend regression.
+
+
+
+
 ## Contributing
 
 This is a university final-year project. Please consult with the project maintainer before making significant changes.

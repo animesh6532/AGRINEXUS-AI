@@ -1,0 +1,1854 @@
+----- _weather_signals -----
+def _weather_signals(farm: FarmContext) -> Dict[str, Any]:
+    """
+    Extract boolean weather signals from the Weather Intelligence context.
+
+    Mirrors the decision engine's documented signal extraction (identical
+    thresholds, imported from that module) and adds the two signals this
+    layer needs. A signal is inactive when the underlying value is absent -
+    missing data never becomes a fabricated value.
+    """
+    signals: Dict[str, Any] = {}
+    weather = farm.weather_context
+    if not weather or not weather.is_weather_data_available:
+        return signals
+
+    if weather.precipitation_probability is not None:
+        probability = weather.precipitation_probability
+        signals["high_precipitation_probability"] = {
+            "active": probability >= PRECIP_PROBABILITY_THRESHOLD,
+            "detail": f"Forecast precipitation probability: {probability}%",
+            "value": probability,
+        }
+        signals["low_precipitation_probability"] = {
+            "active": probability <= LOW_PRECIP_PROBABILITY_THRESHOLD,
+            "detail": f"Forecast precipitation probability: {probability}%",
+            "value": probability,
+        }
+    if weather.forecast_precipitation_sum is not None:
+        total = weather.forecast_precipitation_sum
+        heavy = total >= HEAVY_RAINFALL_MM_THRESHOLD
+        notable = total >= PRECIPITATION_MM_THRESHOLD
+        signals["heavy_rainfall_expected"] = {
+            "active": heavy,
+            "detail": f"Forecast rainfall total: {total} mm over horizon",
+            "value": total,
+        }
+        signals["notable_rainfall_expected"] = {
+            "active": notable and not heavy,
+            "detail": f"Forecast rainfall total: {total} mm over horizon",
+            "value": total,
+        }
+        signals["insufficient_rainfall_expected"] = {
+            "active": total < LOW_RAINFALL_MM_THRESHOLD,
+            "detail": (
+                f"Forecast rainfall total: {total} mm over horizon "
+                f"(below {LOW_RAINFALL_MM_THRESHOLD} mm)"
+            ),
+            "value": total,
+        }
+    if weather.temperature_max_forecast is not None:
+        maximum = weather.temperature_max_forecast
+        signals["extreme_heat_expected"] = {
+            "active": maximum >= EXTREME_HEAT_C_THRESHOLD,
+            "detail": f"Forecast maximum temperature: {maximum} deg C",
+            "value": maximum,
+        }
+        signals["favourable_max_temperature"] = {
+            "active": maximum < FAVOURABLE_TEMP_MAX_C,
+            "detail": f"Forecast maximum temperature: {maximum} deg C",
+            "value": maximum,
+        }
+    if weather.temperature_min_forecast is not None:
+        minimum = weather.temperature_min_forecast
+        signals["frost_risk_expected"] = {
+            "active": minimum <= FROST_C_THRESHOLD,
+            "detail": f"Forecast minimum temperature: {minimum} deg C",
+            "value": minimum,
+        }
+        signals["favourable_min_temperature"] = {
+            "active": minimum > FAVOURABLE_TEMP_MIN_C,
+            "detail": f"Forecast minimum temperature: {minimum} deg C",
+            "value": minimum,
+        }
+    if weather.wind_speed_max_forecast is not None:
+        wind = weather.wind_speed_max_forecast
+        signals["strong_wind_expected"] = {
+            "active": wind >= STRONG_WIND_KMH_THRESHOLD,
+            "detail": f"Forecast maximum wind speed: {wind} km/h",
+            "value": wind,
+        }
+        signals["favourable_wind_conditions"] = {
+            "active": wind < STRONG_WIND_KMH_THRESHOLD,
+            "detail": f"Forecast maximum wind speed: {wind} km/h",
+            "value": wind,
+        }
+    if weather.current_humidity is not None:
+        humidity = weather.current_humidity
+        signals["high_humidity"] = {
+            "active": humidity >= HIGH_HUMIDITY_PERCENT,
+            "detail": f"Current humidity: {humidity}%",
+            "value": humidity,
+        }
+    if weather.severe_weather_indicators:
+        signals["severe_weather_indicator"] = {
+            "active": True,
+            "detail": (
+                "Severe weather indicators: "
+                f"{', '.join(weather.severe_weather_indicators)}"
+            ),
+            "value": list(weather.severe_weather_indicators),
+        }
+    return signals
+
+----- _effective_stage -----
+def _effective_stage(farm: FarmContext) -> Optional[str]:
+    """
+    Resolve the growth stage: crop calendar first, farmer fallback.
+
+    The Crop Calendar module is authoritative; the farmer-supplied stage is
+    used only when the calendar did not provide one.
+    """
+    calendar = farm.crop_calendar_context
+    if calendar and calendar.current_growth_stage:
+        return calendar.current_growth_stage
+    return farm.current_growth_stage
+
+----- _benign_weather_signals -----
+def _benign_weather_signals(view: _AnalysisView) -> List[str]:
+    """Active, explicitly-benign weather signals (never inferred)."""
+    return view.active_in((
+        "low_precipitation_probability",
+        "insufficient_rainfall_expected",
+        "favourable_max_temperature",
+        "favourable_min_temperature",
+        "favourable_wind_conditions",
+    ))
+
+----- _signal_evidence -----
+def _signal_evidence(
+    signals: Dict[str, Any], names: Sequence[str], source: str = "weather",
+) -> List[SupportingSignal]:
+    """Build evidence entries for active signals."""
+    evidence: List[SupportingSignal] = []
+    for name in names:
+        info = signals.get(name)
+        if info and info["active"]:
+            evidence.append(
+                _sig(name, source, info["detail"], info["value"])
+            )
+    return evidence
+
+----- _market_move -----
+def _market_move(market) -> Tuple[Optional[str], Optional[float]]:
+    """
+    (direction, change_percent) from the Market Forecast context, else
+    (None, None). The forecast trend takes precedence over the recent trend.
+    """
+    if not market or not market.is_market_data_available:
+        return None, None
+    trend = market.forecast_trend or market.recent_trend
+    if trend not in ("increasing", "decreasing"):
+        return None, None
+    change = (
+        market.forecast_change_percent
+        if market.forecast_change_percent is not None
+        else market.recent_change_percent
+    )
+    if change is None or abs(change) < MARKET_CHANGE_PERCENT_THRESHOLD:
+        return None, None
+    return trend, change
+
+----- _yield_hint -----
+def _yield_hint(pred: Optional[MLPrediction]) -> Optional[str]:
+    """
+    Comparative yield hint reported by the yield model, or None.
+
+    The shipped yield contract returns a numeric prediction with an
+    interval but no reference baseline, so a comparative hint is only
+    available when the model (or its adapter) reported one. None means
+    "not comparable" and is reported as a data-quality notice instead of
+    being interpreted.
+    """
+    if pred is None:
+        return None
+    metadata = pred.metadata or {}
+    for key in ("expected_change_percent", "predicted_change_percent"):
+        value = metadata.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if value <= -MARKET_CHANGE_PERCENT_THRESHOLD:
+                return "adverse"
+            if value >= MARKET_CHANGE_PERCENT_THRESHOLD:
+                return "favourable"
+            return "neutral"
+    return _categorical_level(pred, YIELD_ADVERSE_PHRASES, YIELD_FAVOURABLE_PHRASES)
+
+----- _commodity_matches_crop -----
+def _commodity_matches_crop(crop: Optional[str], commodity: Optional[str]) -> bool:
+    """
+    Deterministic crop <-> market-commodity matching.
+
+    Reuses the decision engine's documented synonym groups; it performs no
+    inference beyond those fixed groups.
+    """
+    crop_norm = _normalize(crop)
+    commodity_norm = _normalize(commodity)
+    if not crop_norm or not commodity_norm:
+        return False
+    crop_words = [
+        w for w in crop_norm.split() if len(w) >= MIN_MATCH_WORD_LENGTH
+    ]
+    if any(word in commodity_norm for word in crop_words):
+        return True
+    for group in CROP_SYNONYM_GROUPS:
+        normalized_group = {_normalize(item) for item in group}
+        crop_in_group = crop_norm in normalized_group or any(
+            word in normalized_group for word in crop_words
+        )
+        if crop_in_group and any(
+            synonym in commodity_norm for synonym in normalized_group
+        ):
+            return True
+    return False
+
+----- _categorical_level -----
+def _categorical_level(
+    pred: Optional[MLPrediction], adverse, favourable,
+) -> Optional[str]:
+    """
+    Read a model's OWN categorical outcome ('adverse'/'favourable') or None.
+
+    Adverse is checked first. No level is inferred when the model reported
+    nothing that matches its documented output vocabulary.
+    """
+    if pred is None:
+        return None
+    phrases = _hint_phrases(pred)
+    if _matches(phrases, adverse):
+        return "adverse"
+    if _matches(phrases, favourable):
+        return "favourable"
+    return None
+
+----- _model_probability -----
+def _model_probability(pred: Optional[MLPrediction]) -> Optional[float]:
+    """Best probability the MODEL itself reported, else None (never invented)."""
+    if pred is None:
+        return None
+    if pred.probability is not None:
+        return pred.probability
+    if pred.confidence is not None:
+        return pred.confidence
+    return None
+
+----- _grade_risk -----
+def _grade_risk(view: _AnalysisView, candidate: _Candidate) -> Risk:
+    """Deterministic grading of a consolidated risk candidate."""
+    evidence = _dedupe_signals(candidate.evidence)
+    sources = _dedupe_sources(candidate.sources)
+    source_count = _independent_source_count(evidence)
+    stale = _evidence_is_stale(view, candidate)
+
+    severity = _severity_for_risk(
+        source_count=source_count,
+        elevated=candidate.elevated,
+        sensitive=candidate.sensitive,
+        time_sensitive=candidate.time_sensitive,
+        upstream_priority=candidate.upstream_priority,
+        severe=candidate.severe,
+    )
+    priority = _priority_for_risk(
+        severity,
+        sensitive=candidate.sensitive,
+        time_sensitive=candidate.time_sensitive,
+        actionable=bool(candidate.action),
+    )
+    single_model, single_probability = _single_source_model(view, evidence)
+    confidence, value, source, rationale = _confidence_for(
+        source_count=source_count,
+        ml_probability=candidate.ml_probability,
+        upstream_confidence=candidate.upstream_confidence,
+        upstream_confidence_rationale=candidate.upstream_confidence_rationale,
+        stale=stale,
+        single_source_model=single_model,
+        single_source_probability=single_probability,
+    )
+
+    return Risk(
+        id=_item_id("risk", candidate.key, view.farm),
+        category=RiskCategory(candidate.category),
+        title=candidate.title,
+        description=candidate.description,
+        severity=severity,
+        priority=priority,
+        status=ItemStatus.MONITORING if stale else ItemStatus.ACTIVE,
+        confidence=confidence,
+        numerical_confidence=value,
+        confidence_source=source,
+        confidence_rationale=rationale,
+        affected_crop=view.crop,
+        affected_stage=candidate.stage,
+        evidence=evidence,
+        contributing_sources=sources,
+        contributing_signals=sorted({e.signal for e in evidence}),
+        reasoning=candidate.reasoning,
+        recommended_follow_up=candidate.action,
+        detected_at=_utc_now_iso(),
+        valid_until=candidate.valid_until,
+    )
+
+----- _grade_opportunity -----
+def _grade_opportunity(
+    view: _AnalysisView, candidate: _Candidate,
+) -> Opportunity:
+    """Deterministic grading of a consolidated opportunity candidate."""
+    evidence = _dedupe_signals(candidate.evidence)
+    sources = _dedupe_sources(candidate.sources)
+    source_count = _independent_source_count(evidence)
+    stale = _evidence_is_stale(view, candidate)
+
+    priority = _priority_for_opportunity(
+        source_count=source_count, time_bound=candidate.time_bound,
+    )
+    single_model, single_probability = _single_source_model(view, evidence)
+    confidence, value, source, rationale = _confidence_for(
+        source_count=source_count,
+        ml_probability=candidate.ml_probability,
+        upstream_confidence=candidate.upstream_confidence,
+        upstream_confidence_rationale=candidate.upstream_confidence_rationale,
+        stale=stale,
+        single_source_model=single_model,
+        single_source_probability=single_probability,
+    )
+
+    return Opportunity(
+        id=_item_id("opportunity", candidate.key, view.farm),
+        category=OpportunityCategory(candidate.category),
+        title=candidate.title,
+        description=candidate.description,
+        priority=priority,
+        status=ItemStatus.MONITORING if stale else ItemStatus.ACTIVE,
+        confidence=confidence,
+        numerical_confidence=value,
+        confidence_source=source,
+        confidence_rationale=rationale,
+        affected_crop=view.crop,
+        affected_stage=candidate.stage,
+        evidence=evidence,
+        contributing_sources=sources,
+        contributing_signals=sorted({e.signal for e in evidence}),
+        reasoning=candidate.reasoning,
+        suggested_action=candidate.action,
+        time_window=candidate.time_window,
+        detected_at=_utc_now_iso(),
+    )
+
+MISSING _confidence
+----- _summary -----
+def _summary(
+    risks: Sequence[Risk],
+    opportunities: Sequence[Opportunity],
+    notices: Sequence[DataQualityNotice],
+    conflicts: Sequence[ConflictNotice],
+) -> RiskOpportunitySummary:
+    """Deterministic summary statistics."""
+    risk_counts: Dict[str, int] = {}
+    for risk in risks:
+        risk_counts[risk.category.value] = (
+            risk_counts.get(risk.category.value, 0) + 1
+        )
+    opportunity_counts: Dict[str, int] = {}
+    for opportunity in opportunities:
+        opportunity_counts[opportunity.category.value] = (
+            opportunity_counts.get(opportunity.category.value, 0) + 1
+        )
+
+    return RiskOpportunitySummary(
+        risk_count=len(risks),
+        opportunity_count=len(opportunities),
+        data_quality_notice_count=len(notices),
+        conflict_notice_count=len(conflicts),
+        risk_count_by_category=dict(sorted(risk_counts.items())),
+        opportunity_count_by_category=dict(sorted(opportunity_counts.items())),
+        highest_risk_severity=(
+            min(risks, key=lambda r: SEVERITY_ORDER[r.severity]).severity
+            if risks else None
+        ),
+        highest_risk_priority=(
+            min(risks, key=lambda r: PRIORITY_ORDER[r.priority]).priority
+            if risks else None
+        ),
+        highest_opportunity_priority=(
+            min(
+                opportunities, key=lambda o: PRIORITY_ORDER[o.priority],
+            ).priority
+            if opportunities else None
+        ),
+    )
+
+----- _analysis_status -----
+def _analysis_status(
+    farm: FarmContext, conflicts: Sequence[ConflictNotice],
+) -> DecisionStatus:
+    """
+    Overall analysis status (reuses the project's documented vocabulary):
+    conflicting_signals > insufficient_context > complete_context >
+    partial_context.
+    """
+    if conflicts:
+        return DecisionStatus.conflicting_signals
+    available = _available_source_names(farm)
+    ml_available = any(p.status == "available" for p in farm.ml_predictions)
+    if not available and not ml_available:
+        return DecisionStatus.insufficient_context
+    if set(available) == {"weather", "market", "crop_calendar"}:
+        return DecisionStatus.complete_context
+    return DecisionStatus.partial_context
+
+----- _assess_data_quality -----
+def _assess_data_quality(
+    farm: FarmContext, conflicts: Sequence[ConflictNotice],
+) -> DataQuality:
+    """
+    Deterministic data-quality assessment.
+
+    Mirrors the Decision Engine's documented methodology (same expected
+    source count, same completeness formula, same staleness threshold) so
+    both layers report consistent semantics. ``conflicts`` carries this
+    layer's conflict notice IDs.
+    """
+    available = _available_source_names(farm)
+    missing = sorted({"weather", "market", "crop_calendar"} - set(available))
+    unavailable_ml = _unavailable_ml_models(farm)
+    stale = _stale_sources(farm)
+
+    available_ml = len(farm.ml_predictions) - len(unavailable_ml)
+    present = len(available) + max(0, available_ml)
+    completeness = round(
+        min(100.0, (present / EXPECTED_SOURCE_COUNT) * 100.0), 1,
+    ) if present > 0 else 0.0
+
+    ml_available = any(p.status == "available" for p in farm.ml_predictions)
+    if conflicts:
+        status = DecisionStatus.conflicting_signals.value
+    elif not available and not ml_available:
+        status = DecisionStatus.insufficient_context.value
+    elif not missing and not unavailable_ml:
+        status = DecisionStatus.complete_context.value
+    else:
+        status = DecisionStatus.partial_context.value
+
+    return DataQuality(
+        status=status,
+        completeness_percent=completeness,
+        missing_sources=missing,
+        stale_sources=stale,
+        conflicts=sorted(c.id for c in conflicts),
+        unavailable_ml_models=unavailable_ml,
+        missing_critical_fields=[],
+    )
+
+----- _data_quality_notices -----
+def _data_quality_notices(view: _AnalysisView) -> List[DataQualityNotice]:
+    """
+    Deterministic data-quality notices (fixed emission order).
+
+    Notices state what was skipped and why. They never contain substituted
+    values and never mark an unknown source as stale.
+    """
+    farm = view.farm
+    notices: List[DataQualityNotice] = []
+
+    if not view.crop:
+        notices.append(_notice(
+            DataQualityIssueType.MISSING_FIELD, "farmer_context",
+            "Crop was not specified; crop-specific market matching and "
+            "crop-stage rules were skipped (no crop was assumed).",
+            ["market_rules", "crop_stage_rules"],
+        ))
+
+    if not view.weather or not view.weather.is_weather_data_available:
+        notices.append(_notice(
+            DataQualityIssueType.MISSING_DATA, "weather",
+            "Weather data was unavailable; weather-related risks and "
+            "opportunities were skipped (no values were substituted).",
+            ["weather_rules", "irrigation_rules", "disease_rules",
+             "fertilizer_window_rules"],
+        ))
+
+    if not view.market or not view.market.is_market_data_available:
+        notices.append(_notice(
+            DataQualityIssueType.MISSING_DATA, "market",
+            "Market data was unavailable; market risks and opportunities "
+            "were skipped (no prices were substituted).",
+            ["market_rules", "yield_rules"],
+        ))
+
+    calendar = view.calendar
+    if not calendar or not calendar.is_crop_calendar_available:
+        if farm.current_growth_stage:
+            notices.append(_notice(
+                DataQualityIssueType.MISSING_DATA, "crop_calendar",
+                "Crop calendar data was unavailable; the farmer-supplied "
+                "growth stage was used for context, but calendar-derived "
+                "dates, stage transitions and harvest windows were skipped.",
+                ["crop_stage_rules", "harvest_rules"],
+            ))
+        else:
+            notices.append(_notice(
+                DataQualityIssueType.MISSING_DATA, "crop_calendar",
+                "Crop calendar data was unavailable; crop-stage-specific "
+                "risk and opportunity analysis was skipped (no stage was "
+                "assumed).",
+                ["crop_stage_rules", "harvest_rules"],
+            ))
+    elif not calendar.current_growth_stage:
+        notices.append(_notice(
+            DataQualityIssueType.MISSING_FIELD, "crop_calendar",
+            "The crop calendar did not report a current growth stage; "
+            "stage-specific amplification was not applied.",
+            ["crop_stage_rules"],
+        ))
+
+    if view.context.decision_engine_output is None:
+        notices.append(_notice(
+            DataQualityIssueType.MISSING_DATA, "decision_engine",
+            "Decision Engine output was not supplied; upstream decisions "
+            "were not attributed and the analysis ran on direct signals "
+            "only.",
+            ["decision_engine_attribution"],
+        ))
+
+    for model in _unavailable_ml_models(farm):
+        notices.append(_notice(
+            DataQualityIssueType.UNAVAILABLE_MODEL, model,
+            f"ML model '{model}' reported status unavailable/error; its "
+            "signal was not fabricated and no risk or opportunity was "
+            "derived from it.",
+            [model],
+        ))
+
+    for source in view.stale_sources:
+        notices.append(_notice(
+            DataQualityIssueType.STALE_DATA, source,
+            f"Source '{source}' reported a freshness timestamp older than "
+            f"the documented threshold ({STALENESS_DAYS_THRESHOLD} days); "
+            "items depending on it are marked 'monitoring' and their "
+            "confidence was downgraded.",
+            [source],
+        ))
+
+    yield_prediction = view.ml("crop_yield_prediction")
+    if yield_prediction is not None and view.market and \
+            view.market.is_market_data_available and \
+            _yield_hint(yield_prediction) is None:
+        notices.append(_notice(
+            DataQualityIssueType.INSUFFICIENT_BASELINE,
+            "crop_yield_prediction",
+            "The yield model did not report a comparative yield signal "
+            "(for example yield_status or expected_change_percent), so the "
+            "yield-versus-market comparison was skipped; the numeric "
+            "prediction alone is not interpreted by this layer.",
+            ["yield_rules"],
+        ))
+
+    return notices
+
+----- _consolidate -----
+def _consolidate(candidates: Sequence[_Candidate]) -> List[_Candidate]:
+    """
+    Merge candidates that share a consolidation key (rule order preserved).
+
+    This is where multi-source correlation and duplicate suppression
+    happen: one consolidated item is produced per underlying condition,
+    carrying the combined evidence of every contributing rule.
+    """
+    merged: Dict[str, _Candidate] = {}
+    for candidate in candidates:
+        if candidate.key not in merged:
+            merged[candidate.key] = candidate
+        else:
+            merged[candidate.key] = _merge_candidates(
+                merged[candidate.key], candidate
+            )
+    return list(merged.values())
+
+----- _append_stage_context -----
+def _append_stage_context(
+    view: _AnalysisView, candidate: _Candidate,
+) -> _Candidate:
+    """Attach growth-stage context (calendar evidence + source) when known."""
+    if not view.stage:
+        return candidate
+    candidate.evidence.append(_sig(
+        "growth_stage", "crop_calendar",
+        f"Current growth stage: {view.stage}", view.stage,
+    ))
+    candidate.sources.append(
+        _calendar_source("Crop Calendar growth-stage context")
+    )
+    return candidate
+
+----- _apply_upstream -----
+def _apply_upstream(
+    view: _AnalysisView, candidate: _Candidate, *decision_types: DecisionType,
+) -> _Candidate:
+    """
+    Attribute an upstream Decision Engine decision for the same condition.
+
+    Attribution only: the upstream priority/confidence is reused (never
+    recomputed), the decision is added as a contributing source and one
+    reasoning sentence keeps the item traceable to it.
+    """
+    decision = view.decision(*decision_types)
+    if decision is None:
+        return candidate
+    candidate.sources.append(_decision_source(decision))
+    candidate.upstream_priority = _stronger_priority(
+        candidate.upstream_priority, decision.priority.value
+    )
+    if candidate.upstream_confidence is None and decision.confidence is not None:
+        candidate.upstream_confidence = decision.confidence
+        candidate.upstream_confidence_rationale = decision.confidence_rationale
+    candidate.reasoning += (
+        f" The Decision Engine independently reports '{decision.title}' "
+        f"for this condition (priority: {decision.priority.value})."
+    )
+    return candidate
+
+----- _opportunity -----
+def _opportunity(
+    view: _AnalysisView,
+    *,
+    key: str,
+    category: OpportunityCategory,
+    title: str,
+    description: str,
+    reasoning: str,
+    evidence: Sequence[SupportingSignal],
+    sources: Sequence[ContributingSource],
+    action: Optional[str] = None,
+    time_bound: bool = False,
+    time_window: Optional[str] = None,
+) -> _Candidate:
+    """Build an opportunity candidate with complete evidence."""
+    return _Candidate(
+        kind="opportunity",
+        key=key,
+        category=category.value,
+        title=title,
+        description=description,
+        reasoning=reasoning,
+        sources=list(sources),
+        evidence=list(evidence),
+        action=action,
+        stage=view.stage,
+        primary=True,
+        time_bound=time_bound,
+        time_window=time_window,
+    )
+
+----- _rule_excess_rainfall -----
+def _rule_excess_rainfall(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Excess rainfall / heavy rainfall expected.
+
+    Fires whenever the weather module reported a rain signal; a sensitive
+    growth stage amplifies the severity (documented ladder).
+    """
+    active = view.active_in(RAIN_SIGNALS)
+    if not active:
+        return []
+    heavy = view.active("heavy_rainfall_expected")
+    title = "Heavy Rainfall Expected" if heavy else "Rainfall Expected"
+    reason = (
+        f"Forecast signals ({', '.join(active)}) indicate rainfall during "
+        f"the forecast window.{_stage_sentence(view)}"
+    )
+    return [_weather_hazard(
+        view,
+        key=KEY_EXCESS_RAINFALL,
+        category=RiskCategory.WEATHER,
+        title=title,
+        description=(
+            "Rainfall is forecast for the current window; field operations "
+            "and drainage should be reviewed."
+        ),
+        reason=reason,
+        active_signals=active,
+        action=(
+            "Review field drainage and field-operation timing for the "
+            "forecast window."
+        ),
+        # The rule only fires on a weather-reported rain signal, which is
+        # itself an adverse condition for field operations (documented).
+        elevated=True,
+        time_sensitive=heavy,
+    )]
+
+----- _rule_heat_stress -----
+def _rule_heat_stress(view: _AnalysisView) -> List[_Candidate]:
+    """Extreme heat expected (weather-reported threshold)."""
+    if not view.active("extreme_heat_expected"):
+        return []
+    reason = (
+        "The weather module reports extreme heat in the forecast window "
+        "(maximum temperature at or above the documented threshold)."
+        f"{_stage_sentence(view)}"
+    )
+    return [_weather_hazard(
+        view,
+        key=KEY_HEAT_STRESS,
+        category=RiskCategory.WEATHER,
+        title="Heat Stress Risk",
+        description=(
+            "Extreme heat is forecast; the crop may be exposed to heat "
+            "stress during the forecast window."
+        ),
+        reason=reason,
+        active_signals=["extreme_heat_expected"],
+        action=(
+            "Review the irrigation plan and field-operation timing for the "
+            "forecast heat window."
+        ),
+        elevated=True,
+        time_sensitive=False,
+    )]
+
+----- _rule_cold_stress -----
+def _rule_cold_stress(view: _AnalysisView) -> List[_Candidate]:
+    """Frost / cold stress expected (weather-reported threshold)."""
+    if not view.active("frost_risk_expected"):
+        return []
+    reason = (
+        "The weather module reports minimum temperatures at or below the "
+        f"frost threshold in the forecast window.{_stage_sentence(view)}"
+    )
+    return [_weather_hazard(
+        view,
+        key=KEY_COLD_STRESS,
+        category=RiskCategory.WEATHER,
+        title="Cold / Frost Risk",
+        description=(
+            "Low minimum temperatures are forecast; the crop may be "
+            "exposed to cold or frost stress."
+        ),
+        reason=reason,
+        active_signals=["frost_risk_expected"],
+        action=(
+            "Review frost-protection options and field-operation timing "
+            "for the forecast window."
+        ),
+        elevated=True,
+        time_sensitive=True,
+    )]
+
+----- _rule_wind_damage -----
+def _rule_wind_damage(view: _AnalysisView) -> List[_Candidate]:
+    """Strong wind expected (weather-reported threshold)."""
+    if not view.active("strong_wind_expected"):
+        return []
+    reason = (
+        "The weather module reports strong winds in the forecast window "
+        f"(at or above the documented threshold).{_stage_sentence(view)}"
+    )
+    return [_weather_hazard(
+        view,
+        key=KEY_WIND_DAMAGE,
+        category=RiskCategory.WEATHER,
+        title="Strong Wind Risk",
+        description=(
+            "Strong winds are forecast; field operations and standing crop "
+            "may be affected."
+        ),
+        reason=reason,
+        active_signals=["strong_wind_expected"],
+        action=(
+            "Review field-operation and crop-support needs for the "
+            "forecast wind window."
+        ),
+        elevated=True,
+        time_sensitive=True,
+    )]
+
+----- _rule_severe_weather -----
+def _rule_severe_weather(view: _AnalysisView) -> List[_Candidate]:
+    """Severe-weather indicators reported by the weather module."""
+    if not view.active("severe_weather_indicator"):
+        return []
+    reason = (
+        "The weather module reported severe-weather indicators for this "
+        f"location.{_stage_sentence(view)}"
+    )
+    return [_weather_hazard(
+        view,
+        key=KEY_SEVERE_WEATHER,
+        category=RiskCategory.WEATHER,
+        title="Severe Weather Reported",
+        description=(
+            "Severe-weather indicators were reported; the condition is "
+            "treated as time-sensitive."
+        ),
+        reason=reason,
+        active_signals=["severe_weather_indicator"],
+        action=(
+            "Review protective measures and follow the weather module's "
+            "severe-weather indicators."
+        ),
+        elevated=True,
+        time_sensitive=True,
+        severe=True,
+    )]
+
+----- _rule_water_stress -----
+def _rule_water_stress(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Water stress / irrigation risk, consolidated into ONE item.
+
+    Contributors (same consolidation key):
+    - weather: the forecast window is dry (insufficient rainfall and no
+      high precipitation probability), optionally amplified by heat
+    - irrigation model: the model itself reports irrigation need
+
+    When the irrigation model reports need AND rainfall is expected, the
+    sources conflict: this rule stays silent and the conflict path reports
+    the disagreement instead (never silently resolved).
+    """
+    irrigation = view.ml("smart_irrigation")
+    need = _irrigation_need(irrigation)
+    if need is True and view.any_active(RAIN_SIGNALS):
+        return []
+
+    dry = view.active("insufficient_rainfall_expected") and \
+        not view.active("high_precipitation_probability")
+    heat = view.active("extreme_heat_expected")
+    if not dry and need is not True:
+        return []
+
+    candidates: List[_Candidate] = []
+    if dry:
+        active_signals = ["insufficient_rainfall_expected"]
+        if view.active("low_precipitation_probability"):
+            active_signals.append("low_precipitation_probability")
+        if heat:
+            active_signals.append("extreme_heat_expected")
+        reason = (
+            "The forecast window is dry (insufficient rainfall and no high "
+            "precipitation probability)"
+            + (", with extreme heat also forecast" if heat else "")
+            + f".{_stage_sentence(view)}"
+        )
+        candidates.append(_weather_hazard(
+            view,
+            key=KEY_WATER_STRESS,
+            category=RiskCategory.WEATHER,
+            title="Water Deficit Risk",
+            description=(
+                "Rainfall is not expected within the forecast window; soil "
+                "moisture may decline."
+            ),
+            reason=reason,
+            active_signals=active_signals,
+            action="Review the irrigation plan for the forecast window.",
+            elevated=heat,
+            time_sensitive=False,
+            primary=need is not True,
+        ))
+    if need is True and irrigation is not None:
+        candidates.append(_irrigation_need_candidate(view, irrigation))
+    return candidates
+
+----- _rule_disease_favourable_weather -----
+def _rule_disease_favourable_weather(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Disease-favourable weather conditions.
+
+    This is a WEATHER-condition risk, not a diagnosis: the disease model
+    remains the only source of a disease diagnosis. It contributes to the
+    same consolidation key as the model rule, so the two are merged into a
+    single consolidated disease-pressure risk when both apply.
+    """
+    favourable = view.active_in(DISEASE_FAVOURABLE_SIGNALS)
+    if not favourable:
+        return []
+
+    model = view.ml("disease_detection")
+    probability = _model_probability(model)
+    if probability is not None and probability >= ML_PROBABILITY_THRESHOLD:
+        # The model rule owns the consolidated item as its primary source.
+        return []
+
+    elevated = view.active("heavy_rainfall_expected") or (
+        view.active("high_humidity") and view.any_active(RAIN_SIGNALS)
+    )
+    reason = (
+        "Weather conditions reported by the weather module ("
+        + ", ".join(favourable)
+        + ") favour disease development. The disease model reported no "
+        "elevated probability, so this is a weather-condition risk only - "
+        "no disease diagnosis is made by this layer."
+        + _stage_sentence(view)
+    )
+    candidate = _Candidate(
+        kind="risk",
+        key=KEY_DISEASE_PRESSURE,
+        category=RiskCategory.DISEASE.value,
+        title="Disease-Favourable Weather Conditions",
+        description=(
+            "Humidity/rainfall conditions favour disease development; "
+            "monitor the crop (no disease diagnosis is available)."
+        ),
+        reasoning=reason,
+        sources=[_weather_source()],
+        evidence=_signal_evidence(view.signals, favourable),
+        action=(
+            "Increase scouting frequency for disease symptoms while these "
+            "weather conditions persist."
+        ),
+        stage=view.stage,
+        elevated=elevated,
+        sensitive=view.stage_sensitive(),
+        time_sensitive=False,
+        valid_until=view.forecast_valid_until(),
+    )
+    _append_stage_context(view, candidate)
+    return [candidate]
+
+----- _rule_disease_model -----
+def _rule_disease_model(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Elevated disease probability reported by the disease detection model.
+
+    The ML model remains the ONLY source of the disease diagnosis; this
+    layer consolidates it with weather and growth-stage context.
+    """
+    model = view.ml("disease_detection")
+    if model is None:
+        return []
+    probability = _model_probability(model)
+    if probability is None or probability < ML_PROBABILITY_THRESHOLD:
+        return []
+
+    favourable = view.active_in(DISEASE_FAVOURABLE_SIGNALS)
+    detail = f"Disease model reports elevated probability ({probability:.2f})"
+    if model.prediction:
+        detail += f" for {model.prediction}"
+    evidence = [_sig(
+        "disease_model_elevated_probability", "disease_detection",
+        detail, probability,
+    )]
+    sources = [_ml_source(
+        "disease_detection",
+        "Disease Detection ML prediction (diagnosis source; friend's ML "
+        "layer)",
+    )]
+    if favourable:
+        evidence += _signal_evidence(view.signals, favourable)
+        sources.append(_weather_source())
+        reason = (
+            f"The disease detection model reports elevated probability "
+            f"({probability:.2f})"
+            + (f" for {model.prediction}" if model.prediction else "")
+            + " and the weather module reports conditions ("
+            + ", ".join(favourable)
+            + ") favourable for disease development. The ML model remains "
+            "the source of the diagnosis; this layer consolidates it with "
+            "weather and stage context."
+            + _stage_sentence(view)
+        )
+    else:
+        reason = (
+            f"The disease detection model reports elevated probability "
+            f"({probability:.2f})"
+            + (f" for {model.prediction}" if model.prediction else "")
+            + ". Weather conditions were not identified as especially "
+            "favourable for disease development, but the model signal "
+            "warrants monitoring. The ML model remains the source of the "
+            "diagnosis."
+            + _stage_sentence(view)
+        )
+
+    stage_note = (
+        f" during the {view.stage} stage" if view.stage
+        else " for the current crop"
+    )
+    candidate = _Candidate(
+        kind="risk",
+        key=KEY_DISEASE_PRESSURE,
+        category=RiskCategory.DISEASE.value,
+        title="Elevated Disease Pressure",
+        description=(
+            "The disease model reports elevated probability"
+            + (f" for {model.prediction}" if model.prediction else "")
+            + "; weather and stage context are attached."
+        ),
+        reasoning=reason,
+        sources=sources,
+        evidence=evidence,
+        action=f"Increase scouting frequency for disease symptoms{stage_note}.",
+        stage=view.stage,
+        primary=True,
+        elevated=True,
+        sensitive=view.stage_sensitive(),
+        time_sensitive=False,
+        valid_until=view.forecast_valid_until(),
+        ml_probability=probability,
+    )
+    _append_stage_context(view, candidate)
+    return [_apply_upstream(
+        view, candidate, DecisionType.disease_weather_risk,
+    )]
+
+----- _rule_pest_pressure -----
+def _rule_pest_pressure(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Pest pressure reported by the pest prediction model.
+
+    The ML model remains the only source of the pest signal; the crop
+    calendar supplies stage relevance and never a pest prediction.
+    """
+    model = view.ml("pest_prediction")
+    if model is None:
+        return []
+    probability = _model_probability(model)
+    level = _categorical_level(
+        model, PEST_ADVERSE_PHRASES, PEST_FAVOURABLE_PHRASES,
+    )
+    elevated = (
+        probability is not None and probability >= ML_PROBABILITY_THRESHOLD
+    ) or level == "adverse"
+    if not elevated:
+        return []
+
+    detail = "Pest model reports an elevated pest signal"
+    if model.prediction:
+        detail += f": {model.prediction}"
+    if probability is not None:
+        detail += f" (reported confidence {probability:.2f})"
+    reason = (
+        "The pest prediction model reports an elevated pest signal"
+        + (f" ({model.prediction})" if model.prediction else "")
+        + (f" with reported confidence {probability:.2f}"
+           if probability is not None else "")
+        + f".{_stage_sentence(view)}"
+        + " The ML model remains the source of the pest prediction."
+    )
+    stage_note = (
+        f" during the {view.stage} stage" if view.stage
+        else " for the current crop"
+    )
+    candidate = _Candidate(
+        kind="risk",
+        key=KEY_PEST_PRESSURE,
+        category=RiskCategory.PEST.value,
+        title="Elevated Pest Risk",
+        description=(
+            "The pest prediction model reports an elevated pest signal"
+            + (f" ({model.prediction})" if model.prediction else "")
+            + "; growth-stage context is attached."
+        ),
+        reasoning=reason,
+        sources=[_ml_source(
+            "pest_prediction",
+            "Pest Prediction ML (signal source; friend's ML layer)",
+        )],
+        evidence=[_sig(
+            "pest_model_elevated_signal", "pest_prediction", detail, probability,
+        )],
+        action=f"Increase pest scouting frequency{stage_note}.",
+        stage=view.stage,
+        primary=True,
+        elevated=True,
+        sensitive=view.stage_sensitive(),
+        time_sensitive=False,
+        ml_probability=probability,
+    )
+    _append_stage_context(view, candidate)
+    return [_apply_upstream(
+        view, candidate, DecisionType.pest_crop_stage_risk,
+    )]
+
+----- _rule_market_downside -----
+def _rule_market_downside(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Adverse market price trend for the farmer's crop.
+
+    Only fires when the Market Forecast reported a meaningful decrease for a
+    commodity that corresponds to the farmer's crop (fixed synonym matching).
+    """
+    if not view.crop:
+        return []
+    market = view.market
+    if not market or not _commodity_matches_crop(view.crop, market.commodity):
+        return []
+    direction, change = _market_move(market)
+    if direction != "decreasing":
+        return []
+
+    harvest_note = (
+        " The crop is approaching its harvest window, which makes the price "
+        "trend time-sensitive."
+        if view.harvest_imminent() else ""
+    )
+    candidate = _Candidate(
+        kind="risk",
+        key=KEY_MARKET_DOWNSIDE,
+        category=RiskCategory.MARKET.value,
+        title=f"Adverse Market Trend for {view.crop}",
+        description=(
+            f"The Market Forecast reports a decreasing price trend "
+            f"({change:+.1f}%) for {market.commodity}, which corresponds to "
+            f"the farmer's crop."
+        ),
+        reasoning=(
+            f"The Market Forecast reports a decreasing price trend for "
+            f"{market.commodity} ({change:+.1f}% expected change), and the "
+            f"commodity corresponds to the farmer's crop ({view.crop}). "
+            "This is market context only: this layer does not advise buying "
+            "or selling and performs no economic calculation."
+            + harvest_note
+        ),
+        sources=[
+            _src("market", SourceType.EXTERNAL_DATA,
+                 "Market Forecast trend signals"),
+            _calendar_source("Crop identification used for market matching"),
+        ],
+        evidence=_market_signals(direction, market) + [
+            _market_crop_match_signal(view),
+        ],
+        action=(
+            "Review the market forecast trend before planning sales; "
+            "pricing decisions belong to a downstream module."
+        ),
+        stage=view.stage,
+        primary=True,
+        elevated=True,
+        sensitive=False,
+        time_sensitive=view.harvest_imminent(),
+    )
+    return [_apply_upstream(view, candidate, DecisionType.market_crop_context)]
+
+----- _rule_market_upside -----
+def _rule_market_upside(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Favourable market price trend for the farmer's crop.
+
+    Only fires when the Market Forecast reported a meaningful increase for a
+    commodity that corresponds to the farmer's crop.
+    """
+    if not view.crop:
+        return []
+    market = view.market
+    if not market or not _commodity_matches_crop(view.crop, market.commodity):
+        return []
+    direction, change = _market_move(market)
+    if direction != "increasing":
+        return []
+
+    harvest_note = (
+        " The crop is approaching its harvest window, so the window is "
+        "time-bound."
+        if view.harvest_imminent() else ""
+    )
+    candidate = _opportunity(
+        view,
+        key=KEY_MARKET_UPSIDE,
+        category=OpportunityCategory.MARKET,
+        title=f"Favourable Market Trend for {view.crop}",
+        description=(
+            f"The Market Forecast reports an increasing price trend "
+            f"({change:+.1f}%) for {market.commodity}, which corresponds to "
+            f"the farmer's crop."
+        ),
+        reasoning=(
+            f"The Market Forecast reports an increasing price trend for "
+            f"{market.commodity} ({change:+.1f}% expected change) and the "
+            f"commodity corresponds to the farmer's crop ({view.crop}). "
+            "This is market context only: this layer does not advise buying "
+            "or selling." + harvest_note
+        ),
+        evidence=_market_signals(direction, market) + [
+            _market_crop_match_signal(view),
+        ],
+        sources=[
+            _src("market", SourceType.EXTERNAL_DATA,
+                 "Market Forecast trend signals"),
+            _calendar_source("Crop identification used for market matching"),
+        ],
+        action=(
+            "Review the market forecast trend when planning sales; pricing "
+            "decisions belong to a downstream module."
+        ),
+        time_bound=view.harvest_imminent(),
+    )
+    return [_apply_upstream(view, candidate, DecisionType.market_crop_context)]
+
+----- _rule_yield_market_risk -----
+def _rule_yield_market_risk(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Yield + market risk, only when a comparative signal exists.
+
+    Requires an adverse yield hint reported by the yield model AND a
+    meaningful market decrease for a matching commodity. No economic
+    calculation is performed.
+    """
+    yield_prediction = view.ml("crop_yield_prediction")
+    if yield_prediction is None or not view.crop:
+        return []
+    market = view.market
+    if not market or not _commodity_matches_crop(view.crop, market.commodity):
+        return []
+    if _yield_hint(yield_prediction) != "adverse":
+        return []
+    direction, change = _market_move(market)
+    if direction != "decreasing":
+        return []
+
+    unit = f" {yield_prediction.unit}" if yield_prediction.unit else ""
+    candidate = _Candidate(
+        kind="risk",
+        key=KEY_YIELD_MARKET,
+        category=RiskCategory.YIELD.value,
+        title=f"Yield and Market Risk for {view.crop}",
+        description=(
+            "The yield model reports an adverse yield signal while the "
+            "market trend for the matching commodity is decreasing."
+        ),
+        reasoning=(
+            "The crop yield model reports an adverse yield signal"
+            + (f" ({yield_prediction.prediction}{unit})"
+               if yield_prediction.prediction else "")
+            + ", and the Market Forecast reports a decreasing price trend "
+            f"for {market.commodity} ({change:+.1f}%). Both independent "
+            "sources point in the same adverse direction. No economic "
+            "estimate is produced because not all required inputs are "
+            "provided by the existing modules."
+            + _stage_sentence(view)
+        ),
+        sources=[
+            _ml_source(
+                "crop_yield_prediction",
+                "Crop Yield Prediction ML (signal source; friend's ML layer)",
+            ),
+            _src("market", SourceType.EXTERNAL_DATA,
+                 "Market Forecast price context"),
+            _calendar_source("Crop identification used for market matching"),
+        ],
+        evidence=[
+            _sig(
+                "yield_model_adverse_signal", "crop_yield_prediction",
+                "Yield model reports an adverse yield signal"
+                + (f": {yield_prediction.prediction}{unit}"
+                   if yield_prediction.prediction else ""),
+                _model_probability(yield_prediction),
+            ),
+            *_market_signals(direction, market),
+            _market_crop_match_signal(view),
+        ],
+        action=(
+            "Review the yield and market signals together before planning "
+            "sales; this layer produces no economic estimate."
+        ),
+        stage=view.stage,
+        primary=True,
+        elevated=True,
+        sensitive=view.stage_sensitive(),
+        time_sensitive=view.harvest_imminent(),
+        ml_probability=_model_probability(yield_prediction),
+    )
+    return [_apply_upstream(view, candidate, DecisionType.yield_market_context)]
+
+----- _rule_yield_market_opportunity -----
+def _rule_yield_market_opportunity(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Yield + market opportunity, only when a comparative signal exists.
+
+    Requires a favourable yield hint reported by the yield model AND a
+    meaningful market increase for a matching commodity.
+    """
+    yield_prediction = view.ml("crop_yield_prediction")
+    if yield_prediction is None or not view.crop:
+        return []
+    market = view.market
+    if not market or not _commodity_matches_crop(view.crop, market.commodity):
+        return []
+    if _yield_hint(yield_prediction) != "favourable":
+        return []
+    direction, change = _market_move(market)
+    if direction != "increasing":
+        return []
+
+    unit = f" {yield_prediction.unit}" if yield_prediction.unit else ""
+    time_bound = view.harvest_imminent()
+    harvest_note = (
+        " The crop is approaching its harvest window." if time_bound else ""
+    )
+    candidate = _opportunity(
+        view,
+        key=KEY_YIELD_MARKET,
+        category=OpportunityCategory.YIELD,
+        title=f"Favourable Yield and Market Combination for {view.crop}",
+        description=(
+            "The yield model reports a favourable yield signal while the "
+            "market trend for the matching commodity is increasing."
+        ),
+        reasoning=(
+            "The crop yield model reports a favourable yield signal"
+            + (f" ({yield_prediction.prediction}{unit})"
+               if yield_prediction.prediction else "")
+            + f", and the Market Forecast reports an increasing price trend "
+            f"for {market.commodity} ({change:+.1f}%). Both independent "
+            "sources point in the same favourable direction. No economic "
+            "estimate is produced by this layer."
+            + harvest_note
+        ),
+        evidence=[
+            _sig(
+                "yield_model_favourable_signal", "crop_yield_prediction",
+                "Yield model reports a favourable yield signal"
+                + (f": {yield_prediction.prediction}{unit}"
+                   if yield_prediction.prediction else ""),
+                _model_probability(yield_prediction),
+            ),
+            *_market_signals(direction, market),
+            _market_crop_match_signal(view),
+        ],
+        sources=[
+            _ml_source(
+                "crop_yield_prediction",
+                "Crop Yield Prediction ML (signal source; friend's ML layer)",
+            ),
+            _src("market", SourceType.EXTERNAL_DATA,
+                 "Market Forecast price context"),
+            _calendar_source("Crop identification used for market matching"),
+        ],
+        action=(
+            "Review the yield and market signals together when planning "
+            "sales; this layer produces no economic estimate."
+        ),
+        time_bound=time_bound,
+    )
+    candidate.ml_probability = _model_probability(yield_prediction)
+    return [_apply_upstream(view, candidate, DecisionType.yield_market_context)]
+
+----- _rule_fertilizer_risk -----
+def _rule_fertilizer_risk(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Fertilizer application context risk.
+
+    Fires only when a fertilizer recommendation exists AND adverse weather
+    is forecast for the window. The recommendation itself always comes from
+    the ML model and is never recomputed here.
+    """
+    fertilizer = view.ml("fertilizer_recommendation")
+    if fertilizer is None:
+        return []
+    adverse = view.active_in(ADVERSE_WEATHER_SIGNALS)
+    if not adverse:
+        return []
+
+    detail = "Fertilizer model recommendation available"
+    if fertilizer.prediction:
+        detail = f"Fertilizer model recommendation: {fertilizer.prediction}"
+    reason = (
+        f"The fertilizer recommendation model reports: "
+        f"{fertilizer.prediction or 'a recommendation (see model output)'}. "
+        f"Adverse weather is forecast ({', '.join(adverse)}), so the "
+        "application window may be affected. The recommendation itself "
+        "comes from the ML model; this layer only adds context and does not "
+        "recompute it."
+        + _stage_sentence(view)
+    )
+    candidate = _Candidate(
+        kind="risk",
+        key=KEY_FERTILIZER_APPLICATION,
+        category=RiskCategory.FERTILIZER.value,
+        title="Fertilizer Application Timing at Risk",
+        description=(
+            "A fertilizer recommendation is available while adverse weather "
+            "is forecast for the application window."
+        ),
+        reasoning=reason,
+        sources=[
+            _ml_source(
+                "fertilizer_recommendation",
+                "Fertilizer Recommendation ML (recommendation source; "
+                "friend's ML layer)",
+            ),
+            _weather_source(),
+        ],
+        evidence=[
+            _sig(
+                "fertilizer_model_recommendation",
+                "fertilizer_recommendation", detail,
+                _model_probability(fertilizer),
+            ),
+            *_signal_evidence(view.signals, adverse),
+        ],
+        action=(
+            "Review fertilizer application timing against the forecast "
+            "weather window."
+        ),
+        stage=view.stage,
+        primary=True,
+        elevated=False,
+        # The concern is application TIMING (logistics), not crop
+        # susceptibility in this stage, so the sensitive-stage amplification
+        # is deliberately NOT applied here (documented rule-level decision).
+        sensitive=False,
+        time_sensitive=False,
+    )
+    _append_stage_context(view, candidate)
+    return [_apply_upstream(
+        view, candidate, DecisionType.fertilizer_contextualization,
+    )]
+
+----- _rule_stage_transition_risk -----
+def _rule_stage_transition_risk(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Crop-stage risk: an imminent sensitive stage coincides with adverse
+    weather.
+
+    Only fires when the crop calendar reported BOTH the next stage and the
+    days until it, that stage is a sensitive stage, and adverse weather is
+    forecast. No stage or date is ever assumed.
+    """
+    calendar = view.calendar
+    if not calendar or not calendar.is_crop_calendar_available:
+        return []
+    next_stage = calendar.next_stage
+    days = calendar.days_to_next_stage
+    if not next_stage or days is None:
+        return []
+    if days > STAGE_TRANSITION_IMMINENT_DAYS:
+        return []
+    if not _stage_is_sensitive(next_stage):
+        return []
+    adverse = view.active_in(ADVERSE_WEATHER_SIGNALS)
+    if not adverse:
+        return []
+
+    current_note = (
+        f" The crop is currently in the {view.stage} stage." if view.stage
+        else ""
+    )
+    evidence = _signal_evidence(view.signals, adverse) + [
+        _sig(
+            "next_growth_stage", "crop_calendar",
+            f"Next growth stage: {next_stage} (in {days} days)", next_stage,
+        ),
+        _sig(
+            "sensitive_stage_approaching", "crop_calendar",
+            f"{next_stage} is flagged as a sensitive stage by the crop "
+            "calendar",
+            next_stage,
+        ),
+    ]
+    if view.stage:
+        evidence.append(_sig(
+            "growth_stage", "crop_calendar",
+            f"Current growth stage: {view.stage}", view.stage,
+        ))
+
+    candidate = _Candidate(
+        kind="risk",
+        key=KEY_STAGE_TRANSITION,
+        category=RiskCategory.CROP_STAGE.value,
+        title=f"Sensitive Stage Approaching During Adverse Weather",
+        description=(
+            f"The crop approaches the {next_stage} stage (a sensitive stage) "
+            f"in {days} days while adverse weather is forecast."
+        ),
+        reasoning=(
+            f"Adverse weather is forecast ({', '.join(adverse)}) while the "
+            f"crop approaches the {next_stage} stage in {days} days; the "
+            "crop calendar flags that stage as sensitive."
+            + current_note
+        ),
+        sources=[
+            _weather_source(),
+            _calendar_source("Crop Calendar stage schedule"),
+        ],
+        evidence=evidence,
+        action=(
+            f"Prepare for the {next_stage} stage before it begins; the crop "
+            f"calendar reports it starts in {days} days."
+        ),
+        stage=next_stage,
+        primary=True,
+        elevated=True,
+        sensitive=True,
+        time_sensitive=True,
+    )
+    return [_apply_upstream(
+        view, candidate, DecisionType.weather_crop_stage_interaction,
+    )]
+
+----- _rule_favourable_weather_window -----
+def _rule_favourable_weather_window(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Favourable weather window for field operations.
+
+    Only fires when EVERY required forecast value was reported AND lies
+    inside the documented benign ranges - "no adverse signal" alone is not
+    treated as a favourable window.
+    """
+    required = (
+        "low_precipitation_probability",
+        "insufficient_rainfall_expected",
+        "favourable_max_temperature",
+        "favourable_min_temperature",
+        "favourable_wind_conditions",
+    )
+    if view.any_active(ADVERSE_WEATHER_SIGNALS):
+        return []
+    if any(not view.active(name) for name in required):
+        return []
+
+    valid_until = view.forecast_valid_until()
+    horizon = (
+        f" The window is bounded by the reported forecast horizon "
+        f"({view.weather.forecast_horizon_days} days)."
+        if valid_until else ""
+    )
+    time_window = (
+        f"{view.reference_date().isoformat()} to "
+        f"{valid_until.split('T')[0]}"
+        if valid_until else None
+    )
+    evidence = _signal_evidence(view.signals, required)
+    if view.weather.forecast_horizon_days is not None:
+        evidence.append(_sig(
+            "forecast_horizon", "weather",
+            f"Reported forecast horizon: "
+            f"{view.weather.forecast_horizon_days} days",
+            view.weather.forecast_horizon_days,
+        ))
+    candidate = _opportunity(
+        view,
+        key=KEY_FAVOURABLE_WINDOW,
+        category=OpportunityCategory.WEATHER,
+        title="Favourable Weather Window",
+        description=(
+            "Rainfall probability, rainfall total, temperature and wind are "
+            "all inside the documented benign ranges for the forecast "
+            "window."
+        ),
+        reasoning=(
+            "Every reported forecast value is inside the documented benign "
+            "ranges (low precipitation probability, low rainfall total, "
+            "temperature within range and wind below the threshold), so the "
+            f"window is favourable for planned operations.{horizon}"
+        ),
+        evidence=evidence,
+        sources=[_weather_source()],
+        action=(
+            "Use this window for planned field operations; the reported "
+            "forecast conditions are favourable."
+        ),
+        time_bound=valid_until is not None,
+        time_window=time_window,
+    )
+    _append_stage_context(view, candidate)
+    return [candidate]
+
+----- _rule_irrigation_efficiency -----
+def _rule_irrigation_efficiency(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Reduced irrigation requirement (rainfall expected + model reports
+    adequate soil moisture). Consolidates two independent sources.
+    """
+    rain = view.active_in(RAIN_SIGNALS)
+    if not rain:
+        return []
+    irrigation = view.ml("smart_irrigation")
+    if irrigation is None or _irrigation_need(irrigation) is not False:
+        return []
+
+    status_message = (irrigation.metadata or {}).get("status_message")
+    detail = "Irrigation model reports adequate soil moisture"
+    if status_message:
+        detail += f" (model status: {status_message})"
+    candidate = _opportunity(
+        view,
+        key=KEY_IRRIGATION_EFFICIENCY,
+        category=OpportunityCategory.IRRIGATION,
+        title="Reduced Irrigation Requirement",
+        description=(
+            "Rainfall is forecast and the irrigation model reports adequate "
+            "soil moisture, so the planned irrigation may be reduced."
+        ),
+        reasoning=(
+            "The weather module forecasts rainfall ("
+            + ", ".join(rain)
+            + ") and the smart irrigation model reports adequate soil "
+            "moisture for this context. Both independent sources point to a "
+            "reduced immediate irrigation need; no quantity is stated "
+            "because neither source provides one."
+        ),
+        evidence=_signal_evidence(view.signals, rain) + [_sig(
+            "irrigation_model_adequate_moisture", "smart_irrigation",
+            detail, _model_probability(irrigation),
+        )],
+        sources=[
+            _weather_source(),
+            _ml_source(
+                "smart_irrigation",
+                "Smart Irrigation ML prediction (signal source; friend's ML "
+                "layer)",
+            ),
+        ],
+        action=(
+            "Review planned irrigation against the expected rainfall before "
+            "applying water."
+        ),
+    )
+    candidate.ml_probability = _model_probability(irrigation)
+    _append_stage_context(view, candidate)
+    return [_apply_upstream(
+        view, candidate, DecisionType.weather_irrigation_interaction,
+    )]
+
+----- _rule_reduced_disease_pressure -----
+def _rule_reduced_disease_pressure(view: _AnalysisView) -> List[_Candidate]:
+    """
+    Reduced disease pressure: the disease model reported a low probability
+    AND the weather does not favour disease development.
+    """
+    model = view.ml("disease_detection")
+    if model is None:
+        return []
+    probability = _model_probability(model)
+    if probability is None or probability >= ML_PROBABILITY_THRESHOLD:
+        return []
+    if view.any_active(DISEASE_FAVOURABLE_SIGNALS):
+        return []
+
+    weather_context = bool(view.weather and view.weather.is_weather_data_available)
+    reasons = [
+        f"The disease detection model reported a low probability "
+        f"({probability:.2f})"
+    ]
+    evidence = [_sig(
+        "disease_model_low_probability", "disease_detection",
+        f"Disease model reports low probability ({probability:.2f})"
+        + (f" for {model.prediction}" if model.prediction else ""),
+        probability,
+    )]
+    sources = [_ml_source(
+        "disease_detection",
+        "Disease Detection ML prediction (diagnosis source; friend's ML layer)",
+    )]
+    if weather_context:
+        reasons.append(
+            "and the weather module reported no conditions favourable for "
+            "disease development"
+        )
+        sources.append(_weather_source())
+    reasoning = (
+        " ".join(reasons)
+        + ". The ML model remains the source of the disease assessment; "
+        "this layer only consolidates it with weather context."
+        + _stage_sentence(view)
+    )
+    return [_opportunity(
+        view,
+        key=KEY_DISEASE_PRESSURE,
+        category=OpportunityCategory.DISEASE,
+        title="Reduced Disease Pressure",
+        description=(
+            "The disease model reported a low probability and the weather "
+            "does not favour disease development."
+        ),
+        reasoning=reasoning,
+        evidence=evidence,
+        sources=sources,
+        action=(
+            "Continue routine monitoring; no elevated disease pressure is "
+            "indicated by the model or the weather."
+        ),
+    )]
+
+----- _rule_reduced_pest_pressure -----
+def _rule_reduced_pest_pressure(view: _AnalysisView) -> List[_Candidate]:
+    """Reduced pest pressure reported by the pest prediction model."""
+    model = view.ml("pest_prediction")
+    if model is None:
+        return []
+    probability = _model_probability(model)
+    level = _categorical_level(
+        model, PEST_ADVERSE_PHRASES, PEST_FAVOURABLE_PHRASES,
+    )
+    if level != "favourable":
+        return []
+    if probability is not None and probability >= ML_PROBABILITY_THRESHOLD:
+        return []
+
+    detail = "Pest model reports a low pest signal"
+    if model.prediction:
+        detail += f": {model.prediction}"
+    return [_opportunity(
+        view,
+        key=KEY_PEST_PRESSURE,
+        category=OpportunityCategory.PEST,
+        title="Reduced Pest Pressure",
+        description="The pest prediction model reports a low pest signal.",
+        reasoning=(
+            "The pest prediction model reports a low pest signal"
+            + (f" ({model.prediction})" if model.prediction else "")
+            + ". The ML model remains the source of the pest assessment."
+            + _stage_sentence(view)
+        ),
+        evidence=[_sig(
+            "pest_model_low_signal", "pest_prediction", detail, probability,
+        )],
+        sources=[_ml_source(
+            "pest_prediction",
+            "Pest Prediction ML (signal source; friend's ML layer)",
+        )],
+        action="Continue routine pest monitoring.",
+    )]
+
+----- _AnalysisView -----
+class _AnalysisView:
+    """
+    Read-only view over the supplied context.
+
+    Gives rules normalized access to ML predictions, upstream decisions and
+    derived signals. Nothing is invented: absent data yields None / empty
+    results, and a rule simply does not fire.
+    """
+
+    def __init__(
+        self,
+        context: RiskOpportunityContext,
+        signals: Dict[str, Any],
+        stage: Optional[str],
+    ) -> None:
+        self.context = context
+        self.farm = context.farm_context
+        self.signals = signals
+        self.stage = stage
+        self.decisions: List[Decision] = (
+            list(context.decision_engine_output.decisions)
+            if context.decision_engine_output is not None else []
+        )
+        self.stale_sources = _stale_sources(self.farm)
+
+    # ------------------------------------------------------------------
+    # Context accessors
+    # ------------------------------------------------------------------
+
+    @property
+    def crop(self) -> Optional[str]:
+        return self.farm.crop
+
+    @property
+    def location(self) -> Optional[str]:
+        return self.farm.location
+
+    @property
+    def weather(self):
+        return self.farm.weather_context
+
+    @property
+    def market(self):
+        return self.farm.market_context
+
+    @property
+    def calendar(self):
+        return self.farm.crop_calendar_context
+
+    def reference_date(self) -> date:
+        """As-of date when supplied, else the current UTC date."""
+        if self.farm.as_of_date:
+            return self.farm.as_of_date
+        return datetime.now(timezone.utc).date()
+
+    def ml(self, model_name: str) -> Optional[MLPrediction]:
+        """
+        Return an AVAILABLE prediction for a model, else None.
+
+        Unavailable/errored models are never treated as data and never
+        fabricated; they are reported in the data-quality notices.
+        """
+        for prediction in self.farm.ml_predictions:
+            if prediction.model_name == model_name and \
+                    prediction.status == "available":
+                return prediction
+        return None
+
+    def decision(self, *decision_types: DecisionType) -> Optional[Decision]:
+        """First upstream decision of one of the given types, else None."""
+        wanted = {t.value for t in decision_types}
+        for decision in self.decisions:
+            if decision.decision_type.value in wanted:
+                return decision
+        return None
+
+    def active(self, name: str) -> bool:
+        return bool(self.signals.get(name, {}).get("active"))
+
+    def any_active(self, names: Sequence[str]) -> bool:
+        return any(self.active(name) for name in names)
+
+    def active_in(self, names: Sequence[str]) -> List[str]:
+        return _active_in(self.signals, names)
+
+    def stage_sensitive(self) -> bool:
+        return _stage_is_sensitive(self.stage)
+
+    def is_stale(self, *sources: str) -> bool:
+        """Whether any of the named sources is stale."""
+        return any(source in self.stale_sources for source in sources)
+
+    def forecast_valid_until(self) -> Optional[str]:
+        """
+        End of the available weather forecast horizon (ISO-8601, UTC).
+
+        Derived only from the horizon the weather module reported; None when
+        the horizon is unknown.
+        """
+        if not self.weather or not self.weather.is_weather_data_available:
+            return None
+        horizon = self.weather.forecast_horizon_days
+        if horizon is None:
+            return None
+        end = datetime.now(timezone.utc) + timedelta(days=int(horizon))
+        return end.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+    def harvest_imminent(self) -> bool:
+        """
+        Whether the calendar harvest window is active or starts soon.
+
+        Derived only from the calendar's harvest window dates and the
+        as-of date; False when the calendar did not provide a window.
+        """
+        calendar = self.calendar
+        if not calendar or not calendar.is_crop_calendar_available:
+            return False
+        start = calendar.expected_harvest_window_start
+        end = calendar.expected_harvest_window_end
+        if start is None and end is None:
+            return False
+        reference = self.reference_date()
+        window_start = start or end
+        window_end = end or start
+        if window_start and reference < window_start - timedelta(
+            days=HARVEST_WINDOW_IMMINENT_DAYS
+        ):
+            return False
+        if window_end and reference > window_end:
+            return False
+        return True
+
+    def harvest_window_text(self) -> Optional[str]:
+        """Harvest window as 'start to end' when the calendar supplied it."""
+        calendar = self.calendar
+        if not calendar or not calendar.is_crop_calendar_available:
+            return None
+        start = calendar.expected_harvest_window_start
+        end = calendar.expected_harvest_window_end
+        if start is None or end is None:
+            return None
+        return f"{start.isoformat()} to {end.isoformat()}"
