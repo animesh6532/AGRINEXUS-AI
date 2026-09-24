@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sprout, Check, AlertTriangle, ChevronRight, Sparkles, Droplets, Thermometer, Calendar } from 'lucide-react';
+import { Sprout, Check, AlertTriangle, ChevronRight, Sparkles, Droplets, Thermometer, Calendar, Layers, ShieldAlert } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { SmartCropRecommendationItem } from '../../types/api';
 
@@ -7,7 +7,16 @@ interface CropResultCardProps {
   rank: number;
   item: SmartCropRecommendationItem;
   onOpenDetail: (item: SmartCropRecommendationItem) => void;
+  isCompared?: boolean;
+  onToggleCompare?: (item: SmartCropRecommendationItem) => void;
 }
+
+const safeFormatScore = (value: number | undefined | null, decimals = 0): string => {
+  if (value == null || typeof value !== 'number' || isNaN(value)) {
+    return '—';
+  }
+  return value.toFixed(decimals);
+};
 
 const getCategoryBadgeColor = (category: string) => {
   switch (category.toLowerCase()) {
@@ -43,8 +52,31 @@ const getLevelBadgeColor = (level: string) => {
   }
 };
 
-export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOpenDetail }) => {
+const getSowingBadge = (sowingStatus?: string) => {
+  switch (sowingStatus) {
+    case 'IDEAL_WINDOW':
+      return { label: 'Ideal Sowing Window', color: 'bg-emerald-100 text-emerald-800 border-emerald-300' };
+    case 'GOOD_WINDOW':
+      return { label: 'Good Sowing Window', color: 'bg-green-50 text-green-700 border-green-200' };
+    case 'LATE':
+      return { label: 'Late Sowing Window', color: 'bg-amber-100 text-amber-800 border-amber-300' };
+    case 'OUTSIDE_WINDOW':
+      return { label: 'Outside Sowing Window', color: 'bg-rose-100 text-rose-800 border-rose-300' };
+    default:
+      return { label: 'Seasonal Window Active', color: 'bg-gray-100 text-gray-700 border-gray-300' };
+  }
+};
+
+export const CropResultCard: React.FC<CropResultCardProps> = ({
+  rank,
+  item,
+  onOpenDetail,
+  isCompared = false,
+  onToggleCompare
+}) => {
   const isTopRank = rank === 1;
+  const sowingBadge = getSowingBadge((item as any).sowing_feasibility);
+  const factorScores = item.factor_scores || {};
 
   return (
     <GlassCard
@@ -55,6 +87,17 @@ export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOp
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E7DA] pb-5">
         <div className="flex items-start gap-3.5">
+          {/* Comparison Checkbox */}
+          {onToggleCompare && (
+            <input
+              type="checkbox"
+              checked={isCompared}
+              onChange={() => onToggleCompare(item)}
+              className="mt-2.5 w-4 h-4 rounded border-gray-300 text-[#2F6B3C] focus:ring-[#2F6B3C] cursor-pointer"
+              title="Select crop for comparison"
+            />
+          )}
+
           <div
             className={`w-10 h-10 rounded-2xl flex items-center justify-center text-sm font-black shrink-0 ${
               isTopRank
@@ -70,8 +113,8 @@ export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOp
               <h3 className="text-2xl font-black font-editorial text-[#0B1C10] capitalize">
                 {item.display_name}
               </h3>
-              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getCategoryBadgeColor(item.category)}`}>
-                {item.category.replace('_', ' ')}
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider ${getCategoryBadgeColor(item.category || 'all')}`}>
+                {(item.category || 'cereal').replace('_', ' ')}
               </span>
             </div>
             <p className="text-xs italic text-[#536056] font-editorial mt-0.5">
@@ -82,26 +125,31 @@ export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOp
 
         {/* Suitability Score Pill & Level */}
         <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2">
-          <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getLevelBadgeColor(item.suitability_level)}`}>
-            ● {item.suitability_level}
-          </span>
+          <div className="flex flex-col sm:items-end gap-1">
+            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${getLevelBadgeColor(item.suitability_level)}`}>
+              ● {item.suitability_level}
+            </span>
+            <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border ${sowingBadge.color}`}>
+              {sowingBadge.label}
+            </span>
+          </div>
 
           <div className="text-right">
-            <span className="text-xs text-[#536056] block">Suitability Score</span>
+            <span className="text-[10px] uppercase font-bold text-[#536056] block tracking-wider">Suitability Index</span>
             <span className="text-2xl font-black font-mono text-[#0B1C10]">
-              {item.suitability_score}
+              {item.suitability_score ?? '—'}
               <span className="text-xs font-normal text-[#536056]"> / 100</span>
             </span>
           </div>
         </div>
       </div>
 
-      {/* ML Confidence & Factor Badges */}
+      {/* ML Confidence & Factor Breakdown Badges */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {item.ml_prediction?.supported && item.ml_prediction.probability != null ? (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#2F6B3C]/10 text-[#2F6B3C] font-extrabold font-mono border border-[#2F6B3C]/20">
             <Sparkles className="w-3.5 h-3.5 text-[#2F6B3C]" />
-            ML Model Ranks: {(item.ml_prediction.probability * 100).toFixed(0)}%
+            ML Model Ranks: {safeFormatScore(item.ml_prediction.probability * 100)}%
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gray-100 text-gray-600 text-[11px] font-mono border border-gray-200">
@@ -111,15 +159,19 @@ export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOp
 
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#FAFBF7] border border-[#E2E7DA] text-[11px] font-semibold text-[#536056]">
           <Calendar className="w-3 h-3 text-[#2F6B3C]" />
-          Season: {item.factor_scores.season.toFixed(0)}%
+          Season: {safeFormatScore(factorScores.season)}%
         </span>
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#FAFBF7] border border-[#E2E7DA] text-[11px] font-semibold text-[#536056]">
           <Thermometer className="w-3 h-3 text-[#2F6B3C]" />
-          Temp: {item.factor_scores.temperature.toFixed(0)}%
+          Temp: {safeFormatScore(factorScores.temperature)}%
         </span>
         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#FAFBF7] border border-[#E2E7DA] text-[11px] font-semibold text-[#536056]">
           <Droplets className="w-3 h-3 text-[#2F6B3C]" />
-          Rain: {item.factor_scores.rainfall.toFixed(0)}%
+          Rain: {safeFormatScore(factorScores.rainfall ?? factorScores.water)}%
+        </span>
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#FAFBF7] border border-[#E2E7DA] text-[11px] font-semibold text-[#536056]">
+          <Layers className="w-3 h-3 text-[#2F6B3C]" />
+          Soil pH: {safeFormatScore(factorScores.ph)}%
         </span>
       </div>
 
@@ -127,7 +179,7 @@ export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOp
       {item.reasons && item.reasons.length > 0 && (
         <div className="space-y-1.5">
           <span className="text-[11px] font-bold uppercase tracking-wider text-[#536056]">
-            Why Recommended:
+            Why Suitable:
           </span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5 text-xs text-[#0B1C10]">
             {item.reasons.slice(0, 4).map((reason, idx) => (
@@ -145,7 +197,7 @@ export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOp
         <div className="space-y-1 text-xs text-amber-900 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
           <div className="flex items-center gap-1.5 font-bold">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-            <span>Field Risk Cautions:</span>
+            <span>Verify Before Planting:</span>
           </div>
           <ul className="list-disc list-inside text-[11px] space-y-0.5 text-amber-900/90 pl-1">
             {item.warnings.slice(0, 2).map((warn, idx) => (
@@ -158,7 +210,7 @@ export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOp
       {/* Footer CTA */}
       <div className="pt-2 flex items-center justify-between border-t border-[#E2E7DA]/60">
         <span className="text-[11px] text-[#536056] font-mono">
-          Growth Duration: {item.profile_details.growth_duration_days?.[0] || 90}-{item.profile_details.growth_duration_days?.[1] || 120} Days
+          Growth Duration: {item.profile_details?.growth_duration_days?.[0] || 90}-{item.profile_details?.growth_duration_days?.[1] || 120} Days
         </span>
 
         <button
@@ -166,7 +218,7 @@ export const CropResultCard: React.FC<CropResultCardProps> = ({ rank, item, onOp
           onClick={() => onOpenDetail(item)}
           className="inline-flex items-center gap-1 text-xs font-extrabold text-[#2F6B3C] hover:text-[#0B1C10] hover:underline"
         >
-          <span>View Crop Profile</span>
+          <span>View Detailed Profile</span>
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>

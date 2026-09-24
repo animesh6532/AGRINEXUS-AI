@@ -468,10 +468,15 @@ export interface SmartCropFactorScores {
   season: number;
   temperature: number;
   rainfall: number;
+  water?: number;
   ph: number;
   texture: number;
+  soil_texture?: number;
   region: number;
+  land_suitability?: number;
+  sowing_feasibility?: number;
   ml?: number;
+  [key: string]: number | undefined;
 }
 
 export interface SmartCropRecommendationItem {
@@ -562,4 +567,3 @@ export interface SmartCropResponse {
   };
   recommendations: SmartCropRecommendationItem[];
 }
-

@@ -83,10 +83,10 @@ class SmartCropRecommender:
         ml_anomaly_msg: Optional[str] = None
 
         # ML requires: N, P, K, temperature, humidity, ph, rainfall
-        temp_val = weather_ctx.current_temperature or weather_ctx.forecast_temperature_mean
-        hum_val = weather_ctx.current_humidity
-        ph_val = soil_ctx.ph.value if (soil_ctx.ph and soil_ctx.ph.value is not None) else None
-        rain_val = weather_ctx.current_rainfall or weather_ctx.forecast_rainfall_sum
+        temp_val = weather_override_temp if weather_override_temp is not None else (weather_ctx.current_temperature or weather_ctx.forecast_temperature_mean or 25.0)
+        hum_val = weather_override_humidity if weather_override_humidity is not None else (weather_ctx.current_humidity or 70.0)
+        ph_val = user_ph if user_ph is not None else (soil_ctx.ph.value if (soil_ctx.ph and soil_ctx.ph.value is not None) else 6.5)
+        rain_val = weather_override_rain if weather_override_rain is not None else (weather_ctx.current_rainfall or weather_ctx.forecast_rainfall_sum or 150.0)
 
         if (
             user_n is not None and

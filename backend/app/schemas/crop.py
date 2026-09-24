@@ -77,6 +77,28 @@ class SmartCropRequest(BaseModel):
     preferences: Optional[PreferencesInput] = Field(default_factory=PreferencesInput)
 
 
+class SmartCropRecommendationItemSchema(BaseModel):
+    crop: str
+    display_name: str
+    scientific_name: str
+    ml_supported: bool
+    category: str
+    suitability_score: int
+    suitability_level: str
+    land_suitability: str
+    sowing_feasibility: str
+    is_sowing_recommended_now: bool
+    ml_prediction: Optional[Dict[str, Any]] = None
+    factor_scores: Dict[str, float]
+    limiting_factors: List[str] = Field(default_factory=list)
+    positive_factors: List[str] = Field(default_factory=list)
+    reasons: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    missing_data: List[str] = Field(default_factory=list)
+    data_sources: List[Dict[str, str]] = Field(default_factory=list)
+    profile_details: Dict[str, Any] = Field(default_factory=dict)
+
+
 class SmartCropResponse(BaseModel):
     success: bool = True
     engine_version: str = "1.0.0"
@@ -88,5 +110,4 @@ class SmartCropResponse(BaseModel):
     soil: Dict[str, Any]
     ml_status: Dict[str, Any]
     farm: Dict[str, Any]
-    recommendations: List[Dict[str, Any]]
-
+    recommendations: List[SmartCropRecommendationItemSchema]

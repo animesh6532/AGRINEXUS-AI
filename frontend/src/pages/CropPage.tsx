@@ -11,7 +11,8 @@ import {
   RefreshCw,
   Info,
   MapPin,
-  ShieldAlert
+  ShieldAlert,
+  Scale
 } from 'lucide-react';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -26,6 +27,7 @@ import { CropModeSwitcher } from '../components/crop/CropModeSwitcher';
 import { FieldContextPanels } from '../components/crop/FieldContextPanels';
 import { CropResultCard } from '../components/crop/CropResultCard';
 import { CropDetailModal } from '../components/crop/CropDetailModal';
+import { CropCompareModal } from '../components/crop/CropCompareModal';
 import { HybridOverrideDrawer } from '../components/crop/HybridOverrideDrawer';
 import { LocationPicker } from '../components/location/LocationPicker';
 
@@ -55,6 +57,10 @@ export const CropPage: React.FC = () => {
 
   // Selected crop detail modal
   const [selectedCropDetail, setSelectedCropDetail] = useState<SmartCropRecommendationItem | null>(null);
+
+  // Multi-Crop Comparison State
+  const [comparedCrops, setComparedCrops] = useState<SmartCropRecommendationItem[]>([]);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState<boolean>(false);
 
   // Hybrid override drawer visibility
   const [isOverrideDrawerOpen, setIsOverrideDrawerOpen] = useState<boolean>(false);
@@ -86,6 +92,24 @@ export const CropPage: React.FC = () => {
     } finally {
       setManualLoading(false);
     }
+  };
+
+  const handleToggleCompare = (cropItem: SmartCropRecommendationItem) => {
+    setComparedCrops((prev) => {
+      const exists = prev.some((c) => c.crop === cropItem.crop);
+      if (exists) {
+        return prev.filter((c) => c.crop !== cropItem.crop);
+      }
+      if (prev.length >= 4) {
+        alert('You can compare up to 4 crops simultaneously.');
+        return prev;
+      }
+      return [...prev, cropItem];
+    });
+  };
+
+  const handleRemoveCompare = (cropKey: string) => {
+    setComparedCrops((prev) => prev.filter((c) => c.crop !== cropKey));
   };
 
   // Automatically trigger smart analysis when location is available on mount or mode change
@@ -204,10 +228,10 @@ export const CropPage: React.FC = () => {
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E2E7DA] pb-4">
                 <div>
                   <h2 className="text-2xl font-black font-editorial text-[#0B1C10]">
-                    CROPS SUITED TO YOUR FIELD
+                    SUITABLE CROP OPTIONS FOR YOUR FIELD
                   </h2>
                   <p className="text-xs text-[#536056] mt-0.5">
-                    Based on available location ({smartResult.location.display_name}), weather, soil, and seasonal context ({smartResult.season.season}).
+                    Evaluated against field location ({smartResult.location.display_name}), weather, soil, and seasonal conditions ({smartResult.season.season}).
                   </p>
                 </div>
 
@@ -230,6 +254,41 @@ export const CropPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Multi-Crop Comparison Floating Action Bar */}
+              {comparedCrops.length > 0 && (
+                <div className="sticky top-4 z-30 p-4 rounded-2xl bg-[#0B1C10] text-white shadow-2xl flex items-center justify-between gap-4 border border-[#2F6B3C]/50 animate-fade-in">
+                  <div className="flex items-center gap-3">
+                    <Scale className="w-5 h-5 text-[#D4E768]" />
+                    <div>
+                      <span className="text-xs font-bold text-white block">
+                        {comparedCrops.length} Crops Selected for Comparison
+                      </span>
+                      <span className="text-[10px] text-[#A2B5A5] truncate max-w-md block">
+                        {comparedCrops.map((c) => c.display_name).join(', ')}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setComparedCrops([])}
+                      className="px-3 py-1.5 text-xs text-[#A2B5A5] hover:text-white"
+                    >
+                      Clear
+                    </button>
+                    <Button
+                      type="button"
+                      variant="lime"
+                      size="sm"
+                      onClick={() => setIsCompareModalOpen(true)}
+                    >
+                      Compare Side-by-Side
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {/* Ranked Crop List */}
               <div className="space-y-4">
                 {smartResult.recommendations.map((item, idx) => (
@@ -238,6 +297,8 @@ export const CropPage: React.FC = () => {
                     rank={idx + 1}
                     item={item}
                     onOpenDetail={setSelectedCropDetail}
+                    isCompared={comparedCrops.some((c) => c.crop === item.crop)}
+                    onToggleCompare={handleToggleCompare}
                   />
                 ))}
               </div>
@@ -485,6 +546,14 @@ export const CropPage: React.FC = () => {
         item={selectedCropDetail}
         onClose={() => setSelectedCropDetail(null)}
       />
+
+      {isCompareModalOpen && (
+        <CropCompareModal
+          crops={comparedCrops}
+          onClose={() => setIsCompareModalOpen(false)}
+          onRemoveCrop={handleRemoveCompare}
+        />
+      )}
 
       <HybridOverrideDrawer
         isOpen={isOverrideDrawerOpen}

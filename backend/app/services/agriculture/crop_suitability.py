@@ -1,8 +1,9 @@
 """
-Crop suitability engine module.
-Evaluates agro-ecological suitability for a candidate crop profile against field location,
+Crop Suitability Engine module.
+Evaluates agro-ecological suitability for candidate crop profiles against field location,
 weather context, soil context, seasonal window, water availability, and frozen ML predictions.
-Adheres strictly to safety, honesty, and transparency guidelines.
+Distinguishes Question A ("Can this crop generally grow here?") from Question B ("Is this an appropriate crop to sow now?").
+Strictly adheres to FAO AEZ principles, safety, honesty, and transparency guidelines.
 """
 
 from typing import Dict, Any, List, Optional
@@ -12,6 +13,8 @@ from .crop_profiles import CropRequirementProfile
 from .weather_context import WeatherContext
 from .soil_context import SoilContext
 from .season_engine import SeasonInfo
+from .limitation_engine import LimitationEngine, LimitationAnalysisResult
+from .sowing_feasibility import SowingFeasibilityEngine, SowingFeasibilityResult
 
 
 class CropSuitabilityResult(BaseModel):
@@ -20,10 +23,15 @@ class CropSuitabilityResult(BaseModel):
     scientific_name: str
     ml_supported: bool
     category: str
-    suitability_score: int = Field(..., ge=0, le=100, description="Suitability Score (0-100 integer)")
+    suitability_score: int = Field(..., ge=0, le=100, description="AgriNexus Suitability Index (0-100 integer)")
     suitability_level: str  # "Highly Suitable", "Suitable", "Conditionally Suitable", "Low Suitability", "Insufficient Data"
+    land_suitability: str  # "Highly Suitable", "Suitable", "Moderately Suitable", "Marginal", "Not Suitable"
+    sowing_feasibility: str  # "IDEAL_WINDOW", "GOOD_WINDOW", "EARLY", "LATE", "OUTSIDE_WINDOW", "INSUFFICIENT_DATA"
+    is_sowing_recommended_now: bool
     ml_prediction: Optional[Dict[str, Any]] = None  # {supported: bool, probability: float}
-    factor_scores: Dict[str, float]  # season, temperature, rainfall, ph, texture, regional, ml
+    factor_scores: Dict[str, float]
+    limiting_factors: List[str]
+    positive_factors: List[str]
     reasons: List[str]
     warnings: List[str]
     missing_data: List[str]
@@ -34,15 +42,12 @@ class CropSuitabilityResult(BaseModel):
 class CropSuitabilityEngine:
     """Configurable Agricultural Suitability Assessment Engine."""
 
-    # Default engine configuration weights (sums to 1.0)
+    # Default weight distribution (sums to 1.0)
     DEFAULT_WEIGHTS = {
-        "ml": 0.30,
-        "season": 0.15,
-        "temperature": 0.15,
-        "rainfall": 0.15,
-        "ph": 0.10,
-        "texture": 0.05,
-        "region": 0.10
+        "land_suitability": 0.45,
+        "sowing_feasibility": 0.25,
+        "region": 0.10,
+        "ml": 0.20
     }
 
     @classmethod
@@ -53,20 +58,20 @@ class CropSuitabilityEngine:
         soil: SoilContext,
         season: SeasonInfo,
         ml_probability: Optional[float] = None,
-        water_availability: str = "unknown",
-        weights_config: Optional[Dict[str, float]] = None
+        water_availability: str = "unknown"
     ) -> CropSuitabilityResult:
         """
         Evaluate agro-ecological suitability of a candidate crop profile.
         Returns CropSuitabilityResult with score (0-100), level, factor breakdown, reasons, and warnings.
         """
-        weights = dict(weights_config or cls.DEFAULT_WEIGHTS)
         reasons: List[str] = []
         warnings: List[str] = []
         missing_data: List[str] = []
         data_sources: List[Dict[str, str]] = []
 
-        # Track missing critical information
+        # ------------------------------------------------------------------
+        # 1. Missing Critical Data Tracking
+        # ------------------------------------------------------------------
         if not weather.data_available:
             missing_data.append("weather")
             warnings.append("⚠ Weather telemetry unavailable from external provider.")
@@ -77,17 +82,17 @@ class CropSuitabilityEngine:
 
         if soil.phosphorus is None or soil.phosphorus.value is None:
             missing_data.append("phosphorus")
-            warnings.append("⚠ Phosphorus (P) missing from soil data — verify with lab soil test.")
+            warnings.append("⚠ Soil Phosphorus (P) missing — verify with lab soil test before planting.")
 
         if soil.potassium is None or soil.potassium.value is None:
             missing_data.append("potassium")
-            warnings.append("⚠ Potassium (K) missing from soil data — verify with lab soil test.")
+            warnings.append("⚠ Soil Potassium (K) missing — verify with lab soil test before planting.")
 
         if soil.nitrogen and soil.nitrogen.is_estimated:
-            warnings.append("⚠ Soil Nitrogen is estimated from geospatial data (Total N).")
+            warnings.append("⚠ Soil Nitrogen is estimated from 250m geospatial data (Total N).")
 
         if soil.ph and soil.ph.is_estimated:
-            warnings.append("⚠ Soil pH is estimated from geospatial 250m data.")
+            warnings.append("⚠ Soil pH is estimated from 250m geospatial data.")
 
         # Data sources provenance
         data_sources.append({"domain": "Weather", "source": weather.source})
@@ -96,111 +101,37 @@ class CropSuitabilityEngine:
         data_sources.append({"domain": "Crop Requirements", "source": profile.source})
 
         # ------------------------------------------------------------------
-        # 1. Season Evaluation
+        # 2. Limitation Analysis (Question A: General Land Suitability)
         # ------------------------------------------------------------------
-        season_score = 100.0
-        req_seasons = [s.lower() for s in profile.seasons]
-        curr_season = season.season.lower()
+        limitations: LimitationAnalysisResult = LimitationEngine.evaluate_limitations(
+            profile=profile,
+            weather=weather,
+            soil=soil,
+            season=season,
+            water_availability=water_availability
+        )
 
-        if "annual" in req_seasons or curr_season in req_seasons:
-            season_score = 100.0
-            reasons.append(f"✓ Current season ({season.season}) matches optimal growing window ({', '.join(profile.seasons).title()})")
-        else:
-            season_score = 30.0
-            warnings.append(f"⚠ Seasonal mismatch: Current season is {season.season}, but {profile.display_name} prefers {', '.join(profile.seasons).title()}")
-
-        # ------------------------------------------------------------------
-        # 2. Temperature Evaluation
-        # ------------------------------------------------------------------
-        temp_score = 80.0  # default neutral if missing
-        temp_val = weather.current_temperature or weather.forecast_temperature_mean
-
-        if temp_val is not None:
-            opt_min, opt_max = profile.temp_optimal
-            acc_min, acc_max = profile.temp_acceptable
-
-            if opt_min <= temp_val <= opt_max:
-                temp_score = 100.0
-                reasons.append(f"✓ Temperature ({temp_val:.1f}°C) is optimal ({opt_min}-{opt_max}°C)")
-            elif acc_min <= temp_val <= acc_max:
-                temp_score = 70.0
-                reasons.append(f"✓ Temperature ({temp_val:.1f}°C) is within acceptable range ({acc_min}-{acc_max}°C)")
-                warnings.append(f"⚠ Temperature ({temp_val:.1f}°C) is suboptimal for {profile.display_name} (Optimal: {opt_min}-{opt_max}°C)")
-            else:
-                temp_score = 20.0
-                warnings.append(f"⚠ Temperature ({temp_val:.1f}°C) is outside acceptable bounds ({acc_min}-{acc_max}°C)")
+        reasons.extend(limitations.positive_factors)
+        warnings.extend([e.warning for e in limitations.factor_evaluations.values() if e.warning])
 
         # ------------------------------------------------------------------
-        # 3. Rainfall & Water Availability Evaluation
+        # 3. Sowing Feasibility Analysis (Question B: Sowing Time Feasibility)
         # ------------------------------------------------------------------
-        rain_score = 80.0
-        rain_val = weather.current_rainfall or weather.forecast_rainfall_sum or weather.recent_rainfall_14d
+        sowing: SowingFeasibilityResult = SowingFeasibilityEngine.evaluate_sowing_feasibility(
+            profile=profile,
+            weather=weather,
+            season=season,
+            water_availability=water_availability
+        )
 
-        if rain_val is not None:
-            r_opt_min, r_opt_max = profile.rainfall_optimal
-            r_acc_min, r_acc_max = profile.rainfall_acceptable
-
-            # Convert 7-14 day rain sum into seasonal equivalent estimate (approx x 10)
-            est_seasonal_rain = rain_val * 10.0
-
-            if r_opt_min <= est_seasonal_rain <= r_opt_max:
-                rain_score = 100.0
-                reasons.append(f"✓ Rainfall / Moisture availability ({rain_val:.1f} mm) aligns with optimal crop water requirements")
-            elif r_acc_min <= est_seasonal_rain <= r_acc_max:
-                rain_score = 70.0
-                reasons.append(f"✓ Rainfall / Moisture ({rain_val:.1f} mm) is within acceptable limits")
-            else:
-                rain_score = 30.0
-                warnings.append(f"⚠ Water requirement: {profile.display_name} requires {profile.water_requirement.upper()} water, but available moisture is constrained.")
-
-        # Adjust water score based on irrigation availability
-        if water_availability.lower() == "irrigated" and profile.water_requirement in ["high", "medium"]:
-            rain_score = max(rain_score, 90.0)
-            reasons.append("✓ Farm irrigation availability compensates for rainfall deficits")
-        elif water_availability.lower() == "rainfed" and profile.water_requirement == "high":
-            rain_score = min(rain_score, 50.0)
-            warnings.append("⚠ Rainfed field status may cause moisture stress for high-water crop")
+        reasons.extend(sowing.reasons)
+        warnings.extend(sowing.warnings)
 
         # ------------------------------------------------------------------
-        # 4. Soil pH Evaluation
-        # ------------------------------------------------------------------
-        ph_score = 80.0
-        ph_val = soil.ph.value if (soil.ph and soil.ph.value is not None) else None
-
-        if ph_val is not None:
-            p_opt_min, p_opt_max = profile.ph_optimal
-            p_acc_min, p_acc_max = profile.ph_acceptable
-
-            if p_opt_min <= ph_val <= p_opt_max:
-                ph_score = 100.0
-                reasons.append(f"✓ Soil pH ({ph_val:.1f}) is optimal ({p_opt_min}-{p_opt_max})")
-            elif p_acc_min <= ph_val <= p_acc_max:
-                ph_score = 70.0
-                reasons.append(f"✓ Soil pH ({ph_val:.1f}) is acceptable ({p_acc_min}-{p_acc_max})")
-                warnings.append(f"⚠ Soil pH ({ph_val:.1f}) is suboptimal (Optimal: {p_opt_min}-{p_opt_max})")
-            else:
-                ph_score = 25.0
-                warnings.append(f"⚠ Soil pH ({ph_val:.1f}) is hostile for {profile.display_name} (Acceptable: {p_acc_min}-{p_acc_max})")
-
-        # ------------------------------------------------------------------
-        # 5. Soil Texture Evaluation
-        # ------------------------------------------------------------------
-        texture_score = 75.0
-        soil_tex = (soil.soil_texture or "").lower()
-        pref_textures = [t.lower() for t in profile.soil_textures]
-
-        if any(pt in soil_tex or soil_tex in pt for pt in pref_textures):
-            texture_score = 100.0
-            reasons.append(f"✓ Soil texture ({soil.soil_texture}) matches preferred soil types ({', '.join(profile.soil_textures)})")
-        else:
-            texture_score = 60.0
-
-        # ------------------------------------------------------------------
-        # 6. Regional Alignment Evaluation
+        # 4. Regional Alignment
         # ------------------------------------------------------------------
         region_score = 80.0
         reg_states = [r.lower() for r in profile.regional_suitability]
-
         if "all" in reg_states or season.state.lower() in reg_states:
             region_score = 100.0
             reasons.append(f"✓ High regional cultivation priority in {season.state}")
@@ -208,55 +139,48 @@ class CropSuitabilityEngine:
             region_score = 70.0
 
         # ------------------------------------------------------------------
-        # 7. ML Model Probability Evaluation
+        # 5. ML Model Evidence
         # ------------------------------------------------------------------
         ml_score: Optional[float] = None
         if ml_probability is not None and profile.ml_supported:
             ml_score = round(ml_probability * 100.0, 1)
             if ml_probability >= 0.70:
-                reasons.append(f"✓ AgriNexus-AI ML model ranks {profile.display_name} with high confidence ({ml_score:.0f}%)")
+                reasons.append(f"✓ AgriNexus-AI ML model ranks {profile.display_name} with high probability ({ml_score:.0f}%)")
             elif ml_probability >= 0.30:
                 reasons.append(f"✓ AgriNexus-AI ML model identifies {profile.display_name} as a candidate ({ml_score:.0f}%)")
         elif not profile.ml_supported:
-            # Catalogue crop without ML support
             data_sources.append({"domain": "ML Model", "source": "Not Trained in ML Artifact (Catalogue Crop)"})
 
         # ------------------------------------------------------------------
-        # Dynamic Weight Normalization
+        # 6. Overall AgriNexus Suitability Index Calculation
         # ------------------------------------------------------------------
-        active_weights = dict(weights)
+        # Dynamic Weight Re-allocation
+        weights = dict(cls.DEFAULT_WEIGHTS)
         if ml_score is None:
-            # Redistribute ML weight (30%) across remaining 6 factors
-            del active_weights["ml"]
-            total_w = sum(active_weights.values())
-            active_weights = {k: v / total_w for k, v in active_weights.items()}
+            del weights["ml"]
+            tot_w = sum(weights.values())
+            weights = {k: v / tot_w for k, v in weights.items()}
 
-        factor_scores = {
-            "season": round(season_score, 1),
-            "temperature": round(temp_score, 1),
-            "rainfall": round(rain_score, 1),
-            "ph": round(ph_score, 1),
-            "texture": round(texture_score, 1),
-            "region": round(region_score, 1),
-        }
-        if ml_score is not None:
-            factor_scores["ml"] = round(ml_score, 1)
+        land_eval_scores = [e.score for e in limitations.factor_evaluations.values()]
+        land_score_avg = sum(land_eval_scores) / max(1, len(land_eval_scores))
 
-        final_score_raw = (
-            season_score * active_weights.get("season", 0) +
-            temp_score * active_weights.get("temperature", 0) +
-            rain_score * active_weights.get("rainfall", 0) +
-            ph_score * active_weights.get("ph", 0) +
-            texture_score * active_weights.get("texture", 0) +
-            region_score * active_weights.get("region", 0) +
-            (ml_score or 0) * active_weights.get("ml", 0)
-        )
+        if limitations.is_hard_constrained:
+            final_score_raw = 10.0  # Hard constraint caps suitability score near 0
+        else:
+            final_score_raw = (
+                land_score_avg * weights.get("land_suitability", 0.45) +
+                sowing.sowing_score * weights.get("sowing_feasibility", 0.25) +
+                region_score * weights.get("region", 0.10) +
+                (ml_score or 0.0) * weights.get("ml", 0.20)
+            )
 
         final_suitability_score = int(round(min(100.0, max(0.0, final_score_raw))))
 
-        # Determine Suitability Level
+        # Determine Final Suitability Level Label
         if len(missing_data) >= 3:
             suitability_level = "Insufficient Data"
+        elif limitations.is_hard_constrained:
+            suitability_level = "Not Suitable"
         elif final_suitability_score >= 85:
             suitability_level = "Highly Suitable"
         elif final_suitability_score >= 70:
@@ -265,6 +189,24 @@ class CropSuitabilityEngine:
             suitability_level = "Conditionally Suitable"
         else:
             suitability_level = "Low Suitability"
+
+        water_score = round(limitations.factor_evaluations["water"].score, 1)
+        texture_score = round(limitations.factor_evaluations["soil_texture"].score, 1)
+
+        factor_scores = {
+            "land_suitability": round(land_score_avg, 1),
+            "sowing_feasibility": round(sowing.sowing_score, 1),
+            "season": round(limitations.factor_evaluations["season"].score, 1),
+            "temperature": round(limitations.factor_evaluations["temperature"].score, 1),
+            "rainfall": water_score,
+            "water": water_score,
+            "ph": round(limitations.factor_evaluations["ph"].score, 1),
+            "texture": texture_score,
+            "soil_texture": texture_score,
+            "region": round(region_score, 1),
+        }
+        if ml_score is not None:
+            factor_scores["ml"] = round(ml_score, 1)
 
         ml_pred_payload = None
         if profile.ml_supported:
@@ -286,10 +228,15 @@ class CropSuitabilityEngine:
             category=profile.category,
             suitability_score=final_suitability_score,
             suitability_level=suitability_level,
+            land_suitability=limitations.land_suitability_class,
+            sowing_feasibility=sowing.sowing_status,
+            is_sowing_recommended_now=sowing.is_sowing_recommended_now,
             ml_prediction=ml_pred_payload,
             factor_scores=factor_scores,
-            reasons=reasons,
-            warnings=warnings,
+            limiting_factors=limitations.limiting_factors,
+            positive_factors=limitations.positive_factors,
+            reasons=list(dict.fromkeys(reasons)),  # Deduplicate
+            warnings=list(dict.fromkeys(warnings)),
             missing_data=missing_data,
             data_sources=data_sources,
             profile_details={
