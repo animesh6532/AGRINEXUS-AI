@@ -289,19 +289,52 @@ export const CropPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Ranked Crop List */}
-              <div className="space-y-4">
-                {smartResult.recommendations.map((item, idx) => (
-                  <CropResultCard
-                    key={item.crop}
-                    rank={idx + 1}
-                    item={item}
-                    onOpenDetail={setSelectedCropDetail}
-                    isCompared={comparedCrops.some((c) => c.crop === item.crop)}
-                    onToggleCompare={handleToggleCompare}
-                  />
-                ))}
-              </div>
+              {/* Ranked Crop List - Hierarchical Display */}
+              {smartResult.recommendations.length > 0 && (
+                <div className="space-y-6">
+                  {/* Primary Top Recommendation (#1) */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-bold uppercase tracking-widest text-[#2F6B3C] flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-[#2F6B3C]" />
+                      TOP SUITED CROP RECOMMENDATION
+                    </span>
+                    <CropResultCard
+                      rank={1}
+                      item={smartResult.recommendations[0]}
+                      onOpenDetail={setSelectedCropDetail}
+                      isCompared={comparedCrops.some((c) => c.crop === smartResult.recommendations[0].crop)}
+                      onToggleCompare={handleToggleCompare}
+                    />
+                  </div>
+
+                  {/* Alternative Suitable Crops Grid (#2 to #N) */}
+                  {smartResult.recommendations.length > 1 && (
+                    <div className="space-y-3 pt-4 border-t border-[#E2E7DA]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold uppercase tracking-widest text-[#536056]">
+                          ALTERNATIVE SUITABLE CROP OPTIONS ({smartResult.recommendations.length - 1})
+                        </span>
+                        <span className="text-xs text-[#536056]">
+                          Click "Compare" to select crops for side-by-side analysis
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {smartResult.recommendations.slice(1).map((item, idx) => (
+                          <CropResultCard
+                            key={item.crop}
+                            rank={idx + 2}
+                            item={item}
+                            onOpenDetail={setSelectedCropDetail}
+                            isCompared={comparedCrops.some((c) => c.crop === item.crop)}
+                            onToggleCompare={handleToggleCompare}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Transparent Data Sources & Disclaimers */}
               <GlassCard variant="solid" className="p-6 space-y-4 text-xs bg-[#FAFBF7]">

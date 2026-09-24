@@ -199,16 +199,22 @@ export const WeatherPage: React.FC = () => {
             </div>
           </WeatherScene>
 
-          {/* Telemetry Dashboard Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Wind Directional Compass */}
-            <WeatherWindCompass
-              windSpeed={visualizationState.windSpeed}
-              windDirection={visualizationState.windDirection}
-              windGusts={visualizationState.windGusts}
-            />
+          {/* Primary Weather Metrics Grid (4 Columns Desktop / 2 Columns Tablet & Mobile) */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <GlassCard variant="cream" className="p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#D4E768] text-[#0B1C10] flex items-center justify-center font-black">
+                <Thermometer className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] text-[#536056] font-bold uppercase tracking-wider block">
+                  Air Temperature
+                </span>
+                <span className="text-2xl font-black font-editorial text-[#0B1C10]">
+                  {visualizationState.temperature.toFixed(1)}°C
+                </span>
+              </div>
+            </GlassCard>
 
-            {/* Humidity & Precipitation Cards */}
             <GlassCard variant="cream" className="p-5 flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA] flex items-center justify-center font-black">
                 <Droplets className="w-6 h-6" />
@@ -225,14 +231,62 @@ export const WeatherPage: React.FC = () => {
 
             <GlassCard variant="cream" className="p-5 flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA] flex items-center justify-center font-black">
-                <Cloud className="w-6 h-6" />
+                <CloudSun className="w-6 h-6" />
               </div>
               <div>
                 <span className="text-[10px] text-[#536056] font-bold uppercase tracking-wider block">
-                  Cloud Cover
+                  Precipitation
                 </span>
                 <span className="text-2xl font-black font-editorial text-[#0B1C10]">
-                  {visualizationState.cloudCover.toFixed(0)}%
+                  {visualizationState.precipitation} mm
+                </span>
+              </div>
+            </GlassCard>
+
+            <GlassCard variant="cream" className="p-5 flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA] flex items-center justify-center font-black">
+                <Wind className="w-6 h-6" />
+              </div>
+              <div>
+                <span className="text-[10px] text-[#536056] font-bold uppercase tracking-wider block">
+                  Wind Speed
+                </span>
+                <span className="text-2xl font-black font-editorial text-[#0B1C10]">
+                  {visualizationState.windSpeed} km/h
+                </span>
+              </div>
+            </GlassCard>
+          </div>
+
+          {/* Secondary Telemetry Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Wind Directional Compass */}
+            <WeatherWindCompass
+              windSpeed={visualizationState.windSpeed}
+              windDirection={visualizationState.windDirection}
+              windGusts={visualizationState.windGusts}
+            />
+
+            {/* Cloud Cover Card */}
+            <GlassCard variant="cream" className="p-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA] flex items-center justify-center font-black">
+                  <Cloud className="w-6 h-6" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-[#536056] font-bold uppercase tracking-wider block">
+                    Cloud Density & Coverage
+                  </span>
+                  <span className="text-2xl font-black font-editorial text-[#0B1C10]">
+                    {visualizationState.cloudCover.toFixed(0)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <span className="text-[10px] text-[#536056] font-bold uppercase block">Condition</span>
+                <span className="text-sm font-extrabold text-[#2F6B3C] font-editorial">
+                  {visualizationState.condition.replace(/_/g, ' ')}
                 </span>
               </div>
             </GlassCard>
