@@ -1,6 +1,6 @@
-export type LocationSource = 'device' | 'manual' | 'map' | 'unknown';
+export type LocationSource = 'device' | 'search' | 'map' | 'manual';
 
-export type LocationPermissionState = 'granted' | 'prompt' | 'denied' | 'unavailable' | 'timeout';
+export type LocationPermissionState = 'prompt' | 'granted' | 'denied' | 'unavailable' | 'timeout';
 
 export interface UserLocation {
   latitude: number;
@@ -14,7 +14,7 @@ export interface UserLocation {
   postalCode?: string;
   accuracy?: number;
   source: LocationSource;
-  timestamp?: number;
+  timestamp: number;
 }
 
 export interface LocationSearchResult {
@@ -22,12 +22,14 @@ export interface LocationSearchResult {
   displayName: string;
   primaryName: string;
   secondaryName: string;
-  latitude: number;
-  longitude: number;
+  latitude?: number;
+  longitude?: number;
   city?: string;
   locality?: string;
   district?: string;
   state?: string;
   country?: string;
   postalCode?: string;
+  mapboxId?: string;
 }
+

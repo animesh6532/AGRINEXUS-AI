@@ -43,7 +43,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newUser: UserProfile = {
       name: name || email.split('@')[0],
       email,
-      location: 'Punjab, India',
       primaryCrop: 'Rice',
       farmType: 'Commercial Agronomy'
     };

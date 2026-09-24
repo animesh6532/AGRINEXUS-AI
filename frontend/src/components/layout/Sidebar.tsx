@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useHealth } from '../../context/HealthContext';
+import { LocationBadge } from '../location/LocationBadge';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -128,6 +129,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
           >
             {collapsed ? <PanelLeft className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
           </button>
+        </div>
+
+        {/* Sidebar Location Entry (Section 60, 61, 62) */}
+        <div className="px-0.5">
+          <LocationBadge variant={collapsed ? 'sidebar-collapsed' : 'sidebar'} />
         </div>
 
         {/* System Health Status Indicator */}

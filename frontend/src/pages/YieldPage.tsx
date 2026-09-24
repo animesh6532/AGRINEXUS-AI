@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { TrendingUp, AlertTriangle, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { TrendingUp, AlertTriangle, Layers, MapPin } from 'lucide-react';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Input } from '../components/ui/Input';
@@ -7,14 +7,17 @@ import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { ScopeWarning } from '../components/intelligence/ScopeWarning';
 import { UncertaintyRange } from '../components/intelligence/UncertaintyRange';
+import { useLocationContext } from '../context/LocationContext';
 import { api } from '../services/api';
 import { YieldPredictionResponse } from '../types/api';
 
 export const YieldPage: React.FC = () => {
+  const { location } = useLocationContext();
+
   const [formData, setFormData] = useState({
     Crop: 'Rice',
     Season: 'Kharif',
-    State: 'Punjab',
+    State: 'West Bengal',
     Area: 100.0,
     Annual_Rainfall: 1200.0,
     Fertilizer: 15000.0,
@@ -22,6 +25,13 @@ export const YieldPage: React.FC = () => {
     Fertilizer_Per_Area: 150.0,
     Pesticide_Per_Area: 5.0,
   });
+
+  // Pre-populate State from location context
+  useEffect(() => {
+    if (location?.state) {
+      setFormData((prev) => ({ ...prev, State: location.state || prev.State }));
+    }
+  }, [location?.state]);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<YieldPredictionResponse | null>(null);

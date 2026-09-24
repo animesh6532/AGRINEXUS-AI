@@ -3,18 +3,77 @@ import { MapPin, Navigation, ChevronDown } from 'lucide-react';
 import { useLocationContext } from '../../context/LocationContext';
 
 interface LocationBadgeProps {
-  variant?: 'pill' | 'button' | 'card' | 'compact';
+  variant?: 'pill' | 'button' | 'card' | 'compact' | 'sidebar' | 'sidebar-collapsed';
   className?: string;
 }
 
 export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', className = '' }) => {
   const { location, openPicker, isLoading } = useLocationContext();
 
+  const getSourceLabel = (src?: string) => {
+    switch (src) {
+      case 'device':
+        return 'Current Device Location';
+      case 'search':
+        return 'Search Result';
+      case 'map':
+        return 'Map Selection';
+      case 'manual':
+        return 'Manual Entry';
+      default:
+        return 'Field Location';
+    }
+  };
+
   const displayName = location
     ? location.city && location.state
       ? `${location.city}, ${location.state}`
       : location.displayName
-    : 'Set Field Location';
+    : 'Set Location';
+
+  const shortCity = location
+    ? location.city || location.displayName.split(',')[0]
+    : 'Location not set';
+
+  if (variant === 'sidebar-collapsed') {
+    return (
+      <button
+        onClick={openPicker}
+        className={`w-10 h-10 mx-auto rounded-2xl bg-[#112316] hover:bg-white/10 border border-white/10 flex items-center justify-center text-[#D4E768] transition-all group ${className}`}
+        title={location ? `Field Location: ${location.displayName}` : 'Change field location'}
+      >
+        <MapPin className="w-4 h-4 group-hover:scale-110 transition-transform" />
+      </button>
+    );
+  }
+
+  if (variant === 'sidebar') {
+    return (
+      <button
+        onClick={openPicker}
+        className={`w-full p-3 rounded-2xl bg-[#112316] hover:bg-[#162a1c] border border-white/10 hover:border-[#D4E768]/30 transition-all flex items-center justify-between text-left group ${className}`}
+        title="Click to select or update field location"
+      >
+        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+          <div className="w-7 h-7 rounded-xl bg-[#D4E768]/15 text-[#D4E768] flex items-center justify-center shrink-0">
+            <MapPin className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${location ? 'bg-[#D4E768]' : 'bg-white/30'}`} />
+              <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block truncate">
+                FIELD LOCATION
+              </span>
+            </div>
+            <p className="text-xs font-bold text-[#FAFBF7] truncate">
+              {isLoading ? 'Locating...' : shortCity}
+            </p>
+          </div>
+        </div>
+        <ChevronDown className="w-3.5 h-3.5 text-white/50 group-hover:text-white shrink-0 transition-transform" />
+      </button>
+    );
+  }
 
   if (variant === 'compact') {
     return (
@@ -50,7 +109,7 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
               {location?.source && (
                 <span className="text-[10px] text-white/50 flex items-center gap-1 mt-0.5">
                   <Navigation className="w-2.5 h-2.5 text-[#D4E768]" />
-                  {location.source === 'device' ? 'Device Geolocation' : 'Manually Selected'}
+                  {getSourceLabel(location.source)}
                 </span>
               )}
             </div>
@@ -77,3 +136,4 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
     </button>
   );
 };
+

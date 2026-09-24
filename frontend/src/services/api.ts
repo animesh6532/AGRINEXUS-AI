@@ -195,17 +195,17 @@ export const api = {
   // ------------------------------------------------------------------
   // Weather Intelligence (/api/weather)
   // ------------------------------------------------------------------
-  async getWeatherCurrent(lat: number = 19.076, lon: number = 72.8777): Promise<CurrentWeatherResponse> {
+  async getWeatherCurrent(lat: number, lon: number): Promise<CurrentWeatherResponse> {
     const res = await fetch(`${BASE_URL}/api/weather/current?latitude=${lat}&longitude=${lon}`);
     return handleResponse<CurrentWeatherResponse>(res);
   },
 
-  async getWeatherForecast(lat: number = 19.076, lon: number = 72.8777, forecastDays: number = 7): Promise<WeatherForecastResponse> {
+  async getWeatherForecast(lat: number, lon: number, forecastDays: number = 7): Promise<WeatherForecastResponse> {
     const res = await fetch(`${BASE_URL}/api/weather/forecast?latitude=${lat}&longitude=${lon}&forecast_days=${forecastDays}`);
     return handleResponse<WeatherForecastResponse>(res);
   },
 
-  async getWeatherInsights(lat: number = 19.076, lon: number = 72.8777): Promise<WeatherInsightsResponse> {
+  async getWeatherInsights(lat: number, lon: number): Promise<WeatherInsightsResponse> {
     const res = await fetch(`${BASE_URL}/api/weather/insights?latitude=${lat}&longitude=${lon}`);
     return handleResponse<WeatherInsightsResponse>(res);
   },

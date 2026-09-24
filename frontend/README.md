@@ -1,32 +1,23 @@
-# React + TypeScript + Vite
+# AgriNexus-AI Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+AgriNexus-AI is a high-precision Agricultural Intelligence Platform built with React, TypeScript, Vite, and Tailwind CSS.
 
-Currently, two official plugins are available:
+## Location Architecture & Environment Setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### 1. Mapbox Token Setup
+Create `.env.local` inside the `frontend` directory:
+```env
+VITE_MAPBOX_TOKEN=your_mapbox_public_token_here
 ```
+If `VITE_MAPBOX_TOKEN` is not provided, the application gracefully falls back to OpenStreetMap tile rendering and Nominatim geocoding services without crashing.
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+### 2. Browser Geolocation API & HTTPS Requirement
+- **Local Development**: Testing device geolocation via `navigator.geolocation` works on `localhost` (http://localhost:5173).
+- **Deployed Production**: Web browsers require a **Secure Context (HTTPS)** to access the `navigator.geolocation` API. Insecure HTTP production deployments will block device location access, and the UI will prompt the user to search for their field location manually.
+
+### 3. Location Architecture
+- **Single Source of Truth**: Managed by `LocationContext.tsx` (`agrinexus.location.v1` in `localStorage`).
+- **No Hardcoded Defaults**: Fake fallbacks like `"Punjab, India"` or hardcoded coordinates (`19.076, 72.8777`) have been strictly removed. Unset state displays `"Set Location"`.
+- **Search & Retrieve Flow**: Mapbox Search Box API uses a 2-step `/suggest` + `/retrieve` session flow with a 300ms debounce and AbortController request cancellation.
+- **Selection vs Confirmation**: Searching or clicking the map sets a `pendingLocation`. Topbar, Dashboard, Weather, and ML pages update only after explicit confirmation via `[ Use This Location ]`.
+

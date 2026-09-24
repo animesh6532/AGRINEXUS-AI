@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LocateFixed, Plus, Minus, Navigation } from 'lucide-react';
 import { UserLocation } from '../../types/location';
-import { locationService } from '../../services/location';
 
 interface LocationMapProps {
   location: UserLocation | null;
@@ -10,15 +9,20 @@ interface LocationMapProps {
   isLocating?: boolean;
 }
 
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
+
 export const LocationMap: React.FC<LocationMapProps> = ({
   location,
   onSelectCoordinates,
   onRequestCurrentLocation,
   isLocating = false,
 }) => {
-  const [zoom, setZoom] = useState<number>(12);
-  const [centerLat, setCenterLat] = useState<number>(location?.latitude || 22.5726);
-  const [centerLng, setCenterLng] = useState<number>(location?.longitude || 88.3639);
+  // Section 45: Neutral India overview if no saved location exists
+  const hasValidCoords = location && typeof location.latitude === 'number' && typeof location.longitude === 'number';
+  
+  const [zoom, setZoom] = useState<number>(hasValidCoords ? 12 : 5);
+  const [centerLat, setCenterLat] = useState<number>(hasValidCoords ? location.latitude : 20.5937);
+  const [centerLng, setCenterLng] = useState<number>(hasValidCoords ? location.longitude : 78.9629);
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
   // Sync center when location prop changes
@@ -26,6 +30,7 @@ export const LocationMap: React.FC<LocationMapProps> = ({
     if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
       setCenterLat(location.latitude);
       setCenterLng(location.longitude);
+      setZoom(12);
     }
   }, [location?.latitude, location?.longitude]);
 
@@ -76,9 +81,14 @@ export const LocationMap: React.FC<LocationMapProps> = ({
     for (let dy = -1; dy <= 1; dy++) {
       const x = tileX + dx;
       const y = tileY + dy;
-      const subdomains = ['a', 'b', 'c'];
-      const sub = subdomains[Math.abs(x + y) % 3];
-      const url = `https://${sub}.tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+      let url = '';
+      if (MAPBOX_TOKEN) {
+        url = `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/${zoom}/${x}/${y}?access_token=${MAPBOX_TOKEN}`;
+      } else {
+        const subdomains = ['a', 'b', 'c'];
+        const sub = subdomains[Math.abs(x + y) % 3];
+        url = `https://${sub}.tile.openstreetmap.org/${zoom}/${x}/${y}.png`;
+      }
       tilesToRender.push({ x: dx, y: dy, url, key: `${x}-${y}-${zoom}` });
     }
   }
@@ -109,21 +119,23 @@ export const LocationMap: React.FC<LocationMapProps> = ({
       {/* Grid Overlay Texture for Editorial Aesthetic */}
       <div className="absolute inset-0 bg-[#0B1C10]/15 pointer-events-none" />
 
-      {/* Selected Location Marker Pin */}
-      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 flex flex-col items-center">
-        <div className="relative flex items-center justify-center">
-          <div className="w-8 h-8 rounded-full bg-[#0B1C10] border-2 border-[#D4E768] shadow-xl flex items-center justify-center animate-bounce">
-            <div className="w-3 h-3 rounded-full bg-[#D4E768]" />
+      {/* Selected Location Marker Pin (Only when valid coordinates exist) */}
+      {hasValidCoords && (
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-10 flex flex-col items-center">
+          <div className="relative flex items-center justify-center">
+            <div className={`w-8 h-8 rounded-full bg-[#0B1C10] border-2 ${location.source === 'device' ? 'border-[#D4E768]' : 'border-amber-400'} shadow-xl flex items-center justify-center animate-bounce`}>
+              <div className={`w-3 h-3 rounded-full ${location.source === 'device' ? 'bg-[#D4E768]' : 'bg-amber-400'}`} />
+            </div>
+            <div className={`absolute -inset-2 rounded-full border ${location.source === 'device' ? 'border-[#D4E768]/40' : 'border-amber-400/40'} animate-ping pointer-events-none`} />
           </div>
-          <div className="absolute -inset-2 rounded-full border border-[#D4E768]/40 animate-ping pointer-events-none" />
+          <div className="w-2.5 h-1 bg-[#0B1C10]/40 rounded-full blur-[1px] mt-0.5" />
         </div>
-        <div className="w-2.5 h-1 bg-[#0B1C10]/40 rounded-full blur-[1px] mt-0.5" />
-      </div>
+      )}
 
       {/* Map Header Instructions Badge */}
       <div className="absolute top-3 left-3 bg-[#0B1C10]/85 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/10 text-[11px] font-semibold text-[#FAFBF7] flex items-center gap-1.5 pointer-events-none z-10 shadow-md">
         <Navigation className="w-3 h-3 text-[#D4E768]" />
-        <span>Click map to place field pin</span>
+        <span>{hasValidCoords ? 'Click map to update pin position' : 'Click map to select field location'}</span>
       </div>
 
       {/* Controls Overlay (Zoom + Current Location) */}
@@ -160,10 +172,14 @@ export const LocationMap: React.FC<LocationMapProps> = ({
         </div>
       </div>
 
-      {/* Coordinates Display Pill */}
-      <div className="absolute bottom-3 left-3 bg-[#0B1C10]/85 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/10 text-[10px] font-mono text-[#D4E768] z-10 shadow-md">
-        {centerLat.toFixed(4)}° N, {centerLng.toFixed(4)}° E
+      {/* Coordinates & Provider Attribution Display (Section 56) */}
+      <div className="absolute bottom-3 left-3 bg-[#0B1C10]/85 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-white/10 text-[10px] font-mono text-[#D4E768] z-10 shadow-md flex items-center gap-2">
+        <span>{centerLat.toFixed(4)}° N, {centerLng.toFixed(4)}° E</span>
+        <span className="text-white/40 text-[9px]">
+          {MAPBOX_TOKEN ? '© Mapbox' : '© OpenStreetMap'}
+        </span>
       </div>
     </div>
   );
 };
+

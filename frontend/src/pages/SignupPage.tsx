@@ -1,19 +1,22 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Mail, Lock, User, MapPin, Sprout, ArrowLeft, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, User, Sprout, ArrowLeft, ShieldCheck, MapPin } from 'lucide-react';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
+import { useLocationContext } from '../context/LocationContext';
+import { LocationBadge } from '../components/location/LocationBadge';
+import { LocationPicker } from '../components/location/LocationPicker';
 
 export const SignupPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [location, setLocation] = useState('Punjab, India');
   const [primaryCrop, setPrimaryCrop] = useState('Rice');
   const [isLoading, setIsLoading] = useState(false);
   const { signup } = useAuth();
+  const { location: globalLocation } = useLocationContext();
   const navigate = useNavigate();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -23,7 +26,7 @@ export const SignupPage: React.FC = () => {
       signup({
         name: name || 'Farmer',
         email: email || 'farmer@agrinexus.ai',
-        location,
+        location: globalLocation?.displayName,
         primaryCrop,
         farmType: 'Commercial Agronomy'
       });
@@ -145,13 +148,13 @@ export const SignupPage: React.FC = () => {
               required
             />
 
-            <Input
-              label="Farm Location"
-              placeholder="Ludhiana, Punjab"
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              icon={<MapPin className="w-4 h-4 text-[#2F6B3C]" />}
-            />
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-[#162018] flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-[#2F6B3C]" />
+                <span>Farm Location</span>
+              </label>
+              <LocationBadge variant="card" className="w-full" />
+            </div>
 
             <Select
               label="Primary Crop Interest"
@@ -186,6 +189,8 @@ export const SignupPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <LocationPicker />
     </div>
   );
 };

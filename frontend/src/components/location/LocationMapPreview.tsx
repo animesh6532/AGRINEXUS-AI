@@ -8,6 +8,8 @@ interface LocationMapPreviewProps {
   onClick?: () => void;
 }
 
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
+
 export const LocationMapPreview: React.FC<LocationMapPreviewProps> = ({
   location,
   className = '',
@@ -43,7 +45,10 @@ export const LocationMapPreview: React.FC<LocationMapPreviewProps> = ({
 
   const tileX = lon2tile(lng, zoom);
   const tileY = lat2tile(lat, zoom);
-  const mapTileUrl = `https://a.tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
+  
+  const mapTileUrl = MAPBOX_TOKEN
+    ? `https://api.mapbox.com/styles/v1/mapbox/outdoors-v12/tiles/${zoom}/${tileX}/${tileY}?access_token=${MAPBOX_TOKEN}`
+    : `https://a.tile.openstreetmap.org/${zoom}/${tileX}/${tileY}.png`;
 
   return (
     <div
@@ -68,7 +73,7 @@ export const LocationMapPreview: React.FC<LocationMapPreviewProps> = ({
       <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between pointer-events-none">
         <div className="min-w-0 pr-2">
           <p className="text-xs font-bold text-[#FAFBF7] truncate drop-shadow">
-            {location.displayName}
+            📍 {location.displayName}
           </p>
           <p className="text-[10px] text-[#D4E768] font-mono">
             {lat.toFixed(4)}° N, {lng.toFixed(4)}° E
@@ -76,9 +81,10 @@ export const LocationMapPreview: React.FC<LocationMapPreviewProps> = ({
         </div>
         <span className="shrink-0 px-2 py-1 rounded-full bg-[#0B1C10]/90 border border-white/10 text-[9px] font-bold text-[#FAFBF7] flex items-center gap-1">
           <Navigation className="w-2.5 h-2.5 text-[#D4E768]" />
-          {location.source === 'device' ? 'GPS' : 'Manual'}
+          {location.source === 'device' ? 'GPS' : 'Map/Search'}
         </span>
       </div>
     </div>
   );
 };
+
