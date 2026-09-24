@@ -257,6 +257,10 @@ export interface CurrentWeatherResponse {
   wind_speed: number;
   wind_direction: number;
   weather_code: number;
+  is_day?: number;
+  apparent_temperature?: number;
+  cloud_cover?: number;
+  wind_gusts?: number;
   data_source: string;
 }
 
@@ -266,7 +270,11 @@ export interface HourlyForecastItem {
   relative_humidity: number;
   precipitation: number;
   wind_speed: number;
+  wind_direction?: number;
   weather_code: number;
+  is_day?: number;
+  cloud_cover?: number;
+  apparent_temperature?: number;
 }
 
 export interface DailyForecastItem {

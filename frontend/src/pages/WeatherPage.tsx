@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { CloudSun, Wind, Droplets, Thermometer, AlertCircle, RefreshCw, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { CloudSun, Wind, Droplets, Thermometer, AlertCircle, RefreshCw, Eye, Cloud } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -8,7 +8,13 @@ import { useLocationContext } from '../context/LocationContext';
 import { LocationBadge } from '../components/location/LocationBadge';
 import { LocationEmptyState } from '../components/location/LocationEmptyState';
 import { api } from '../services/api';
-import { CurrentWeatherResponse, WeatherForecastResponse, WeatherInsightsResponse } from '../types/api';
+import { CurrentWeatherResponse, WeatherForecastResponse, WeatherInsightsResponse, HourlyForecastItem } from '../types/api';
+import { useWeatherVisualization } from '../hooks/useWeatherVisualization';
+import { WeatherScene } from '../components/weather/WeatherScene';
+import { WeatherHero } from '../components/weather/WeatherHero';
+import { WeatherWindCompass } from '../components/weather/WeatherWindCompass';
+import { WeatherHourlyTimeline } from '../components/weather/WeatherHourlyTimeline';
+import { AgrometInsightsPanel } from '../components/weather/AgrometInsightsPanel';
 
 export const WeatherPage: React.FC = () => {
   const { location, openPicker } = useLocationContext();
@@ -19,12 +25,9 @@ export const WeatherPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchWeatherForLocation = async (latitude: number, longitude: number) => {
+  const fetchWeatherForLocation = useCallback(async (latitude: number, longitude: number) => {
     setLoading(true);
     setError(null);
-    setCurrent(null);
-    setForecast(null);
-    setInsights(null);
 
     try {
       const [cData, fData, iData] = await Promise.all([
@@ -40,18 +43,38 @@ export const WeatherPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (location && typeof location.latitude === 'number' && typeof location.longitude === 'number') {
       fetchWeatherForLocation(location.latitude, location.longitude);
+
+      // Auto refresh weather data every 10 minutes (600,000 ms)
+      const interval = setInterval(() => {
+        fetchWeatherForLocation(location.latitude, location.longitude);
+      }, 600000);
+
+      return () => clearInterval(interval);
     } else {
       setCurrent(null);
       setForecast(null);
       setInsights(null);
       setLoading(false);
     }
-  }, [location?.latitude, location?.longitude]);
+  }, [location?.latitude, location?.longitude, fetchWeatherForLocation]);
+
+  const locationName = location?.displayName || 'Selected Field';
+
+  const {
+    visualizationState,
+    selectedForecastHour,
+    selectForecastHour,
+    resetToCurrent,
+  } = useWeatherVisualization({
+    current,
+    forecast,
+    locationName,
+  });
 
   const forecastChartData =
     forecast?.daily.map((d) => ({
@@ -63,11 +86,11 @@ export const WeatherPage: React.FC = () => {
 
   return (
     <div className="space-y-8 selection:bg-[#D4E768] selection:text-[#0B1C10]">
-      {/* Page Hero */}
+      {/* Page Hero Header */}
       <AgriculturalPageHero
-        category="FIELD SIGNALS"
-        title="Weather Telemetry Center"
-        description="Open-Meteo live observation telemetry, 7-day agricultural forecast trends, and automated field operation disruption signals tailored to your selected field location."
+        category="LIVE ATMOSPHERIC TELEMETRY"
+        title="Weather Telemetry Engine"
+        description="Real-time Open-Meteo observation telemetry, dynamic atmospheric visual scene engine, 24-hour interactive forecast strip, and agricultural operational disruption insights."
         imageSrc="/images/weather-intelligence.webp"
       >
         <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 flex-wrap">
@@ -89,29 +112,30 @@ export const WeatherPage: React.FC = () => {
       {/* Empty State Banner if no location is configured */}
       {!location && (
         <LocationEmptyState
-          title="FIELD LOCATION REQUIRED FOR WEATHER"
-          subtitle="Please set your field location to view real-time Open-Meteo telemetry, 7-day temperature forecasts and spraying disruption risk signals."
+          title="FIELD LOCATION REQUIRED FOR WEATHER TELEMETRY"
+          subtitle="Please set your field location to view real-time Open-Meteo telemetry, dynamic visual atmospheric scenes, and field operation disruption signals."
         />
       )}
 
       {/* Loading Skeleton */}
-      {loading && (
-        <GlassCard variant="solid" className="p-10 text-center space-y-4">
-          <div className="w-12 h-12 rounded-full bg-[#112316] border border-[#D4E768]/40 text-[#D4E768] flex items-center justify-center mx-auto animate-spin">
-            <RefreshCw className="w-6 h-6" />
+      {loading && !current && (
+        <GlassCard variant="solid" className="p-12 text-center space-y-4">
+          <div className="w-14 h-14 rounded-full bg-[#112316] border border-[#D4E768]/40 text-[#D4E768] flex items-center justify-center mx-auto animate-spin">
+            <RefreshCw className="w-7 h-7" />
           </div>
           <div>
-            <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
-              Updating weather telemetry...
+            <h3 className="text-lg font-extrabold font-editorial text-[#0B1C10]">
+              Connecting to Live Weather Telemetry Engine...
             </h3>
             <p className="text-xs text-[#536056] mt-1">
               Fetching Open-Meteo observations for{' '}
-              <strong className="text-[#2F6B3C]">{location?.displayName || 'selected location'}</strong>
+              <strong className="text-[#2F6B3C]">{locationName}</strong>
             </p>
           </div>
         </GlassCard>
       )}
 
+      {/* Error State Banner */}
       {error && (
         <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -120,40 +144,71 @@ export const WeatherPage: React.FC = () => {
           </div>
           <button
             onClick={openPicker}
-            className="px-3 py-1 rounded-xl bg-rose-200 text-rose-900 font-bold hover:bg-rose-300"
+            className="px-3 py-1 rounded-xl bg-rose-200 text-rose-900 font-bold hover:bg-rose-300 transition"
           >
             Change Location
           </button>
         </div>
       )}
 
-      {/* Current Observations Grid */}
-      {!loading && current && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between text-xs px-1">
-            <span className="font-bold text-[#536056] uppercase tracking-wider">
-              CURRENT CONDITIONS — {location?.displayName}
-            </span>
-            <span className="text-[11px] text-[#2F6B3C] font-mono">
-              {location?.latitude.toFixed(4)}° N, {location?.longitude.toFixed(4)}° E
-            </span>
-          </div>
+      {/* Main Atmospheric Scene Container */}
+      {!loading && visualizationState && (
+        <div className="space-y-6">
+          <WeatherScene state={visualizationState}>
+            <div className="space-y-8">
+              {/* Weather Hero Card */}
+              <WeatherHero
+                state={visualizationState}
+                onRefresh={() => fetchWeatherForLocation(visualizationState.latitude, visualizationState.longitude)}
+                isLoading={loading}
+                onOpenLocationPicker={openPicker}
+              />
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <GlassCard variant="cream" className="p-5 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-[#D4E768] text-[#0B1C10] flex items-center justify-center font-black">
-                <Thermometer className="w-6 h-6" />
-              </div>
-              <div>
-                <span className="text-[10px] text-[#536056] font-bold uppercase tracking-wider block">
-                  Air Temperature
-                </span>
-                <span className="text-2xl font-black font-editorial text-[#0B1C10]">
-                  {current.temperature}°C
-                </span>
-              </div>
-            </GlassCard>
+              {/* Reset to current observation banner if previewing forecast hour */}
+              {selectedForecastHour && (
+                <div className="flex items-center justify-between bg-black/50 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-[#D4E768]/40 text-xs text-white">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#D4E768] animate-ping" />
+                    <span>
+                      Previewing Forecast Scene for{' '}
+                      <strong>
+                        {new Date(selectedForecastHour.time).toLocaleTimeString([], {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </strong>
+                    </span>
+                  </div>
+                  <button
+                    onClick={resetToCurrent}
+                    className="px-3 py-1 rounded-xl bg-[#D4E768] text-[#0B1C10] font-extrabold hover:bg-lime-300 transition text-[11px]"
+                  >
+                    Reset to Live Now
+                  </button>
+                </div>
+              )}
 
+              {/* 24-Hour Interactive Timeline */}
+              {forecast?.hourly && forecast.hourly.length > 0 && (
+                <WeatherHourlyTimeline
+                  hourly={forecast.hourly}
+                  selectedTime={selectedForecastHour?.time || null}
+                  onSelectHour={selectForecastHour}
+                />
+              )}
+            </div>
+          </WeatherScene>
+
+          {/* Telemetry Dashboard Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Wind Directional Compass */}
+            <WeatherWindCompass
+              windSpeed={visualizationState.windSpeed}
+              windDirection={visualizationState.windDirection}
+              windGusts={visualizationState.windGusts}
+            />
+
+            {/* Humidity & Precipitation Cards */}
             <GlassCard variant="cream" className="p-5 flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA] flex items-center justify-center font-black">
                 <Droplets className="w-6 h-6" />
@@ -163,142 +218,87 @@ export const WeatherPage: React.FC = () => {
                   Relative Humidity
                 </span>
                 <span className="text-2xl font-black font-editorial text-[#0B1C10]">
-                  {current.relative_humidity}%
+                  {visualizationState.humidity}%
                 </span>
               </div>
             </GlassCard>
 
             <GlassCard variant="cream" className="p-5 flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA] flex items-center justify-center font-black">
-                <CloudSun className="w-6 h-6" />
+                <Cloud className="w-6 h-6" />
               </div>
               <div>
                 <span className="text-[10px] text-[#536056] font-bold uppercase tracking-wider block">
-                  Precipitation
+                  Cloud Cover
                 </span>
                 <span className="text-2xl font-black font-editorial text-[#0B1C10]">
-                  {current.precipitation} mm
-                </span>
-              </div>
-            </GlassCard>
-
-            <GlassCard variant="cream" className="p-5 flex items-center gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA] flex items-center justify-center font-black">
-                <Wind className="w-6 h-6" />
-              </div>
-              <div>
-                <span className="text-[10px] text-[#536056] font-bold uppercase tracking-wider block">
-                  Wind Velocity
-                </span>
-                <span className="text-2xl font-black font-editorial text-[#0B1C10]">
-                  {current.wind_speed} km/h
+                  {visualizationState.cloudCover.toFixed(0)}%
                 </span>
               </div>
             </GlassCard>
           </div>
-        </div>
-      )}
 
-      {/* 7-Day Forecast Temperature & Rain Chart */}
-      {!loading && forecastChartData.length > 0 && (
-        <GlassCard variant="solid" className="p-6 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-4">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">
-                7-DAY FORECAST TELEMETRY
-              </span>
-              <h3 className="text-2xl font-extrabold font-editorial text-[#0B1C10]">
-                Temperature & Precipitation Trends
-              </h3>
-            </div>
-            <span className="text-xs text-[#2F6B3C] font-bold">Open-Meteo Engine</span>
-          </div>
+          {/* 7-Day Forecast Temperature & Rain Chart */}
+          {forecastChartData.length > 0 && (
+            <GlassCard variant="solid" className="p-6 sm:p-8 space-y-6">
+              <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-4">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">
+                    7-DAY FORECAST TELEMETRY TRENDS
+                  </span>
+                  <h3 className="text-2xl font-extrabold font-editorial text-[#0B1C10]">
+                    Temperature & Rainfall Projections
+                  </h3>
+                </div>
+                <span className="text-xs text-[#2F6B3C] font-bold">Open-Meteo Forecast</span>
+              </div>
 
-          <div className="h-72 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={forecastChartData}>
-                <XAxis dataKey="date" stroke="#536056" fontSize={11} tickLine={false} />
-                <YAxis stroke="#536056" fontSize={11} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#0B1C10',
-                    color: '#FAFBF7',
-                    borderRadius: '16px',
-                    borderColor: '#D4E768',
-                    fontSize: '12px',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="MaxTemp"
-                  stroke="#2F6B3C"
-                  fill="#2F6B3C"
-                  fillOpacity={0.2}
-                  strokeWidth={2}
-                  name="Max Temp (°C)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="Rain"
-                  stroke="#D4E768"
-                  fill="#D4E768"
-                  fillOpacity={0.3}
-                  strokeWidth={2}
-                  name="Rainfall (mm)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-      )}
-
-      {/* Field Disruption Risk Signals */}
-      {!loading && insights && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-[#536056]">
-              Agricultural Field Operation Insights
-            </h3>
-            <span className="text-xs text-[#2F6B3C] font-semibold">
-              {insights.insights.length} Signals Evaluated
-            </span>
-          </div>
-
-          {insights.insights.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {insights.insights.map((ins, idx) => (
-                <GlassCard
-                  key={idx}
-                  variant="solid"
-                  className="p-6 space-y-3 border-l-4 border-l-[#2F6B3C]"
-                >
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-base font-extrabold font-editorial text-[#0B1C10]">
-                      {ins.title}
-                    </h4>
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                        ins.severity === 'high'
-                          ? 'bg-rose-500/10 text-rose-800 border border-rose-500/20'
-                          : ins.severity === 'medium'
-                          ? 'bg-amber-500/10 text-amber-800 border border-amber-500/20'
-                          : 'bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA]'
-                      }`}
-                    >
-                      {ins.severity} Severity
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#536056] leading-relaxed font-sans">
-                    {ins.description}
-                  </p>
-                </GlassCard>
-              ))}
-            </div>
-          ) : (
-            <GlassCard variant="cream" className="p-8 text-center text-xs text-[#536056]">
-              No severe field-disruption weather signals detected for this forecast window.
+              <div className="h-72 w-full pt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={forecastChartData}>
+                    <XAxis dataKey="date" stroke="#536056" fontSize={11} tickLine={false} />
+                    <YAxis stroke="#536056" fontSize={11} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#0B1C10',
+                        color: '#FAFBF7',
+                        borderRadius: '16px',
+                        borderColor: '#D4E768',
+                        fontSize: '12px',
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="MaxTemp"
+                      stroke="#2F6B3C"
+                      fill="#2F6B3C"
+                      fillOpacity={0.2}
+                      strokeWidth={2}
+                      name="Max Temp (°C)"
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="Rain"
+                      stroke="#D4E768"
+                      fill="#D4E768"
+                      fillOpacity={0.3}
+                      strokeWidth={2}
+                      name="Rainfall (mm)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </GlassCard>
           )}
+
+          {/* Agromet & Operational Insights Panel */}
+          <AgrometInsightsPanel
+            insightsResponse={insights}
+            temperature={visualizationState.temperature}
+            humidity={visualizationState.humidity}
+            windSpeed={visualizationState.windSpeed}
+            precipitation={visualizationState.precipitation}
+          />
         </div>
       )}
     </div>

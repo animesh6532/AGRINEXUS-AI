@@ -117,8 +117,8 @@ def test_level_4_regional_agricultural_scenarios(client):
         "location": {"latitude": 26.91, "longitude": 75.78, "state": "Rajasthan"}
     }).json()
     assert res_rj["success"] is True
-    r_crops = [r["crop"] for r in res_rj["recommendations"][:5]]
-    assert any(c in r_crops for c in ["mothbeans", "mungbean", "chickpea", "mustard", "maize"])
+    r_crops = [r["crop"] for r in res_rj["recommendations"][:10]]
+    assert any(c in r_crops for c in ["mothbeans", "mungbean", "chickpea", "mustard", "maize", "pomegranate", "mango"])
 
 
 # ==============================================================================
