@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
+import { BarChart3, TrendingUp, AlertCircle, MapPin } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Select } from '../components/ui/Select';
+import { useLocationContext } from '../context/LocationContext';
+import { LocationBadge } from '../components/location/LocationBadge';
 import { api } from '../services/api';
 import { MarketPriceRecord, MarketForecastResponse, MarketSignalsResponse } from '../types/api';
 
 export const MarketPage: React.FC = () => {
+  const { location } = useLocationContext();
   const [commodity, setCommodity] = useState<string>('Paddy(Common)');
   const [model, setModel] = useState<string>('ets');
 
@@ -23,8 +26,9 @@ export const MarketPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      const stateParam = location?.state;
       const [cData, hData, fData, sData] = await Promise.allSettled([
-        api.getMarketCurrent(commodity),
+        api.getMarketCurrent(commodity, stateParam),
         api.getMarketHistory(commodity),
         api.getMarketForecast(commodity, 7, model),
         api.getMarketSignals(commodity),
@@ -43,12 +47,13 @@ export const MarketPage: React.FC = () => {
 
   useEffect(() => {
     fetchMarketData();
-  }, [commodity, model]);
+  }, [commodity, model, location?.state]);
 
-  const forecastChartData = forecast?.forecasts.map((f) => ({
-    date: f.date.split('-').slice(1).join('/'),
-    ForecastPrice: f.predicted_modal_price,
-  })) || [];
+  const forecastChartData =
+    forecast?.forecasts.map((f) => ({
+      date: f.date.split('-').slice(1).join('/'),
+      ForecastPrice: f.predicted_modal_price,
+    })) || [];
 
   return (
     <div className="space-y-8 selection:bg-[#D4E768] selection:text-[#0B1C10]">
@@ -56,10 +61,11 @@ export const MarketPage: React.FC = () => {
       <AgriculturalPageHero
         category="FIELD SIGNALS"
         title="Mandi Market Intelligence"
-        description="Government of India Mandi arrival observations, ETS/ARIMA price forecasting models, and actionable market signals."
+        description="Government of India Mandi arrival observations, ETS/ARIMA price forecasting models, and actionable market signals tailored to your state/region."
         imageSrc="/images/market-intelligence.webp"
       >
         <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md p-2 rounded-2xl border border-white/10 flex-wrap">
+          <LocationBadge variant="pill" />
           <Select
             value={commodity}
             onChange={(e) => setCommodity(e.target.value)}
@@ -103,9 +109,15 @@ export const MarketPage: React.FC = () => {
               </h2>
             </div>
             <div className="flex items-center gap-3 text-xs font-bold text-[#162018] flex-wrap">
-              <span className="p-3 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA]">Min: ₹{current.min_price}</span>
-              <span className="p-3 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA]">Modal: ₹{current.modal_price}</span>
-              <span className="p-3 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA]">Max: ₹{current.max_price}</span>
+              <span className="p-3 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA]">
+                Min: ₹{current.min_price}
+              </span>
+              <span className="p-3 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA]">
+                Modal: ₹{current.modal_price}
+              </span>
+              <span className="p-3 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA]">
+                Max: ₹{current.max_price}
+              </span>
             </div>
           </div>
         </GlassCard>
@@ -139,7 +151,7 @@ export const MarketPage: React.FC = () => {
                     color: '#FAFBF7',
                     borderRadius: '16px',
                     borderColor: '#D4E768',
-                    fontSize: '12px'
+                    fontSize: '12px',
                   }}
                 />
                 <Line
@@ -170,9 +182,15 @@ export const MarketPage: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {signals.actionable_signals.map((sig, idx) => (
-              <GlassCard key={idx} variant="solid" className="p-6 space-y-3 border-l-4 border-l-[#2F6B3C]">
+              <GlassCard
+                key={idx}
+                variant="solid"
+                className="p-6 space-y-3 border-l-4 border-l-[#2F6B3C]"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#0B1C10]">{sig.type}</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#0B1C10]">
+                    {sig.type}
+                  </span>
                   <span className="px-3 py-0.5 rounded-full bg-[#EEF3E8] text-[#2F6B3C] text-[10px] font-extrabold uppercase border border-[#E2E7DA]">
                     Signal Strength: {(sig.signal_strength * 100).toFixed(0)}%
                   </span>

@@ -1,24 +1,26 @@
 import React, { useState } from 'react';
-import { User, MapPin, Sprout, Save, CheckCircle2 } from 'lucide-react';
+import { User, MapPin, Save, CheckCircle2, Navigation } from 'lucide-react';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
+import { useLocationContext } from '../context/LocationContext';
+import { LocationMapPreview } from '../components/location/LocationMapPreview';
 
 export const ProfilePage: React.FC = () => {
   const { user, updateProfile } = useAuth();
+  const { location: globalLocation, openPicker, clearLocation } = useLocationContext();
 
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [location, setLocation] = useState(user?.location || 'Punjab, India');
   const [primaryCrop, setPrimaryCrop] = useState(user?.primaryCrop || 'Rice');
   const [savedNotice, setSavedNotice] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile({ name, email, location, primaryCrop });
+    updateProfile({ name, email, location: globalLocation?.displayName || 'Not Set', primaryCrop });
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 3000);
   };
@@ -28,14 +30,15 @@ export const ProfilePage: React.FC = () => {
       {/* Page Hero */}
       <AgriculturalPageHero
         category="ACCOUNT"
-        title="Farmer Profile & Farm Location"
-        description="Manage your agronomic identity, farm geographic coordinates, primary crop focus, and operational preferences."
+        title="Farmer Profile & Field Location"
+        description="Manage your agronomic identity, field geographic location, map center, primary crop focus, and operational preferences."
         imageSrc="/images/crop-calendar.webp"
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Profile Overview Card (5 Cols) */}
+        {/* Left Profile Overview Card & Field Location Card (5 Cols) */}
         <div className="lg:col-span-5 space-y-6">
+          {/* User Identity Card */}
           <div className="p-8 rounded-3xl bg-[#0B1C10] text-[#FAFBF7] space-y-6 border border-white/10 shadow-xl">
             <div className="flex items-center gap-4">
               <div className="w-16 h-16 rounded-full bg-[#D4E768] text-[#0B1C10] flex items-center justify-center font-black text-2xl font-editorial shadow-md">
@@ -52,10 +55,6 @@ export const ProfilePage: React.FC = () => {
 
             <div className="space-y-3 pt-4 border-t border-white/10 text-xs font-sans">
               <div className="flex justify-between py-1.5 border-b border-white/5">
-                <span className="text-white/60">Farm Location:</span>
-                <span className="font-bold text-white">{location}</span>
-              </div>
-              <div className="flex justify-between py-1.5 border-b border-white/5">
                 <span className="text-white/60">Primary Crop:</span>
                 <span className="font-bold text-[#D4E768]">{primaryCrop}</span>
               </div>
@@ -65,6 +64,63 @@ export const ProfilePage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Premium Field Location Card with Map Preview */}
+          <GlassCard variant="solid" className="p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+              <div className="flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-[#2F6B3C]" />
+                <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FIELD LOCATION</h3>
+              </div>
+              <button
+                onClick={openPicker}
+                className="px-3 py-1 rounded-xl bg-[#EEF3E8] border border-[#E2E7DA] text-xs font-bold text-[#2F6B3C] hover:bg-[#D4E768] hover:text-[#0B1C10] transition-colors"
+              >
+                {globalLocation ? 'Change Location' : 'Set Location'}
+              </button>
+            </div>
+
+            <LocationMapPreview location={globalLocation} onClick={openPicker} />
+
+            {globalLocation ? (
+              <div className="space-y-2 text-xs pt-1">
+                <div className="flex justify-between py-1 border-b border-[#E2E7DA]">
+                  <span className="text-[#536056]">Location Name:</span>
+                  <span className="font-bold text-[#0B1C10]">{globalLocation.displayName}</span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[#E2E7DA] font-mono">
+                  <span className="text-[#536056]">Coordinates:</span>
+                  <span className="font-bold text-[#2F6B3C]">
+                    {globalLocation.latitude.toFixed(4)}° N, {globalLocation.longitude.toFixed(4)}° E
+                  </span>
+                </div>
+                <div className="flex justify-between py-1 border-b border-[#E2E7DA]">
+                  <span className="text-[#536056]">Acquisition Source:</span>
+                  <span className="font-bold text-[#0B1C10] flex items-center gap-1">
+                    <Navigation className="w-3 h-3 text-[#2F6B3C]" />
+                    {globalLocation.source === 'device' ? 'Device GPS' : 'Manual / Map'}
+                  </span>
+                </div>
+                {globalLocation.timestamp && (
+                  <div className="flex justify-between py-1 text-[11px] text-[#536056]">
+                    <span>Last Updated:</span>
+                    <span>{new Date(globalLocation.timestamp).toLocaleTimeString()}</span>
+                  </div>
+                )}
+
+                <button
+                  onClick={clearLocation}
+                  className="w-full mt-2 text-xs text-rose-600 hover:text-rose-800 font-bold py-1.5 transition-colors"
+                >
+                  Clear Saved Location
+                </button>
+              </div>
+            ) : (
+              <p className="text-xs text-[#536056] text-center italic py-2">
+                No field location selected. Click map above to choose your farm location.
+              </p>
+            )}
+          </GlassCard>
         </div>
 
         {/* Form Settings (7 Cols) */}
@@ -94,13 +150,6 @@ export const ProfilePage: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-              />
-
-              <Input
-                label="Farm Location"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                icon={<MapPin className="w-4 h-4 text-[#2F6B3C]" />}
               />
 
               <Select

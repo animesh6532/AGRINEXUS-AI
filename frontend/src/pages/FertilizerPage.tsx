@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FlaskConical, AlertTriangle, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FlaskConical, AlertTriangle, Layers, MapPin } from 'lucide-react';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Input } from '../components/ui/Input';
@@ -7,10 +7,13 @@ import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { ConfidenceBar } from '../components/intelligence/ConfidenceBar';
 import { ScopeWarning } from '../components/intelligence/ScopeWarning';
+import { useLocationContext } from '../context/LocationContext';
 import { api } from '../services/api';
 import { FertilizerRecommendResponse } from '../types/api';
 
 export const FertilizerPage: React.FC = () => {
+  const { location } = useLocationContext();
+
   const [formData, setFormData] = useState({
     Nitrogen: 37.0,
     Phosphorus: 20.0,
@@ -22,6 +25,16 @@ export const FertilizerPage: React.FC = () => {
     Soil_color: 'Black',
     Crop: 'Paddy',
   });
+
+  // Pre-populate District_Name from selected field location
+  useEffect(() => {
+    if (location) {
+      const dist = location.district || location.city;
+      if (dist) {
+        setFormData((prev) => ({ ...prev, District_Name: dist }));
+      }
+    }
+  }, [location?.district, location?.city]);
 
   const [loading, setLoading] = useState<boolean>(false);
   const [result, setResult] = useState<FertilizerRecommendResponse | null>(null);
@@ -55,11 +68,19 @@ export const FertilizerPage: React.FC = () => {
         {/* Form Inputs (5 Cols) */}
         <div className="lg:col-span-5 space-y-6">
           <GlassCard variant="solid" className="p-6 sm:p-8 space-y-5">
-            <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-4">
-              <Layers className="w-5 h-5 text-[#2F6B3C]" />
-              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
-                Soil & Crop Parameters
-              </h3>
+            <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-4">
+              <div className="flex items-center gap-2">
+                <Layers className="w-5 h-5 text-[#2F6B3C]" />
+                <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
+                  Soil & Crop Parameters
+                </h3>
+              </div>
+              {location && (
+                <span className="text-[10px] text-[#2F6B3C] font-semibold flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {location.city || location.district}
+                </span>
+              )}
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -146,7 +167,7 @@ export const FertilizerPage: React.FC = () => {
               </div>
 
               <Input
-                label="District Name"
+                label="District Name (Location-aware)"
                 value={formData.District_Name}
                 onChange={(e) => setFormData({ ...formData, District_Name: e.target.value })}
                 required

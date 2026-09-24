@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bug, Upload, Image as ImageIcon, AlertTriangle, CloudRain, Layers } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bug, Upload, Image as ImageIcon, AlertTriangle, CloudRain, MapPin } from 'lucide-react';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Input } from '../components/ui/Input';
@@ -8,10 +8,12 @@ import { Button } from '../components/ui/Button';
 import { ConfidenceBar } from '../components/intelligence/ConfidenceBar';
 import { QualityReport } from '../components/intelligence/QualityReport';
 import { ScopeWarning } from '../components/intelligence/ScopeWarning';
+import { useLocationContext } from '../context/LocationContext';
 import { api } from '../services/api';
 import { VisualPestPredictResponse, PestRiskResponse } from '../types/api';
 
 export const PestPage: React.FC = () => {
+  const { location } = useLocationContext();
   const [activeTab, setActiveTab] = useState<'visual' | 'env'>('visual');
 
   // Visual State
@@ -30,6 +32,14 @@ export const PestPage: React.FC = () => {
     Soil_Type: 'Clay',
     Region: 'South',
   });
+
+  // Pre-populate region from location context state when available
+  useEffect(() => {
+    if (location?.state) {
+      setEnvForm((prev) => ({ ...prev, Region: location.state || prev.Region }));
+    }
+  }, [location?.state]);
+
   const [envLoading, setEnvLoading] = useState<boolean>(false);
   const [envResult, setEnvResult] = useState<PestRiskResponse | null>(null);
   const [envError, setEnvError] = useState<string | null>(null);
@@ -259,11 +269,19 @@ export const PestPage: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           <div className="lg:col-span-5 space-y-6">
             <GlassCard variant="solid" className="p-6 sm:p-8 space-y-5">
-              <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-4">
-                <CloudRain className="w-5 h-5 text-[#2F6B3C]" />
-                <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
-                  Microclimate Outbreak Parameters
-                </h3>
+              <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-4">
+                <div className="flex items-center gap-2">
+                  <CloudRain className="w-5 h-5 text-[#2F6B3C]" />
+                  <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
+                    Microclimate Outbreak Parameters
+                  </h3>
+                </div>
+                {location && (
+                  <span className="text-[10px] text-[#2F6B3C] font-semibold flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {location.state || location.city}
+                  </span>
+                )}
               </div>
 
               <form onSubmit={handleEnvSubmit} className="space-y-4">
@@ -319,16 +337,11 @@ export const PestPage: React.FC = () => {
                   ]}
                 />
 
-                <Select
-                  label="Region"
+                <Input
+                  label="Region (Location-aware)"
                   value={envForm.Region}
                   onChange={(e) => setEnvForm({ ...envForm, Region: e.target.value })}
-                  options={[
-                    { value: 'South', label: 'South Region' },
-                    { value: 'North', label: 'North Region' },
-                    { value: 'West', label: 'West Region' },
-                    { value: 'East', label: 'East Region' },
-                  ]}
+                  required
                 />
 
                 <Button

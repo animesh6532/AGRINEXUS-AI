@@ -14,41 +14,59 @@ import {
   Calendar,
   ShieldCheck,
   ShieldAlert,
-  ArrowRight
+  ArrowRight,
+  MapPin,
+  RefreshCw,
 } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
 import { useHealth } from '../context/HealthContext';
+import { useLocationContext } from '../context/LocationContext';
+import { LocationEmptyState } from '../components/location/LocationEmptyState';
+import { LocationBadge } from '../components/location/LocationBadge';
 import { api } from '../services/api';
 import { CurrentWeatherResponse, MarketPriceRecord, CropCalendarItem } from '../types/api';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { isApiConnected, isModelSystemReady } = useHealth();
+  const { location, openPicker } = useLocationContext();
 
   const [weather, setWeather] = useState<CurrentWeatherResponse | null>(null);
   const [market, setMarket] = useState<MarketPriceRecord | null>(null);
   const [catalogue, setCatalogue] = useState<CropCalendarItem[]>([]);
+  const [isRefreshingWeather, setIsRefreshingWeather] = useState<boolean>(false);
 
   useEffect(() => {
     async function loadData() {
+      setIsRefreshingWeather(true);
       try {
-        const [wData, mData, cData] = await Promise.allSettled([
-          api.getWeatherCurrent(19.076, 72.8777),
-          api.getMarketCurrent('Paddy(Common)'),
-          api.getCropCalendarCatalogue()
-        ]);
+        const promises: Promise<any>[] = [api.getCropCalendarCatalogue()];
 
-        if (wData.status === 'fulfilled') setWeather(wData.value);
-        if (mData.status === 'fulfilled') setMarket(mData.value);
-        if (cData.status === 'fulfilled') setCatalogue(cData.value);
+        if (location) {
+          promises.push(api.getWeatherCurrent(location.latitude, location.longitude));
+          promises.push(api.getMarketCurrent('Paddy(Common)', location.state));
+        }
+
+        const results = await Promise.allSettled(promises);
+        if (results[0].status === 'fulfilled') setCatalogue(results[0].value);
+
+        if (location) {
+          if (results[1] && results[1].status === 'fulfilled') setWeather(results[1].value);
+          if (results[2] && results[2].status === 'fulfilled') setMarket(results[2].value);
+        } else {
+          setWeather(null);
+          setMarket(null);
+        }
       } catch {
         // Safe fallback
+      } finally {
+        setIsRefreshingWeather(false);
       }
     }
     loadData();
-  }, []);
+  }, [location?.latitude, location?.longitude, location?.state]);
 
   const quickActions = [
     { label: 'Recommend Crop', path: '/crop', icon: <Sprout className="w-5 h-5 text-[#2F6B3C]" /> },
@@ -86,6 +104,9 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Location Onboarding Banner if location is not configured */}
+      {!location && <LocationEmptyState />}
+
       {/* 2. Hero Section: Cinematic Farmland Overlay Panel */}
       <div className="relative rounded-3xl overflow-hidden bg-[#0B1C10] text-[#FAFBF7] p-8 sm:p-12 border border-[#E2E7DA]/20 shadow-xl min-h-[260px] flex flex-col justify-between group">
         <div className="absolute inset-0 z-0 overflow-hidden">
@@ -108,9 +129,14 @@ export const Dashboard: React.FC = () => {
           </h2>
 
           <p className="text-xs sm:text-sm text-white/80 leading-relaxed font-sans">
-            {isModelSystemReady
-              ? '7 frozen ML artifacts loaded across ExtraTrees, ResNet18, LightGBM, MobileNetV3, XGBoost, and OpenCV live stream processing.'
-              : 'Backend connected, model system initializations underway...'}
+            {location ? (
+              <>
+                Your agricultural intelligence is currently personalized for{' '}
+                <strong className="text-[#D4E768] font-semibold">{location.displayName}</strong>.
+              </>
+            ) : (
+              'Set your field location to unlock localized weather, mandi prices and pest outbreak risk signals.'
+            )}
           </p>
         </div>
 
@@ -129,8 +155,24 @@ export const Dashboard: React.FC = () => {
             </span>
           </div>
 
-          <div className="text-[#D4E768] font-bold flex items-center gap-1">
-            <span>Location: {user?.location || 'Punjab, India'}</span>
+          <div className="flex items-center gap-2">
+            {location ? (
+              <button
+                onClick={openPicker}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4E768]/20 border border-[#D4E768]/40 text-[#D4E768] font-bold hover:bg-[#D4E768] hover:text-[#0B1C10] transition-all"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>📍 {location.city || location.displayName.split(',')[0]}</span>
+              </button>
+            ) : (
+              <button
+                onClick={openPicker}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 font-bold hover:bg-amber-400 hover:text-[#0B1C10] transition-all"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                <span>📍 Set Field Location</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -167,40 +209,72 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
             <div className="flex items-center gap-2">
               <CloudSun className="w-5 h-5 text-[#2F6B3C]" />
-              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">Weather Telemetry</h3>
+              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
+                Weather Telemetry
+              </h3>
             </div>
-            <Link to="/weather" className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5">
+            <Link
+              to="/weather"
+              className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5"
+            >
               <span>View</span>
               <ArrowRight className="w-3 h-3" />
             </Link>
           </div>
 
-          {weather ? (
+          {isRefreshingWeather ? (
+            <div className="text-xs text-[#536056] py-8 text-center flex flex-col items-center gap-2">
+              <RefreshCw className="w-5 h-5 text-[#2F6B3C] animate-spin" />
+              <span>Updating weather telemetry for location...</span>
+            </div>
+          ) : weather ? (
             <div className="space-y-4">
               <div className="flex items-baseline justify-between">
                 <div>
-                  <span className="text-4xl font-extrabold font-editorial text-[#0B1C10]">{weather.temperature}°C</span>
+                  <span className="text-4xl font-extrabold font-editorial text-[#0B1C10]">
+                    {weather.temperature}°C
+                  </span>
                   <span className="text-xs text-[#536056] block">Air Temperature</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-sm font-bold text-[#2F6B3C]">{weather.relative_humidity}%</span>
-                  <span className="text-[10px] text-[#536056] block uppercase tracking-wider">Humidity</span>
+                  <span className="text-sm font-bold text-[#2F6B3C]">
+                    {weather.relative_humidity}%
+                  </span>
+                  <span className="text-[10px] text-[#536056] block uppercase tracking-wider">
+                    Humidity
+                  </span>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-[#E2E7DA]">
                 <div className="p-2.5 rounded-xl bg-white border border-[#E2E7DA]">
-                  <span className="text-[#536056] block text-[10px] uppercase font-bold">Rainfall</span>
-                  <span className="font-extrabold text-[#0B1C10]">{weather.precipitation} mm</span>
+                  <span className="text-[#536056] block text-[10px] uppercase font-bold">
+                    Rainfall
+                  </span>
+                  <span className="font-extrabold text-[#0B1C10]">
+                    {weather.precipitation} mm
+                  </span>
                 </div>
                 <div className="p-2.5 rounded-xl bg-white border border-[#E2E7DA]">
-                  <span className="text-[#536056] block text-[10px] uppercase font-bold">Wind Speed</span>
-                  <span className="font-extrabold text-[#0B1C10]">{weather.wind_speed} km/h</span>
+                  <span className="text-[#536056] block text-[10px] uppercase font-bold">
+                    Wind Speed
+                  </span>
+                  <span className="font-extrabold text-[#0B1C10]">
+                    {weather.wind_speed} km/h
+                  </span>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="text-xs text-[#536056] italic py-6 text-center">Fetching Open-Meteo weather...</div>
+            <div className="text-xs text-[#536056] py-6 text-center space-y-2">
+              <p>Set a field location to view real-time weather telemetry.</p>
+              <button
+                onClick={openPicker}
+                className="px-3 py-1.5 rounded-xl bg-[#EEF3E8] border border-[#E2E7DA] text-xs font-bold text-[#2F6B3C] hover:bg-[#D4E768] hover:text-[#0B1C10] transition-colors"
+              >
+                Set Location
+              </button>
+            </div>
           )}
         </GlassCard>
 
@@ -209,9 +283,14 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5 text-[#2F6B3C]" />
-              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">Mandi Market Price</h3>
+              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
+                Mandi Market Price
+              </h3>
             </div>
-            <Link to="/market" className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5">
+            <Link
+              to="/market"
+              className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5"
+            >
               <span>View</span>
               <ArrowRight className="w-3 h-3" />
             </Link>
@@ -236,7 +315,9 @@ export const Dashboard: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div className="text-xs text-[#536056] italic py-6 text-center">Fetching Mandi market prices...</div>
+            <div className="text-xs text-[#536056] italic py-6 text-center">
+              Fetching Mandi market prices...
+            </div>
           )}
         </GlassCard>
 
@@ -245,9 +326,14 @@ export const Dashboard: React.FC = () => {
           <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-[#2F6B3C]" />
-              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">Crop Catalogue</h3>
+              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
+                Crop Catalogue
+              </h3>
             </div>
-            <Link to="/crop-calendar" className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5">
+            <Link
+              to="/crop-calendar"
+              className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5"
+            >
               <span>View</span>
               <ArrowRight className="w-3 h-3" />
             </Link>
@@ -256,7 +342,10 @@ export const Dashboard: React.FC = () => {
           {catalogue.length > 0 ? (
             <div className="space-y-2.5">
               {catalogue.slice(0, 3).map((c, i) => (
-                <div key={i} className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-white border border-[#E2E7DA]">
+                <div
+                  key={i}
+                  className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-white border border-[#E2E7DA]"
+                >
                   <span className="font-bold text-[#0B1C10] capitalize">{c.crop}</span>
                   <span className="px-2 py-0.5 rounded-full bg-[#EEF3E8] text-[#2F6B3C] text-[10px] font-bold uppercase">
                     {c.primary_season}
@@ -265,7 +354,9 @@ export const Dashboard: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="text-xs text-[#536056] italic py-6 text-center">Loading Crop Catalogue...</div>
+            <div className="text-xs text-[#536056] italic py-6 text-center">
+              Loading Crop Catalogue...
+            </div>
           )}
         </GlassCard>
       </div>
@@ -281,26 +372,44 @@ export const Dashboard: React.FC = () => {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="p-4 rounded-2xl bg-[#112316] border border-white/10">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">SOIL SOC</span>
-            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">Optimal Organic Content</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
+              SOIL SOC
+            </span>
+            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">
+              Optimal Organic Content
+            </span>
             <span className="text-[10px] text-[#D4E768]">SOC Prediction Model Active</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#112316] border border-white/10">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">WATER / SWC</span>
-            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">3h Forecast Ready</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
+              WATER / SWC
+            </span>
+            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">
+              3h Forecast Ready
+            </span>
             <span className="text-[10px] text-[#D4E768]">ML vs Persistence Active</span>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#112316] border border-white/10">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">WEATHER</span>
-            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">Open-Meteo Synced</span>
-            <span className="text-[10px] text-[#D4E768]">Spraying Suitability Ok</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
+              WEATHER
+            </span>
+            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">
+              {location ? 'Open-Meteo Synced' : 'Location Not Set'}
+            </span>
+            <span className="text-[10px] text-[#D4E768]">
+              {location ? location.displayName.split(',')[0] : 'Set field location'}
+            </span>
           </div>
 
           <div className="p-4 rounded-2xl bg-[#112316] border border-white/10">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">MARKET TREND</span>
-            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">Paddy Mandi Signals</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">
+              MARKET TREND
+            </span>
+            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">
+              Paddy Mandi Signals
+            </span>
             <span className="text-[10px] text-[#D4E768]">ETS Forecast Ready</span>
           </div>
         </div>

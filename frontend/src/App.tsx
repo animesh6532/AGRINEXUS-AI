@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { HealthProvider } from './context/HealthContext';
+import { LocationProvider } from './context/LocationContext';
 import { AppShell } from './components/layout/AppShell';
 
 import { LandingPage } from './pages/LandingPage';
@@ -37,43 +38,45 @@ export const App: React.FC = () => {
   return (
     <AuthProvider>
       <HealthProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Public Routes */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <LocationProvider>
+          <BrowserRouter>
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-            {/* Protected Platform Routes */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <AppShell />
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/crop" element={<CropPage />} />
-              <Route path="/disease" element={<DiseasePage />} />
-              <Route path="/pest" element={<PestPage />} />
-              <Route path="/fertilizer" element={<FertilizerPage />} />
-              <Route path="/irrigation" element={<IrrigationPage />} />
-              <Route path="/soil" element={<SoilPage />} />
-              <Route path="/yield" element={<YieldPage />} />
-              <Route path="/live" element={<LiveCameraPage />} />
-              <Route path="/weather" element={<WeatherPage />} />
-              <Route path="/market" element={<MarketPage />} />
-              <Route path="/crop-calendar" element={<CropCalendarPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-              <Route path="/profile" element={<ProfilePage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
+              {/* Protected Platform Routes */}
+              <Route
+                element={
+                  <ProtectedRoute>
+                    <AppShell />
+                  </ProtectedRoute>
+                }
+              >
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/crop" element={<CropPage />} />
+                <Route path="/disease" element={<DiseasePage />} />
+                <Route path="/pest" element={<PestPage />} />
+                <Route path="/fertilizer" element={<FertilizerPage />} />
+                <Route path="/irrigation" element={<IrrigationPage />} />
+                <Route path="/soil" element={<SoilPage />} />
+                <Route path="/yield" element={<YieldPage />} />
+                <Route path="/live" element={<LiveCameraPage />} />
+                <Route path="/weather" element={<WeatherPage />} />
+                <Route path="/market" element={<MarketPage />} />
+                <Route path="/crop-calendar" element={<CropCalendarPage />} />
+                <Route path="/history" element={<HistoryPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
 
-            {/* Catch-all fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
+              {/* Catch-all fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </LocationProvider>
       </HealthProvider>
     </AuthProvider>
   );
