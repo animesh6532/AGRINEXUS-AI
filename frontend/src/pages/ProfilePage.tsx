@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { User, MapPin, Sprout, Save } from 'lucide-react';
+import { User, MapPin, Sprout, Save, CheckCircle2 } from 'lucide-react';
+import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
@@ -23,66 +24,118 @@ export const ProfilePage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center font-bold">
-          <User className="w-6 h-6" />
+    <div className="space-y-8 selection:bg-[#D4E768] selection:text-[#0B1C10]">
+      {/* Page Hero */}
+      <AgriculturalPageHero
+        category="ACCOUNT"
+        title="Farmer Profile & Farm Location"
+        description="Manage your agronomic identity, farm geographic coordinates, primary crop focus, and operational preferences."
+        imageSrc="/images/crop-calendar.webp"
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Profile Overview Card (5 Cols) */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="p-8 rounded-3xl bg-[#0B1C10] text-[#FAFBF7] space-y-6 border border-white/10 shadow-xl">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-[#D4E768] text-[#0B1C10] flex items-center justify-center font-black text-2xl font-editorial shadow-md">
+                {(name || 'F').charAt(0).toUpperCase()}
+              </div>
+              <div>
+                <h3 className="text-2xl font-extrabold font-editorial text-white">{name || 'Farmer'}</h3>
+                <p className="text-xs text-white/60">{email || 'farmer@agrinexus.ai'}</p>
+                <span className="inline-block mt-2 px-3 py-0.5 rounded-full bg-[#D4E768]/20 text-[#D4E768] text-[10px] font-bold uppercase border border-[#D4E768]/30">
+                  Commercial Agronomist
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-4 border-t border-white/10 text-xs font-sans">
+              <div className="flex justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/60">Farm Location:</span>
+                <span className="font-bold text-white">{location}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/60">Primary Crop:</span>
+                <span className="font-bold text-[#D4E768]">{primaryCrop}</span>
+              </div>
+              <div className="flex justify-between py-1.5 border-b border-white/5">
+                <span className="text-white/60">Registered Services:</span>
+                <span className="font-bold text-white">All 8 Inference Models</span>
+              </div>
+            </div>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Farmer Profile</h1>
-          <p className="text-xs text-slate-500">
-            Manage your personal agronomic preferences and farm location.
-          </p>
+
+        {/* Form Settings (7 Cols) */}
+        <div className="lg:col-span-7 space-y-6">
+          <GlassCard variant="solid" className="p-6 sm:p-8 space-y-6">
+            <div className="border-b border-[#E2E7DA] pb-4">
+              <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">
+                EDIT PREFERENCES
+              </span>
+              <h3 className="text-2xl font-extrabold font-editorial text-[#0B1C10]">
+                Agronomic Identity Settings
+              </h3>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <Input
+                label="Full Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                icon={<User className="w-4 h-4 text-[#2F6B3C]" />}
+                required
+              />
+
+              <Input
+                label="Email Address"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+
+              <Input
+                label="Farm Location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                icon={<MapPin className="w-4 h-4 text-[#2F6B3C]" />}
+              />
+
+              <Select
+                label="Primary Crop Interest"
+                value={primaryCrop}
+                onChange={(e) => setPrimaryCrop(e.target.value)}
+                options={[
+                  { value: 'Rice', label: 'Rice / Paddy' },
+                  { value: 'Wheat', label: 'Wheat' },
+                  { value: 'Maize', label: 'Maize' },
+                  { value: 'Cotton', label: 'Cotton' },
+                  { value: 'Sugarcane', label: 'Sugarcane' },
+                ]}
+              />
+
+              <Button
+                type="submit"
+                variant="lime"
+                size="lg"
+                className="w-full mt-2 shadow-md hover:shadow-glow"
+                icon={<Save className="w-4 h-4" />}
+              >
+                Save Farmer Profile
+              </Button>
+
+              {savedNotice && (
+                <div className="p-4 rounded-2xl bg-[#EEF3E8] border border-[#E2E7DA] text-[#2F6B3C] text-xs font-bold flex items-center gap-2 animate-fade-in">
+                  <CheckCircle2 className="w-4 h-4 text-[#2F6B3C]" />
+                  <span>Farmer profile preferences saved successfully!</span>
+                </div>
+              )}
+            </form>
+          </GlassCard>
         </div>
       </div>
-
-      <GlassCard variant="strong" className="p-6 max-w-xl space-y-6">
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Full Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            icon={<User className="w-4 h-4" />}
-            required
-          />
-
-          <Input
-            label="Email Address"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-
-          <Input
-            label="Farm Location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            icon={<MapPin className="w-4 h-4" />}
-          />
-
-          <Select
-            label="Primary Crop Interest"
-            value={primaryCrop}
-            onChange={(e) => setPrimaryCrop(e.target.value)}
-            options={[
-              { value: 'Rice', label: 'Rice / Paddy' },
-              { value: 'Wheat', label: 'Wheat' },
-              { value: 'Maize', label: 'Maize' },
-              { value: 'Cotton', label: 'Cotton' },
-              { value: 'Sugarcane', label: 'Sugarcane' },
-            ]}
-          />
-
-          <Button type="submit" variant="primary" size="md" icon={<Save className="w-4 h-4" />}>
-            Save Profile Preferences
-          </Button>
-
-          {savedNotice && (
-            <p className="text-xs text-emerald-600 font-bold animate-pulse">Profile updated successfully!</p>
-          )}
-        </form>
-      </GlassCard>
     </div>
   );
 };

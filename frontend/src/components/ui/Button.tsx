@@ -3,7 +3,7 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'lime' | 'dark';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   icon?: React.ReactNode;
@@ -20,20 +20,22 @@ export const Button: React.FC<ButtonProps> = ({
   disabled,
   ...props
 }) => {
-  const baseStyles = 'inline-flex items-center justify-center font-medium transition-all duration-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseStyles = 'inline-flex items-center justify-center font-semibold transition-all duration-300 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variants = {
-    primary: 'bg-primary-600 hover:bg-primary-700 text-white shadow-md hover:shadow-glow focus:ring-primary-500',
-    secondary: 'bg-agri-600 hover:bg-agri-700 text-white shadow-md focus:ring-agri-500',
-    outline: 'bg-white/70 hover:bg-white border border-slate-200 text-slate-700 hover:text-slate-900 focus:ring-slate-300',
-    ghost: 'bg-transparent hover:bg-slate-100/60 text-slate-600 hover:text-slate-900 focus:ring-slate-300',
-    danger: 'bg-rose-600 hover:bg-rose-700 text-white shadow-md focus:ring-rose-500',
+    primary: 'bg-[#2F6B3C] hover:bg-[#24522E] text-white shadow-sm hover:shadow-md focus:ring-[#2F6B3C]',
+    secondary: 'bg-[#D4E768] hover:bg-[#E2F165] text-[#0B1C10] font-bold shadow-sm focus:ring-[#D4E768]',
+    lime: 'bg-[#D4E768] hover:bg-[#E2F165] text-[#0B1C10] font-bold shadow-sm hover:shadow-glow focus:ring-[#D4E768]',
+    dark: 'bg-[#0B1C10] hover:bg-[#112316] text-[#FAFBF7] border border-white/20 focus:ring-[#D4E768]',
+    outline: 'bg-transparent hover:bg-[#EEF3E8] border border-[#E2E7DA] text-[#162018] focus:ring-[#2F6B3C]',
+    ghost: 'bg-transparent hover:bg-[#EEF3E8] text-[#536056] hover:text-[#162018] focus:ring-[#2F6B3C]',
+    danger: 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm focus:ring-rose-500',
   };
 
   const sizes = {
-    sm: 'px-3 py-1.5 text-xs gap-1.5',
-    md: 'px-4 py-2.5 text-sm gap-2',
-    lg: 'px-6 py-3 text-base gap-2.5',
+    sm: 'px-3.5 py-1.5 text-xs gap-1.5',
+    md: 'px-5 py-2.5 text-xs sm:text-sm gap-2',
+    lg: 'px-7 py-3.5 text-sm sm:text-base gap-2.5',
   };
 
   return (

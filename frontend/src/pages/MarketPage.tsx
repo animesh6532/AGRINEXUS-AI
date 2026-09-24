@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { BarChart3, TrendingUp, RefreshCw, AlertCircle, Calendar } from 'lucide-react';
+import { BarChart3, TrendingUp, AlertCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Select } from '../components/ui/Select';
-import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
 import { api } from '../services/api';
 import { MarketPriceRecord, MarketForecastResponse, MarketSignalsResponse } from '../types/api';
 
@@ -46,35 +45,21 @@ export const MarketPage: React.FC = () => {
     fetchMarketData();
   }, [commodity, model]);
 
-  const historyChartData = history.map((h) => ({
-    date: h.arrival_date,
-    ModalPrice: h.modal_price,
-    MinPrice: h.min_price,
-    MaxPrice: h.max_price,
-  }));
-
   const forecastChartData = forecast?.forecasts.map((f) => ({
     date: f.date.split('-').slice(1).join('/'),
     ForecastPrice: f.predicted_modal_price,
   })) || [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-            <BarChart3 className="w-6 h-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Market Intelligence & Mandi Forecast</h1>
-            <p className="text-xs text-slate-500">
-              Government of India mandi observations, ETS/ARIMA price forecasting, and actionable trend signals.
-            </p>
-          </div>
-        </div>
-
-        {/* Filters */}
-        <div className="flex items-center gap-3">
+    <div className="space-y-8 selection:bg-[#D4E768] selection:text-[#0B1C10]">
+      {/* Page Hero */}
+      <AgriculturalPageHero
+        category="FIELD SIGNALS"
+        title="Mandi Market Intelligence"
+        description="Government of India Mandi arrival observations, ETS/ARIMA price forecasting models, and actionable market signals."
+        imageSrc="/images/market-intelligence.webp"
+      >
+        <div className="flex items-center gap-3 bg-black/40 backdrop-blur-md p-2 rounded-2xl border border-white/10 flex-wrap">
           <Select
             value={commodity}
             onChange={(e) => setCommodity(e.target.value)}
@@ -89,16 +74,16 @@ export const MarketPage: React.FC = () => {
             value={model}
             onChange={(e) => setModel(e.target.value)}
             options={[
-              { value: 'ets', label: 'ETS Holt-Winters' },
+              { value: 'ets', label: 'ETS Holt-Winters Model' },
               { value: 'arima', label: 'ARIMA Model' },
-              { value: 'ma', label: 'Moving Average' },
+              { value: 'ma', label: 'Moving Average Model' },
             ]}
           />
         </div>
-      </div>
+      </AgriculturalPageHero>
 
       {error && (
-        <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+        <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
           <span>{error}</span>
         </div>
@@ -106,20 +91,21 @@ export const MarketPage: React.FC = () => {
 
       {/* Current Mandi Observation Card */}
       {current && (
-        <GlassCard variant="strong" className="p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <GlassCard variant="solid" className="p-6 sm:p-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E7DA] pb-6">
             <div>
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">
-                Latest Mandi Observation ({current.market}, {current.state})
+              <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">
+                OBSERVED MANDI MARKET PRICE ({current.market}, {current.state})
               </span>
-              <h2 className="text-3xl font-black text-slate-900 mt-1">
-                ₹{current.modal_price} <span className="text-xs font-normal text-slate-500">/ quintal</span>
+              <h2 className="text-4xl font-black font-editorial text-[#0B1C10] mt-1">
+                ₹{current.modal_price}{' '}
+                <span className="text-sm font-sans font-medium text-[#536056]">/ quintal</span>
               </h2>
             </div>
-            <div className="flex items-center gap-4 text-xs font-medium text-slate-600">
-              <span className="p-2 rounded-lg bg-white/70 border border-slate-100">Min: ₹{current.min_price}</span>
-              <span className="p-2 rounded-lg bg-white/70 border border-slate-100">Max: ₹{current.max_price}</span>
-              <Badge variant="success">Observed {current.arrival_date}</Badge>
+            <div className="flex items-center gap-3 text-xs font-bold text-[#162018] flex-wrap">
+              <span className="p-3 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA]">Min: ₹{current.min_price}</span>
+              <span className="p-3 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA]">Modal: ₹{current.modal_price}</span>
+              <span className="p-3 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA]">Max: ₹{current.max_price}</span>
             </div>
           </div>
         </GlassCard>
@@ -127,23 +113,43 @@ export const MarketPage: React.FC = () => {
 
       {/* Forecast Chart */}
       {forecastChartData.length > 0 && (
-        <GlassCard variant="strong" className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-emerald-600" /> 7-Day Modal Price Forecast ({forecast?.model_used.toUpperCase()})
-            </h3>
-            <span className="text-xs text-slate-400 font-medium">As of {forecast?.last_historical_date}</span>
+        <GlassCard variant="solid" className="p-6 sm:p-8 space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#E2E7DA] pb-4">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">
+                7-DAY MODAL PRICE FORECAST
+              </span>
+              <h3 className="text-2xl font-extrabold font-editorial text-[#0B1C10]">
+                Predictive Price Horizon ({forecast?.model_used.toUpperCase()})
+              </h3>
+            </div>
+            <span className="text-xs text-[#536056] font-mono">
+              Historical Baseline: {forecast?.last_historical_date}
+            </span>
           </div>
 
-          <div className="h-64 w-full">
+          <div className="h-72 w-full pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={forecastChartData}>
-                <XAxis dataKey="date" stroke="#94A3B8" fontSize={11} />
-                <YAxis stroke="#94A3B8" fontSize={11} />
+                <XAxis dataKey="date" stroke="#536056" fontSize={11} tickLine={false} />
+                <YAxis stroke="#536056" fontSize={11} tickLine={false} />
                 <Tooltip
-                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: '12px', borderColor: '#E2E8F0' }}
+                  contentStyle={{
+                    backgroundColor: '#0B1C10',
+                    color: '#FAFBF7',
+                    borderRadius: '16px',
+                    borderColor: '#D4E768',
+                    fontSize: '12px'
+                  }}
                 />
-                <Line type="monotone" dataKey="ForecastPrice" stroke="#10B981" strokeWidth={3} dot={{ r: 4 }} name="Predicted Price (₹)" />
+                <Line
+                  type="monotone"
+                  dataKey="ForecastPrice"
+                  stroke="#2F6B3C"
+                  strokeWidth={3}
+                  dot={{ r: 5, fill: '#D4E768', stroke: '#0B1C10' }}
+                  name="Predicted Price (₹)"
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -152,17 +158,29 @@ export const MarketPage: React.FC = () => {
 
       {/* Market Signals */}
       {signals && signals.actionable_signals && (
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Actionable Market Signals</h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-widest text-[#536056]">
+              Actionable Mandi Signals
+            </h3>
+            <span className="text-xs text-[#2F6B3C] font-semibold">
+              {signals.actionable_signals.length} Active Market Signals
+            </span>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {signals.actionable_signals.map((sig, idx) => (
-              <GlassCard key={idx} className="p-4 space-y-2 border-l-4 border-l-emerald-500">
+              <GlassCard key={idx} variant="solid" className="p-6 space-y-3 border-l-4 border-l-[#2F6B3C]">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900">{sig.type}</span>
-                  <Badge variant="success">Strength: {(sig.signal_strength * 100).toFixed(0)}%</Badge>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#0B1C10]">{sig.type}</span>
+                  <span className="px-3 py-0.5 rounded-full bg-[#EEF3E8] text-[#2F6B3C] text-[10px] font-extrabold uppercase border border-[#E2E7DA]">
+                    Signal Strength: {(sig.signal_strength * 100).toFixed(0)}%
+                  </span>
                 </div>
-                <p className="text-xs text-slate-600">{sig.description}</p>
-                <p className="text-xs font-semibold text-emerald-700 bg-emerald-50 p-2 rounded-lg">{sig.recommendation}</p>
+                <p className="text-xs text-[#536056] leading-relaxed font-sans">{sig.description}</p>
+                <p className="text-xs font-bold text-[#2F6B3C] bg-[#EEF3E8] p-3 rounded-2xl border border-[#E2E7DA]">
+                  {sig.recommendation}
+                </p>
               </GlassCard>
             ))}
           </div>

@@ -7,14 +7,26 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#F7F8F3',
+        background: '#FAFBF7',
         surface: {
           DEFAULT: '#EEF3E8',
           card: '#FFFFFF',
-          glass: 'rgba(255, 255, 255, 0.75)',
-          dark: '#162018',
-          darkSurface: '#1F2C22',
+          glass: 'rgba(255, 255, 255, 0.85)',
+          dark: '#112316',
+          darker: '#07120A',
+          darkDeep: '#0B1C10',
         },
+        agriDark: '#0B1C10',
+        agriForest: '#112316',
+        agriDarker: '#07120A',
+        agriBg: '#FAFBF7',
+        agriSurface: '#EEF3E8',
+        agriLime: '#D4E768',
+        agriGreen: '#2F6B3C',
+        agriMediumGreen: '#5E9F48',
+        agriBorder: '#E2E7DA',
+        agriText: '#162018',
+        agriMuted: '#536056',
         agri: {
           50: '#F4F8F1',
           100: '#EEF3E8',
@@ -26,19 +38,19 @@ export default {
           700: '#24522E',
           800: '#1D3E24',
           900: '#162018',
-          950: '#0D140F',
+          950: '#0B1C10',
         },
         earth: {
           50: '#FAF8F5',
-          100: '#F7F8F3',
+          100: '#FAFBF7',
           200: '#ECE8DE',
-          300: '#E8E4D9',
+          300: '#E2E7DA',
           400: '#D4CDBC',
           500: '#B8AD95',
           600: '#8C8068',
-          700: '#645B4A',
-          800: '#39463B',
-          900: '#162018',
+          700: '#536056',
+          800: '#112316',
+          900: '#0B1C10',
         },
         primary: {
           50: '#F4F8F1',
@@ -48,6 +60,7 @@ export default {
           700: '#24522E',
         },
         accent: {
+          lime: '#D4E768',
           sand: '#ECE8DE',
           amber: '#D97706',
           sky: '#0284C7',
@@ -55,7 +68,8 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'Manrope', 'DM Sans', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'Plus Jakarta Sans', 'Manrope', 'system-ui', 'sans-serif'],
+        editorial: ['Plus Jakarta Sans', 'Manrope', 'Inter', 'sans-serif'],
         serif: ['Georgia', 'Cambria', 'serif'],
       },
       backdropBlur: {
@@ -63,10 +77,10 @@ export default {
         strong: '24px',
       },
       boxShadow: {
-        card: '0 4px 20px -2px rgba(22, 32, 24, 0.05)',
+        card: '0 4px 20px -2px rgba(11, 28, 16, 0.04)',
         'card-hover': '0 20px 40px -15px rgba(47, 107, 60, 0.12)',
-        floating: '0 16px 36px -8px rgba(22, 32, 24, 0.1)',
-        glow: '0 0 30px rgba(94, 159, 72, 0.2)',
+        floating: '0 16px 36px -8px rgba(11, 28, 16, 0.1)',
+        glow: '0 0 30px rgba(212, 231, 104, 0.25)',
       },
       animation: {
         'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',

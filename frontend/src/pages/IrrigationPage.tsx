@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Droplets, AlertTriangle, Activity, BarChart2 } from 'lucide-react';
+import { Droplets, AlertTriangle, Activity } from 'lucide-react';
+import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
 import { ScopeWarning } from '../components/intelligence/ScopeWarning';
 import { api } from '../services/api';
 import { IrrigationPredictionResponse } from '../types/api';
@@ -38,179 +38,202 @@ export const IrrigationPage: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center font-bold">
-          <Droplets className="w-6 h-6" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Irrigation Predictor</h1>
-          <p className="text-xs text-slate-500">
-            3-hour Soil Water Content prediction evaluated against persistence baseline SWC benchmark.
-          </p>
-        </div>
-      </div>
+    <div className="space-y-8 selection:bg-[#D4E768] selection:text-[#0B1C10]">
+      {/* Page Hero */}
+      <AgriculturalPageHero
+        category="FIELD INTELLIGENCE"
+        title="Irrigation & Water Predictor"
+        description="Soil water, predicted ahead. 3-hour horizon Soil Water Content (SWC) forecasting evaluated side-by-side with persistence reference baselines."
+        imageSrc="/images/irrigation.webp"
+      />
 
       <ScopeWarning
         type="info"
-        message="Evaluates 3-hour horizon Soil Water Content (SWC). Note that the persistence baseline (SWC_t+3h = SWC_t) serves as the primary benchmark reference alongside the ML model."
+        message="Evaluates 3-hour horizon Soil Water Content (SWC). On held-out testing, the persistence baseline (SWC_t+3h = SWC_t) serves as the primary benchmark reference alongside the ML model."
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Form Inputs */}
-        <GlassCard variant="strong" className="p-6 lg:col-span-1 space-y-4">
-          <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-sky-600" /> Soil Water Content Observations
-          </h3>
-
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <Input
-              label="Current Soil Water Content (SWC)"
-              type="number"
-              step="0.001"
-              min="0"
-              max="1"
-              value={formData.SWC}
-              onChange={(e) => setFormData({ ...formData, SWC: parseFloat(e.target.value) || 0 })}
-              required
-            />
-
-            <div className="grid grid-cols-3 gap-2">
-              <Input
-                label="Lag 1h"
-                type="number"
-                step="0.001"
-                value={formData.SWC_lag1h}
-                onChange={(e) => setFormData({ ...formData, SWC_lag1h: parseFloat(e.target.value) || 0 })}
-                required
-              />
-              <Input
-                label="Lag 2h"
-                type="number"
-                step="0.001"
-                value={formData.SWC_lag2h}
-                onChange={(e) => setFormData({ ...formData, SWC_lag2h: parseFloat(e.target.value) || 0 })}
-                required
-              />
-              <Input
-                label="Lag 3h"
-                type="number"
-                step="0.001"
-                value={formData.SWC_lag3h}
-                onChange={(e) => setFormData({ ...formData, SWC_lag3h: parseFloat(e.target.value) || 0 })}
-                required
-              />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Form Inputs (5 Cols) */}
+        <div className="lg:col-span-5 space-y-6">
+          <GlassCard variant="solid" className="p-6 sm:p-8 space-y-5">
+            <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-4">
+              <Activity className="w-5 h-5 text-[#2F6B3C]" />
+              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">
+                Soil Water Content Telemetry
+              </h3>
             </div>
 
-            <Input
-              label="6-Hour Mean SWC"
-              type="number"
-              step="0.001"
-              value={formData.SWC_roll6h_mean}
-              onChange={(e) => setFormData({ ...formData, SWC_roll6h_mean: parseFloat(e.target.value) || 0 })}
-              required
-            />
-
-            <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleSubmit} className="space-y-4">
               <Input
-                label="Rainfall (mm)"
+                label="Current Soil Water Content (SWC)"
                 type="number"
-                step="0.1"
-                value={formData.Rainfall_mm}
-                onChange={(e) => setFormData({ ...formData, Rainfall_mm: parseFloat(e.target.value) || 0 })}
+                step="0.001"
+                min="0"
+                max="1"
+                value={formData.SWC}
+                onChange={(e) => setFormData({ ...formData, SWC: parseFloat(e.target.value) || 0 })}
                 required
               />
+
+              <div className="grid grid-cols-3 gap-3">
+                <Input
+                  label="Lag 1h"
+                  type="number"
+                  step="0.001"
+                  value={formData.SWC_lag1h}
+                  onChange={(e) => setFormData({ ...formData, SWC_lag1h: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+                <Input
+                  label="Lag 2h"
+                  type="number"
+                  step="0.001"
+                  value={formData.SWC_lag2h}
+                  onChange={(e) => setFormData({ ...formData, SWC_lag2h: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+                <Input
+                  label="Lag 3h"
+                  type="number"
+                  step="0.001"
+                  value={formData.SWC_lag3h}
+                  onChange={(e) => setFormData({ ...formData, SWC_lag3h: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+              </div>
+
               <Input
-                label="6h Rain Sum"
+                label="6-Hour Rolling Mean SWC"
                 type="number"
-                step="0.1"
-                value={formData.Rain_roll6h_sum}
-                onChange={(e) => setFormData({ ...formData, Rain_roll6h_sum: parseFloat(e.target.value) || 0 })}
+                step="0.001"
+                value={formData.SWC_roll6h_mean}
+                onChange={(e) => setFormData({ ...formData, SWC_roll6h_mean: parseFloat(e.target.value) || 0 })}
                 required
               />
-            </div>
 
-            <Button type="submit" variant="secondary" size="md" className="w-full mt-2" isLoading={loading}>
-              Predict 3h SWC Horizon
-            </Button>
-          </form>
-        </GlassCard>
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Rainfall (mm)"
+                  type="number"
+                  step="0.1"
+                  value={formData.Rainfall_mm}
+                  onChange={(e) => setFormData({ ...formData, Rainfall_mm: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+                <Input
+                  label="6h Rain Sum"
+                  type="number"
+                  step="0.1"
+                  value={formData.Rain_roll6h_sum}
+                  onChange={(e) => setFormData({ ...formData, Rain_roll6h_sum: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+              </div>
 
-        {/* Prediction Results & Comparison */}
-        <div className="lg:col-span-2 space-y-6">
+              <Button
+                type="submit"
+                variant="lime"
+                size="lg"
+                className="w-full mt-2 shadow-md hover:shadow-glow"
+                isLoading={loading}
+                icon={<Droplets className="w-4 h-4" />}
+              >
+                Predict 3h SWC Horizon
+              </Button>
+            </form>
+          </GlassCard>
+        </div>
+
+        {/* Prediction Results (7 Cols) */}
+        <div className="lg:col-span-7 space-y-6">
           {error && (
-            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
+            <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
           {result ? (
-            <GlassCard variant="strong" className="p-6 space-y-6">
-              <div className="flex items-center justify-between border-b border-slate-200/60 pb-4">
+            <GlassCard variant="solid" className="p-6 sm:p-8 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E7DA] pb-6">
                 <div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block">Agronomic Recommendation</span>
-                  <h2 className="text-xl font-black text-slate-900 mt-1">
+                  <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">
+                    AGRONOMIC STATUS & ADVISORY
+                  </span>
+                  <h2 className="text-2xl font-black font-editorial text-[#0B1C10] mt-1">
                     {result.agronomic_status.status_message}
                   </h2>
                 </div>
-                <Badge variant={result.agronomic_status.irrigation_needed ? 'danger' : 'success'} dot>
-                  {result.agronomic_status.irrigation_needed ? 'Irrigation Needed' : 'Adequate Moisture'}
-                </Badge>
+                <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold ${
+                  result.agronomic_status.irrigation_needed
+                    ? 'bg-amber-500/10 text-amber-900 border border-amber-500/25'
+                    : 'bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA]'
+                }`}>
+                  {result.agronomic_status.irrigation_needed ? '● Irrigation Recommended' : '● Moisture Adequate'}
+                </span>
               </div>
 
               {/* Side-by-Side Comparison Display */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-sky-50/80 border border-sky-200/60 space-y-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-sky-800 block">
-                    ML Model Prediction (3h)
+                <div className="p-5 rounded-2xl bg-[#EEF3E8] border border-[#E2E7DA] space-y-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-[#2F6B3C] block">
+                    ML Model Forecast (3h Horizon)
                   </span>
-                  <div className="text-3xl font-black text-sky-900">
-                    {result.ml_predicted_swc_3h} <span className="text-xs font-normal text-slate-500">SWC</span>
+                  <div className="text-4xl font-black font-editorial text-[#0B1C10]">
+                    {result.ml_predicted_swc_3h}{' '}
+                    <span className="text-xs font-sans font-medium text-[#536056]">SWC</span>
                   </div>
-                  <p className="text-[10px] text-sky-700">Scaled Ridge Regression Model</p>
+                  <p className="text-[10px] text-[#536056]">Scaled Ridge Regression Model</p>
                 </div>
 
-                <div className="p-4 rounded-xl bg-slate-100/80 border border-slate-200 space-y-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 block">
-                    Persistence Baseline (3h)
+                <div className="p-5 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA] space-y-2">
+                  <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">
+                    Persistence Reference (3h)
                   </span>
-                  <div className="text-3xl font-black text-slate-900">
-                    {result.persistence_swc_3h} <span className="text-xs font-normal text-slate-500">SWC</span>
+                  <div className="text-4xl font-black font-editorial text-[#0B1C10]">
+                    {result.persistence_swc_3h}{' '}
+                    <span className="text-xs font-sans font-medium text-[#536056]">SWC</span>
                   </div>
-                  <p className="text-[10px] text-slate-500">SWC(t+3h) = SWC(t) Reference Benchmark</p>
+                  <p className="text-[10px] text-[#536056]">SWC(t+3h) = SWC(t) Reference Baseline</p>
                 </div>
               </div>
 
               {/* Agronomic Threshold Metrics */}
               <div className="grid grid-cols-3 gap-3 text-xs">
-                <div className="p-3 rounded-lg bg-white/70 border border-slate-100 text-center">
-                  <span className="text-slate-400 block text-[10px]">Field Capacity</span>
-                  <span className="font-bold text-slate-800">{result.agronomic_status.field_capacity}</span>
+                <div className="p-3.5 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA] text-center">
+                  <span className="text-[#536056] block text-[10px] uppercase font-bold">Field Capacity</span>
+                  <span className="font-extrabold text-[#0B1C10] text-base">{result.agronomic_status.field_capacity}</span>
                 </div>
-                <div className="p-3 rounded-lg bg-white/70 border border-slate-100 text-center">
-                  <span className="text-slate-400 block text-[10px]">Critical Threshold</span>
-                  <span className="font-bold text-amber-700">{result.agronomic_status.critical_threshold}</span>
+                <div className="p-3.5 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA] text-center">
+                  <span className="text-[#536056] block text-[10px] uppercase font-bold">Critical Threshold</span>
+                  <span className="font-extrabold text-amber-700 text-base">{result.agronomic_status.critical_threshold}</span>
                 </div>
-                <div className="p-3 rounded-lg bg-white/70 border border-slate-100 text-center">
-                  <span className="text-slate-400 block text-[10px]">Wilting Point</span>
-                  <span className="font-bold text-rose-700">{result.agronomic_status.wilting_point}</span>
+                <div className="p-3.5 rounded-2xl bg-[#FAFBF7] border border-[#E2E7DA] text-center">
+                  <span className="text-[#536056] block text-[10px] uppercase font-bold">Wilting Point</span>
+                  <span className="font-extrabold text-rose-700 text-base">{result.agronomic_status.wilting_point}</span>
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-slate-50 text-[11px] text-slate-600 leading-relaxed border border-slate-200/50">
-                <span className="font-bold text-slate-900 block mb-0.5">Evaluation Note:</span>
+              <div className="p-4 rounded-2xl bg-[#EEF3E8] text-xs text-[#162018] leading-relaxed border border-[#E2E7DA]">
+                <span className="font-bold text-[#0B1C10] block mb-1">Agronomic Transparency Note:</span>
                 {result.agronomic_status.decision_note}
               </div>
             </GlassCard>
           ) : (
-            <GlassCard className="p-12 text-center space-y-3">
-              <Droplets className="w-10 h-10 text-slate-300 mx-auto" />
-              <h3 className="text-base font-bold text-slate-700">No Irrigation Prediction Calculated</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Enter current SWC and lag observations on the left to evaluate 3-hour moisture prediction.
-              </p>
-            </GlassCard>
+            <div className="relative rounded-3xl overflow-hidden border border-[#E2E7DA] bg-[#FAFBF7] p-8 sm:p-12 text-center space-y-6 flex flex-col items-center justify-center min-h-[380px] group">
+              <div className="w-14 h-14 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] flex items-center justify-center font-extrabold text-xl shadow-sm">
+                <Droplets className="w-7 h-7" />
+              </div>
+
+              <div className="space-y-2 max-w-md">
+                <h3 className="text-xl font-extrabold font-editorial text-[#0B1C10]">
+                  Ready for Water Content Prediction
+                </h3>
+                <p className="text-xs text-[#536056] leading-relaxed">
+                  Enter current Soil Water Content (SWC) and hourly lag observations on the left to compute 3-hour moisture forecasts.
+                </p>
+              </div>
+            </div>
           )}
         </div>
       </div>

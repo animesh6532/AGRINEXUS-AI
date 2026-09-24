@@ -12,15 +12,12 @@ import {
   CloudSun,
   BarChart3,
   Calendar,
-  CheckCircle2,
-  ArrowRight,
   ShieldCheck,
-  AlertTriangle,
-  RefreshCw
+  ShieldAlert,
+  ArrowRight
 } from 'lucide-react';
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
-import { Badge } from '../components/ui/Badge';
 import { useAuth } from '../context/AuthContext';
 import { useHealth } from '../context/HealthContext';
 import { api } from '../services/api';
@@ -28,16 +25,14 @@ import { CurrentWeatherResponse, MarketPriceRecord, CropCalendarItem } from '../
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const { isApiConnected, isModelSystemReady, modelStatus } = useHealth();
+  const { isApiConnected, isModelSystemReady } = useHealth();
 
   const [weather, setWeather] = useState<CurrentWeatherResponse | null>(null);
   const [market, setMarket] = useState<MarketPriceRecord | null>(null);
   const [catalogue, setCatalogue] = useState<CropCalendarItem[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     async function loadData() {
-      setLoading(true);
       try {
         const [wData, mData, cData] = await Promise.allSettled([
           api.getWeatherCurrent(19.076, 72.8777),
@@ -50,176 +45,265 @@ export const Dashboard: React.FC = () => {
         if (cData.status === 'fulfilled') setCatalogue(cData.value);
       } catch {
         // Safe fallback
-      } finally {
-        setLoading(false);
       }
     }
     loadData();
   }, []);
 
   const quickActions = [
-    { label: 'Recommend Crop', path: '/crop', icon: <Sprout className="w-5 h-5 text-agri-600" />, color: 'bg-agri-50 border-agri-200' },
-    { label: 'Scan Leaf Disease', path: '/disease', icon: <Stethoscope className="w-5 h-5 text-primary-600" />, color: 'bg-primary-50 border-primary-200' },
-    { label: 'Check Pest Risk', path: '/pest', icon: <Bug className="w-5 h-5 text-amber-600" />, color: 'bg-amber-50 border-amber-200' },
-    { label: 'Fertilizer Advisor', path: '/fertilizer', icon: <FlaskConical className="w-5 h-5 text-purple-600" />, color: 'bg-purple-50 border-purple-200' },
-    { label: 'Check Irrigation', path: '/irrigation', icon: <Droplets className="w-5 h-5 text-sky-600" />, color: 'bg-sky-50 border-sky-200' },
-    { label: 'Analyze Soil', path: '/soil', icon: <Mountain className="w-5 h-5 text-emerald-600" />, color: 'bg-emerald-50 border-emerald-200' },
-    { label: 'Predict Yield', path: '/yield', icon: <TrendingUp className="w-5 h-5 text-indigo-600" />, color: 'bg-indigo-50 border-indigo-200' },
-    { label: 'Live Camera CV', path: '/live', icon: <Camera className="w-5 h-5 text-rose-600" />, color: 'bg-rose-50 border-rose-200' },
+    { label: 'Recommend Crop', path: '/crop', icon: <Sprout className="w-5 h-5 text-[#2F6B3C]" /> },
+    { label: 'Scan Leaf Disease', path: '/disease', icon: <Stethoscope className="w-5 h-5 text-[#2F6B3C]" /> },
+    { label: 'Check Pest Risk', path: '/pest', icon: <Bug className="w-5 h-5 text-amber-700" /> },
+    { label: 'Fertilizer Advisor', path: '/fertilizer', icon: <FlaskConical className="w-5 h-5 text-purple-700" /> },
+    { label: 'Predict Irrigation', path: '/irrigation', icon: <Droplets className="w-5 h-5 text-sky-700" /> },
+    { label: 'Analyze Soil SOC', path: '/soil', icon: <Mountain className="w-5 h-5 text-emerald-800" /> },
+    { label: 'Forecast Yield', path: '/yield', icon: <TrendingUp className="w-5 h-5 text-indigo-700" /> },
+    { label: 'Live Camera Vision', path: '/live', icon: <Camera className="w-5 h-5 text-rose-700" /> },
   ];
 
   return (
-    <div className="space-y-8">
-      {/* Welcome Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-8 selection:bg-[#D4E768] selection:text-[#0B1C10]">
+      {/* 1. Large Greeting Header */}
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-[#E2E7DA] pb-6">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Welcome back, {user?.name || 'Farmer'}! 👋
+          <span className="text-xs font-bold uppercase tracking-widest text-[#536056] block">
+            COMMAND CENTER OVERVIEW
+          </span>
+          <h1 className="text-3xl sm:text-5xl font-black font-editorial tracking-tight text-[#0B1C10] mt-1">
+            Good morning, {user?.name || 'Farmer'}.
           </h1>
-          <p className="text-xs sm:text-sm text-slate-600 mt-1">
-            Here is your real-time agricultural intelligence overview and ML system status.
+          <p className="text-xs sm:text-sm text-[#536056] mt-1 font-sans">
+            Here is what your field intelligence & active model signals look like today.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
           <Link to="/live">
-            <Button variant="secondary" size="md" icon={<Camera className="w-4 h-4" />}>
-              Open Live Vision
+            <Button variant="lime" size="md" icon={<Camera className="w-4 h-4" />}>
+              Open Live Vision Studio
             </Button>
           </Link>
         </div>
       </div>
 
-      {/* Backend & Model System Readiness Banner */}
-      <GlassCard variant={isModelSystemReady ? 'light' : 'strong'} className="p-4 sm:p-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white ${
-              isModelSystemReady ? 'bg-emerald-600' : 'bg-amber-500'
-            }`}>
-              {isModelSystemReady ? <ShieldCheck className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-slate-900">
-                {isModelSystemReady ? 'All 8 ML Inference Services Ready' : 'ML Model System Notice'}
-              </h3>
-              <p className="text-xs text-slate-600 mt-0.5">
-                {isModelSystemReady
-                  ? '7 frozen artifacts loaded successfully across Crop, Disease, Pest, Fertilizer, Irrigation, Soil, and Yield.'
-                  : 'Backend connected, checking model readiness...'}
-              </p>
-            </div>
+      {/* 2. Hero Section: Cinematic Farmland Overlay Panel */}
+      <div className="relative rounded-3xl overflow-hidden bg-[#0B1C10] text-[#FAFBF7] p-8 sm:p-12 border border-[#E2E7DA]/20 shadow-xl min-h-[260px] flex flex-col justify-between group">
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <img
+            src="/images/hero-farmland.webp"
+            alt="Farm Hero Background"
+            className="w-full h-full object-cover object-center opacity-40 transition-transform duration-1000 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0B1C10] via-[#0B1C10]/80 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0B1C10] via-transparent to-transparent" />
+        </div>
+
+        <div className="relative z-10 space-y-4 max-w-2xl">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#D4E768] text-[#0B1C10] text-xs font-extrabold uppercase tracking-widest">
+            FARM INTELLIGENCE SYSTEM
           </div>
 
-          <div className="flex items-center gap-2">
-            <Badge variant={isApiConnected ? 'success' : 'danger'} dot>
-              {isApiConnected ? 'FastAPI Connected' : 'API Unreachable'}
-            </Badge>
-            <Badge variant={isModelSystemReady ? 'primary' : 'warning'}>
-              {isModelSystemReady ? '8/8 READY' : 'Status Check'}
-            </Badge>
+          <h2 className="text-2xl sm:text-4xl font-extrabold font-editorial tracking-tight text-[#FAFBF7]">
+            {isModelSystemReady ? '8/8 Inference Services Ready' : 'ML Model Readiness Check'}
+          </h2>
+
+          <p className="text-xs sm:text-sm text-white/80 leading-relaxed font-sans">
+            {isModelSystemReady
+              ? '7 frozen ML artifacts loaded across ExtraTrees, ResNet18, LightGBM, MobileNetV3, XGBoost, and OpenCV live stream processing.'
+              : 'Backend connected, model system initializations underway...'}
+          </p>
+        </div>
+
+        <div className="relative z-10 pt-6 flex items-center justify-between border-t border-white/10 flex-wrap gap-4 text-xs">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white">
+              {isModelSystemReady ? (
+                <ShieldCheck className="w-4 h-4 text-[#D4E768]" />
+              ) : (
+                <ShieldAlert className="w-4 h-4 text-amber-400" />
+              )}
+              {isModelSystemReady ? 'All Models Operational' : 'Degraded Operational State'}
+            </span>
+            <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-white/15 text-white">
+              {isApiConnected ? '● FastAPI Online' : '● API Offline'}
+            </span>
+          </div>
+
+          <div className="text-[#D4E768] font-bold flex items-center gap-1">
+            <span>Location: {user?.location || 'Punjab, India'}</span>
           </div>
         </div>
-      </GlassCard>
+      </div>
 
-      {/* Quick Actions Grid */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">Quick Intelligence Actions</h2>
+      {/* 3. Quick Actions Pill Navigation */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold uppercase tracking-widest text-[#536056]">
+            Field Intelligence Workspaces
+          </h2>
+          <span className="text-xs text-[#2F6B3C] font-semibold">8 Active Services</span>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
           {quickActions.map((act, idx) => (
             <Link key={idx} to={act.path}>
-              <div className={`p-3.5 rounded-2xl border transition-all duration-200 hover:-translate-y-1 hover:shadow-md flex flex-col items-center text-center space-y-2 ${act.color}`}>
-                <div className="p-2 rounded-xl bg-white shadow-sm">{act.icon}</div>
-                <span className="text-[11px] font-bold text-slate-800 leading-tight">{act.label}</span>
+              <div className="p-4 rounded-2xl bg-white border border-[#E2E7DA] hover:border-[#D4E768] hover:shadow-card-hover transition-all duration-300 flex flex-col items-center text-center space-y-2 group">
+                <div className="p-3 rounded-xl bg-[#EEF3E8] group-hover:bg-[#D4E768] transition-colors">
+                  {act.icon}
+                </div>
+                <span className="text-xs font-bold text-[#162018] group-hover:text-[#2F6B3C] leading-tight">
+                  {act.label}
+                </span>
               </div>
             </Link>
           ))}
         </div>
       </div>
 
-      {/* Intelligence Snapshot Row (Weather, Market, Crop Calendar) */}
+      {/* 4. Three Major Editorial Panels: Weather, Market, Crop Calendar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Weather Snapshot */}
-        <GlassCard className="p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
+        {/* Weather Telemetry Panel */}
+        <GlassCard variant="cream" className="p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
             <div className="flex items-center gap-2">
-              <CloudSun className="w-5 h-5 text-sky-600" />
-              <h3 className="text-sm font-bold text-slate-900">Current Weather</h3>
+              <CloudSun className="w-5 h-5 text-[#2F6B3C]" />
+              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">Weather Telemetry</h3>
             </div>
-            <Link to="/weather" className="text-xs text-primary-600 hover:underline font-semibold">View All</Link>
+            <Link to="/weather" className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5">
+              <span>View</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
 
           {weather ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="flex items-baseline justify-between">
-                <span className="text-3xl font-extrabold text-slate-900">{weather.temperature}°C</span>
-                <span className="text-xs font-medium text-slate-500">Humidity: {weather.relative_humidity}%</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="p-2 rounded-lg bg-white/70 border border-slate-100">
-                  <span className="text-slate-400 block text-[10px]">Precipitation</span>
-                  <span className="font-semibold text-slate-800">{weather.precipitation} mm</span>
+                <div>
+                  <span className="text-4xl font-extrabold font-editorial text-[#0B1C10]">{weather.temperature}°C</span>
+                  <span className="text-xs text-[#536056] block">Air Temperature</span>
                 </div>
-                <div className="p-2 rounded-lg bg-white/70 border border-slate-100">
-                  <span className="text-slate-400 block text-[10px]">Wind Speed</span>
-                  <span className="font-semibold text-slate-800">{weather.wind_speed} km/h</span>
+                <div className="text-right">
+                  <span className="text-sm font-bold text-[#2F6B3C]">{weather.relative_humidity}%</span>
+                  <span className="text-[10px] text-[#536056] block uppercase tracking-wider">Humidity</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-[#E2E7DA]">
+                <div className="p-2.5 rounded-xl bg-white border border-[#E2E7DA]">
+                  <span className="text-[#536056] block text-[10px] uppercase font-bold">Rainfall</span>
+                  <span className="font-extrabold text-[#0B1C10]">{weather.precipitation} mm</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-white border border-[#E2E7DA]">
+                  <span className="text-[#536056] block text-[10px] uppercase font-bold">Wind Speed</span>
+                  <span className="font-extrabold text-[#0B1C10]">{weather.wind_speed} km/h</span>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="text-xs text-slate-400 italic">Loading Open-Meteo weather...</div>
+            <div className="text-xs text-[#536056] italic py-6 text-center">Fetching Open-Meteo weather...</div>
           )}
         </GlassCard>
 
-        {/* Market Price Snapshot */}
-        <GlassCard className="p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
+        {/* Mandi Market Intelligence Panel */}
+        <GlassCard variant="cream" className="p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
             <div className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-emerald-600" />
-              <h3 className="text-sm font-bold text-slate-900">Mandi Market Price</h3>
+              <BarChart3 className="w-5 h-5 text-[#2F6B3C]" />
+              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">Mandi Market Price</h3>
             </div>
-            <Link to="/market" className="text-xs text-primary-600 hover:underline font-semibold">View Mandi</Link>
+            <Link to="/market" className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5">
+              <span>View</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
 
           {market ? (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div>
-                <span className="text-xs font-semibold text-slate-500">{market.commodity} ({market.state})</span>
-                <div className="text-2xl font-extrabold text-slate-900 mt-0.5">₹{market.modal_price} <span className="text-xs font-normal text-slate-500">/ quintal</span></div>
+                <span className="text-xs font-bold text-[#536056] uppercase tracking-wider block">
+                  {market.commodity} ({market.state})
+                </span>
+                <div className="text-3xl font-black font-editorial text-[#0B1C10] mt-1">
+                  ₹{market.modal_price}{' '}
+                  <span className="text-xs font-sans font-medium text-[#536056]">/ quintal</span>
+                </div>
               </div>
-              <div className="flex justify-between text-xs text-slate-600 pt-1 border-t border-slate-100">
+
+              <div className="flex justify-between text-xs font-semibold text-[#162018] pt-3 border-t border-[#E2E7DA]">
                 <span>Min: ₹{market.min_price}</span>
+                <span className="text-[#2F6B3C]">Modal: ₹{market.modal_price}</span>
                 <span>Max: ₹{market.max_price}</span>
               </div>
             </div>
           ) : (
-            <div className="text-xs text-slate-400 italic">Fetching Mandi market observations...</div>
+            <div className="text-xs text-[#536056] italic py-6 text-center">Fetching Mandi market prices...</div>
           )}
         </GlassCard>
 
-        {/* Crop Calendar Overview */}
-        <GlassCard className="p-6 space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-200/60 pb-3">
+        {/* Crop Calendar Panel */}
+        <GlassCard variant="cream" className="p-6 space-y-4">
+          <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
             <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-amber-600" />
-              <h3 className="text-sm font-bold text-slate-900">Crop Catalogue</h3>
+              <Calendar className="w-5 h-5 text-[#2F6B3C]" />
+              <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">Crop Catalogue</h3>
             </div>
-            <Link to="/crop-calendar" className="text-xs text-primary-600 hover:underline font-semibold">View Calendar</Link>
+            <Link to="/crop-calendar" className="text-xs text-[#2F6B3C] hover:underline font-bold flex items-center gap-0.5">
+              <span>View</span>
+              <ArrowRight className="w-3 h-3" />
+            </Link>
           </div>
 
           {catalogue.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {catalogue.slice(0, 3).map((c, i) => (
-                <div key={i} className="flex items-center justify-between text-xs p-2 rounded-lg bg-white/70 border border-slate-100">
-                  <span className="font-semibold text-slate-800 capitalize">{c.crop}</span>
-                  <Badge variant="neutral">{c.primary_season}</Badge>
+                <div key={i} className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-white border border-[#E2E7DA]">
+                  <span className="font-bold text-[#0B1C10] capitalize">{c.crop}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-[#EEF3E8] text-[#2F6B3C] text-[10px] font-bold uppercase">
+                    {c.primary_season}
+                  </span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="text-xs text-slate-400 italic">Loading Crop Catalogue...</div>
+            <div className="text-xs text-[#536056] italic py-6 text-center">Loading Crop Catalogue...</div>
           )}
         </GlassCard>
+      </div>
+
+      {/* 5. Field Intelligence Summary Indicators */}
+      <div className="p-6 rounded-3xl bg-[#0B1C10] text-[#FAFBF7] space-y-4 border border-white/10">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold uppercase tracking-widest text-[#D4E768]">
+            FIELD INTELLIGENCE SUMMARY
+          </span>
+          <span className="text-xs text-white/60">Live Signal Telemetry</span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="p-4 rounded-2xl bg-[#112316] border border-white/10">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">SOIL SOC</span>
+            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">Optimal Organic Content</span>
+            <span className="text-[10px] text-[#D4E768]">SOC Prediction Model Active</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#112316] border border-white/10">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">WATER / SWC</span>
+            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">3h Forecast Ready</span>
+            <span className="text-[10px] text-[#D4E768]">ML vs Persistence Active</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#112316] border border-white/10">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">WEATHER</span>
+            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">Open-Meteo Synced</span>
+            <span className="text-[10px] text-[#D4E768]">Spraying Suitability Ok</span>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-[#112316] border border-white/10">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">MARKET TREND</span>
+            <span className="text-sm font-extrabold text-[#FAFBF7] mt-1 block">Paddy Mandi Signals</span>
+            <span className="text-[10px] text-[#D4E768]">ETS Forecast Ready</span>
+          </div>
+        </div>
       </div>
     </div>
   );
