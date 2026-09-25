@@ -1,7 +1,0 @@
-FARM ['location', 'latitude', 'longitude', 'crop', 'variety', 'season', 'sowing_date', 'current_growth_stage', 'weather_context', 'market_context', 'crop_calendar_context', 'ml_predictions', 'farmer_context', 'data_freshness', 'as_of_date']
-W ['latitude', 'longitude', 'current_temperature', 'current_humidity', 'current_precipitation', 'precipitation_probability', 'forecast_precipitation_sum', 'temperature_max_forecast', 'temperature_min_forecast', 'wind_speed_max_forecast', 'severe_weather_indicators', 'forecast_horizon_days', 'weather_data_freshness', 'is_weather_data_available']
-M ['commodity', 'current_price', 'recent_trend', 'forecast_trend', 'recent_change_percent', 'forecast_change_percent', 'volatility', 'signal_strength', 'analysis_period_days', 'market_data_freshness', 'is_market_data_available']
-C ['crop', 'season', 'sowing_date', 'current_growth_stage', 'stage_progress_percent', 'next_stage', 'expected_harvest_window_start', 'expected_harvest_window_end', 'days_to_next_stage', 'calendar_confidence', 'is_crop_calendar_available']
-ML ['model_name', 'prediction', 'confidence', 'top_predictions', 'probability', 'unit', 'timestamp', 'model_version', 'status', 'metadata']
-DEC ['id', 'decision_type', 'status', 'priority', 'severity', 'title', 'summary', 'reason', 'crop', 'growth_stage', 'location', 'confidence', 'confidence_rationale', 'contributing_sources', 'supporting_signals', 'warnings', 'created_at']
-DQ ['status', 'completeness_percent', 'missing_sources', 'stale_sources', 'conflicts', 'unavailable_ml_models', 'missing_critical_fields']
