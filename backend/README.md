@@ -740,6 +740,75 @@ backend regression.
 
 
 
+## Smart Alerts Module
+
+**Smart Alerts is a deterministic, explainable alert-intelligence
+layer AFTER Risk & Opportunity Analysis and BEFORE the frontend / AI
+Farming Assistant.** It converts important risks, opportunities,
+conflicts and data-quality conditions from the existing Risk &
+Opportunity system into concise, traceable alerts. It is NOT another
+ML model: no external API calls, no ML calls, no invented facts,
+confidence, recommendations or validity periods.
+
+### Architecture
+
+```text
+External Data -> Weather / Market / Crop Calendar
+  -> Friend's 7 ML Predictions -> Context/Decision Engine
+  -> Risk & Opportunity Analysis -> SMART ALERTS
+  -> Frontend / AI Farming Assistant
+```
+
+### Files
+
+| File | Role |
+| --- | --- |
+| `app/schemas/smart_alert.py` | Alert/preference/request/response schemas (reuses `SupportingSignal`, `ContributingSource`, `RiskOpportunityResponse`, `DecisionStatus`) |
+| `app/intelligence/smart_alert.py` | Deterministic filtering, dedupe, sorting, message generation |
+| `app/services/smart_alert_service.py` | DI service (health, generate, rules) |
+| `app/api/smart_alert.py` | `POST /api/smart-alerts/generate`, `GET /api/smart-alerts/health`, `GET /api/smart-alerts/rules` |
+| `tests/test_smart_alert.py` | 22 deterministic tests, no external/ML calls |
+
+### Alert priority rules (deterministic)
+
+- Risks: CRITICAL/HIGH always alert; MEDIUM alerts only when actionable (recommended follow-up, `valid_until`, or time sensitivity); LOW suppressed.
+- Opportunities: HIGH always alert; MEDIUM alerts only with suggested action or time window; LOW suppressed.
+- Conflicts: alert when important/unresolved (recommended action or unresolved reason present); empty boilerplate suppressed.
+- Data quality: alert when material (`affected_analysis` non-empty or type in missing_data/stale_data/unavailable_model); minor/informational suppressed.
+- `min_priority` / `include_*` preferences filter further; `max_alerts` truncation NEVER drops CRITICAL alerts.
+
+### Deduplication
+
+Stable SHA-256 over `alert_type | source_id | category | crop | stage`.
+Repeated identical upstream signals share one alert (first wins).
+Never uses Python `hash()`.
+
+### Traceability
+
+Every alert preserves `source_id`/`source_type`, evidence,
+contributing sources/signals, reasoning, `valid_until`/`time_window`,
+recommended action, crop and stage. Messages are concise and derived
+only from upstream fields.
+
+### API Endpoints
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /api/smart-alerts/generate` | Generate alerts from a `RiskOpportunityResponse` + preferences |
+| `GET /api/smart-alerts/health` | Service health, version, ruleset version |
+| `GET /api/smart-alerts/rules` | Active deterministic rules and ordering |
+
+No new external API key is required; actual notification delivery
+(SMS/push/email) is out of scope for this layer.
+
+### Testing
+
+```bash
+python -m pytest tests/test_smart_alert.py -q
+```
+
+
+
 
 ## Contributing
 
