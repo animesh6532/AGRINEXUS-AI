@@ -126,7 +126,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Health check endpoint
 @app.get("/health", tags=["health"])
 async def health_check():
-    """Application health check endpoint combining app and ML readiness status."""
+    """Application process liveness check endpoint with model readiness summary."""
     registry = ModelRegistry()
     m_health = registry.get_health_status()
 
@@ -134,5 +134,6 @@ async def health_check():
         "status": "healthy",
         "service": "agrinexus-ai",
         "version": config.settings.VERSION,
+        "models_status": m_health["status"],
         "models": m_health["models"]
     }

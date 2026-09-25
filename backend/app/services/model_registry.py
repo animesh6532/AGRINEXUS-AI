@@ -298,6 +298,13 @@ class ModelRegistry:
             pipe = self.fertilizer_artifact["model_pipeline"]
             feats = self.fertilizer_artifact["feature_cols"]
 
+            # Preserve feature names in ColumnTransformer step to eliminate LGBMClassifier feature name warning
+            if hasattr(pipe, "set_output"):
+                try:
+                    pipe.set_output(transform="pandas")
+                except Exception:
+                    pass
+
             sample_df = pd.DataFrame([{
                 "Nitrogen": 20.0, "Phosphorus": 20.0, "Potassium": 20.0,
                 "pH": 6.5, "Rainfall": 800.0, "Temperature": 26.0,

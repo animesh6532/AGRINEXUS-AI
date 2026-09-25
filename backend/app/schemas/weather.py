@@ -46,6 +46,10 @@ class CurrentWeatherResponse(WeatherLocation):
     wind_speed: Optional[float] = Field(None, ge=0, example=10.0)
     wind_direction: Optional[float] = Field(None, ge=0, le=360, example=180.0)
     weather_code: Optional[int] = Field(None, example=0)
+    is_day: Optional[int] = Field(None, example=1)
+    apparent_temperature: Optional[float] = Field(None, example=29.2)
+    cloud_cover: Optional[float] = Field(None, ge=0, le=100, example=45.0)
+    wind_gusts: Optional[float] = Field(None, ge=0, example=22.0)
     data_source: str = Field(default="open-meteo", example="open-meteo")
 
 
@@ -59,7 +63,11 @@ class HourlyForecastPoint(BaseModel):
     )
     precipitation: Optional[float] = Field(None, ge=0, example=0.0)
     wind_speed: Optional[float] = Field(None, ge=0, example=15.0)
+    wind_direction: Optional[float] = Field(None, ge=0, le=360, example=180.0)
     weather_code: Optional[int] = Field(None, example=1)
+    is_day: Optional[int] = Field(None, example=1)
+    cloud_cover: Optional[float] = Field(None, ge=0, le=100, example=40.0)
+    apparent_temperature: Optional[float] = Field(None, example=30.0)
 
 
 class DailyForecastPoint(BaseModel):

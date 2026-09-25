@@ -1,181 +1,168 @@
 # AgriNexus-AI Backend
 
-This is the backend implementation for AgriNexus-AI, integrating 7 Frozen ML Model services, Live OpenCV Computer Vision, Market Intelligence, Weather Intelligence, and Crop Calendar services.
+This is the FastAPI backend implementation for **AgriNexus-AI**, integrating 7 Frozen Machine Learning model artifacts across 8 inference services, Live OpenCV Computer Vision quality gates, Market Intelligence, Weather Intelligence, and Crop Calendar services.
 
-## Overview
+---
 
-The Market Forecast backend provides:
-- Retrieval of agricultural market price data from Government of India APIs
-- Data validation and storage
-- Time-series forecasting of market prices
-- Market trend analysis and intelligence
-- RESTful API for accessing market data and forecasts
+## 🌟 Architecture & Features
 
-## Features
+### 1. 🤖 ML Models & Inference Services (8 Services across 7 Frozen Artifacts)
+1. **Crop Recommendation**: `crop_recommendation.pkl` (ExtraTreesClassifier on raw N, P, K, temp, humidity, pH, rainfall features + IsolationForest anomaly check).
+2. **Plant Disease Detection**: `disease_detection.pt` (ResNet18 PyTorch model with optional Grad-CAM visual heatmaps).
+3. **Fertilizer Recommendation**: `fertilizer_recommendation.pkl` (scikit-learn pipeline + LightGBM classifier with Western Maharashtra scope warning).
+4. **Irrigation Prediction**: `irrigation_prediction.pkl` (Soil Water Content prediction + persistence baseline benchmark comparison).
+5. **Visual Pest Classification**: `pest_prediction.pkl` (PyTorch MobileNetV3 Small 102-class single-insect classifier).
+6. **Environmental Pest Risk**: `pest_prediction.pkl` (scikit-learn RandomForest environmental outbreak risk model).
+7. **Soil Organic Carbon Analysis**: `soil_analysis.pkl` (Soil Organic Carbon prediction with 95% residual confidence intervals).
+8. **Crop Yield Prediction**: `yield_prediction.pkl` (XGBoost crop yield model with prediction intervals).
 
-- Fetches real-time market data from data.gov.in (AGMARKNET API)
-- Stores market observations in SQLite database
-- Implements multiple forecasting models:
-  - Naive (last value)
-  - Moving Average
-  - Exponential Smoothing (ETS/Holt-Winters)
-  - ARIMA
-- Provides market trend analysis and signals
-- Generates actionable insights for farmers and stakeholders
-- Secure API key management using environment variables
-- Comprehensive test suite
-- Interactive API documentation (Swagger UI)
+### 2. 📷 Live OpenCV Computer Vision
+- Single-frame quality check (blur detection via Laplacian variance, exposure validation via mean brightness).
+- Temporal prediction smoothing over rolling frames.
+- Frame skipping for blurry / poorly lit frames.
+- High-throughput REST & WebSocket endpoints (`/disease/live`, `/pest/live`, `/ws/disease/live`, `/ws/pest/live`).
 
-## Project Structure
+### 3. 📈 Market Intelligence & Forecasting
+- Real-time market observations from Government of India APIs (data.gov.in / AGMARKNET).
+- SQLite database storage and time-series forecasting (ETS, ARIMA, Moving Average).
+- Actionable market trend signals.
+
+### 4. ☀️ Weather Intelligence
+- Open-Meteo current weather and 7-day forecast data.
+- Rule-based agricultural disruption signals and actionable insights.
+
+### 5. 📅 Crop Calendar Module
+- Sowing windows, crop durations, growth stage schedules, and upcoming field activities.
+- Bundled reference dataset with support for external provider integration.
+
+---
+
+## 📁 Project Structure
 
 ```
 backend/
 ├── app/
-│   ├── main.py              # FastAPI application entry point
+│   ├── main.py                     # FastAPI application entry point & lifespan context manager
 │   ├── api/
-│   │   └── market.py        # Market forecast API endpoints
-│   │   ├── weather.py       # Weather intelligence API endpoints
-│   │   └── crop_calendar.py # Crop calendar API endpoints
+│   │   ├── market.py               # Market API endpoints
+│   │   ├── weather.py              # Weather API endpoints
+│   │   ├── crop_calendar.py        # Crop calendar API endpoints
+│   │   └── v1/
+│   │       ├── router.py           # Unified v1 ML & CV router
+│   │       ├── crop.py             # Crop recommendation endpoint
+│   │       ├── disease.py          # Disease detection endpoint
+│   │       ├── fertilizer.py       # Fertilizer recommendation endpoint
+│   │       ├── irrigation.py       # Irrigation prediction endpoint
+│   │       ├── pest.py             # Visual pest & environmental risk endpoints
+│   │       ├── soil.py             # Soil analysis endpoint
+│   │       ├── yield_api.py        # Yield prediction endpoint
+│   │       ├── live.py             # OpenCV Live REST & WebSocket endpoints
+│   │       └── health.py           # ML Model readiness status endpoint
 │   ├── services/
-│   │   ├── market_service.py# Market data service and API client
-│   │   ├── weather_service.py# Weather data service (Open-Meteo)
-│   │   ├── crop_calendar_service.py# Crop calendar data service
-│   │   └── crop_calendar_reference_data.py# Bundled reference dataset
-│   ├── forecasting/
-│   │   ├─ forecast_service.py# Forecasting service
-│   │   └─ model.py          # Forecasting models
-│   ├── intelligence/
-│   │   ├── market_intelligence.py# Market intelligence layer
-│   │   ├── weather_intelligence.py# Weather intelligence layer
-│   │   └── crop_calendar_intelligence.py# Crop calendar intelligence
-│   ├── schemas/
-│   │   ├── market.py         # Pydantic schemas for API
-│   │   ├── weather.py        # Pydantic schemas for API
-│   │   └── crop_calendar.py  # Pydantic schemas for API
-│   ├── database/
-│   │   ├─ connection.py     # Database connection
-│   │   ├─ models.py         # SQLAlchemy models
-│   │   └─ repository.py     # Data access layer
-│   ├── core/
-│   │   ├─ config.py         # Application configuration
-│   │   ├─ logging.py        # Logging configuration
-│   │   └─ dependencies.py   # Dependency injection
-│   └── __init__.py
-├── data/
-│   └── market/              # Market data storage (SQLite)
-├── tests/                   # Test suite
-├── scripts/
-│   └─ collect_market_data.py# Data collection script
-├── requirements.txt         # Python dependencies
-├── .env.example             # Environment variables template
+│   │   ├── model_registry.py       # Singleton ML model registry and inference logic
+│   │   ├── cv_service.py           # OpenCV frame inspection & PyTorch preprocessing
+│   │   ├── gradcam.py              # PyTorch Grad-CAM heatmap generator
+│   │   ├── temporal_smoother.py    # Live stream prediction smoother
+│   │   ├── market_service.py       # Market API client
+│   │   ├── weather_service.py      # Weather API client
+│   │   └── crop_calendar_service.py# Crop calendar service
+│   ├── database/                   # SQLite database models and repository
+│   └── core/                       # Application configuration & logging
+├── models/                         # Frozen ML model artifacts directory (.pkl, .pt)
+├── tests/                          # Automated PyTest integration test suite
+├── requirements.txt                # Python dependencies (scikit-learn 1.7.1, Python 3.13)
 └── README.md
 ```
 
-## Setup Instructions
+---
+
+## 🚀 Quick Setup Instructions
 
 ### 1. Prerequisites
+- Python 3.13
+- Virtual Environment (`.venv`)
 
-- Python 3.11+
-- pip (Python package manager)
-
-### 2. Installation
+### 2. Environment Setup & Dependency Installation
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd AgriNexus-AI/backend
+# Navigate to backend directory
+cd backend
 
-# Create virtual environment (optional but recommended)
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# Create virtual environment
+python -m venv .venv
 
-# Install dependencies
+# Activate virtual environment
+# Windows (PowerShell):
+.venv\Scripts\Activate.ps1
+# Linux/macOS:
+source .venv/bin/activate
+
+# Install compatible dependencies (includes scikit-learn==1.7.1)
 pip install -r requirements.txt
 ```
 
-### 3. Environment Configuration
+### 3. Model Placement
+Ensure all 7 frozen artifacts exist in `models/` or `Notebook/models/`:
+- `crop_recommendation.pkl`
+- `disease_detection.pt`
+- `fertilizer_recommendation.pkl`
+- `irrigation_prediction.pkl`
+- `pest_prediction.pkl`
+- `soil_analysis.pkl`
+- `yield_prediction.pkl`
 
-1. Copy `.env.example` to `.env`:
-   ```bash
-   cp .env.example .env
-   ```
+---
 
-2. Edit `.env` and add your Government of India API key:
-   ```env
-   DATA_GOV_API_KEY=your_actual_api_key_here
-   ```
+## 🏃 Running the Application
 
-   You can obtain an API key from:
-   - [data.gov.in](https://data.gov.in/) (recommended for AGMARKNET data)
-   - [agmarknet.gov.in](https://agmarknet.gov.in/)
-
-### 4. Database Initialization
-
-The backend uses SQLite by default. Database tables are created automatically on startup.
-
-### 5. Running the Application
-
+### Development Mode (with Live Reload)
 ```bash
-# Start the FastAPI server
-uvicorn app.main:app --reload
-
-# The API will be available at:
-# - Main endpoint: http://localhost:8000
-# - API documentation: http://localhost:8000/docs
-# - Alternative docs: http://localhost:8000/redoc
+python -m uvicorn app.main:app --reload
 ```
 
-### 6. Collecting Market Data
-
-You can manually trigger data collection using the provided script:
-
+### Production Mode
 ```bash
-python scripts/collect_market_data.py
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Options:
-- `--commodity`: Filter by commodity (e.g., "Paddy(Common)")
-- `--state`: Filter by state (e.g., "Andhra Pradesh")
-- `--market`: Filter by market (e.g., "Maddipadu APMC")
-- `--limit`: Maximum records to fetch (default: 1000)
-- `--verbose`: Enable detailed logging
+---
 
-## API Endpoints
+## 🔗 Key Endpoints & Swagger UI
 
-All API endpoints are prefixed with `/api/market`.
+- **Interactive Swagger Docs**: `http://127.0.0.1:8000/docs`
+- **ReDoc UI**: `http://127.0.0.1:8000/redoc`
+- **Process Liveness Health**: `GET http://127.0.0.1:8000/health`
+- **ML Model Readiness Health**: `GET http://127.0.0.1:8000/api/v1/models/health`
 
-### Market Data
-- `GET /current` - Get latest price for a commodity
-- `GET /history` - Get historical prices for a commodity
-- `POST /refresh` - Refresh data from external API
+### 🧪 ML & Computer Vision Endpoints (`/api/v1`)
+- `POST /api/v1/crop/recommend` — Crop recommendation on raw soil/climate features
+- `POST /api/v1/disease/predict` — Image plant disease detection (+ optional Grad-CAM)
+- `POST /api/v1/fertilizer/recommend` — Commercial fertilizer formulation recommendation
+- `POST /api/v1/irrigation/predict` — Soil Water Content prediction & persistence baseline
+- `POST /api/v1/pest/predict` — Visual pest classification
+- `POST /api/v1/pest/risk` — Environmental pest outbreak risk level
+- `POST /api/v1/soil/analyze` — Soil organic carbon estimation with 95% confidence intervals
+- `POST /api/v1/yield/predict` — Crop yield prediction
+- `POST /api/v1/disease/live` — Live video frame disease detection
+- `POST /api/v1/pest/live` — Live video frame pest recognition
+- `WebSocket /ws/disease/live` — Continuous live camera disease stream
+- `WebSocket /ws/pest/live` — Continuous live camera pest stream
 
-### Forecasting
-- `GET /forecast` - Generate price forecast for a commodity
+---
 
-### Analysis
-- `GET /trend` - Get market trend analysis
-- `GET /signals` - Get comprehensive market signals
+## 🧪 Testing
 
-### Health Checks
-- `GET /health` - Overall application health
-- `GET /api/market/health` - Market module health
-
-## Example Usage
-
-### Get Current Price
+Run code compilation check:
 ```bash
-curl "http://localhost:8000/api/market/current?commodity=Paddy(Common)&state=Andhra Pradesh"
+python -m compileall -q app tests
 ```
 
-### Generate 7-Day Forecast
+Run test suite with pytest:
 ```bash
-curl "http://localhost:8000/api/market/forecast?commodity=Paddy(Common)&horizon=7&model=ets"
+pytest -q
 ```
 
-### Get Market Signals
-```bash
-curl "http://localhost:8000/api/market/signals?commodity=Paddy(Common)"
-```
+---
 
 ## Testing
 
@@ -416,7 +403,7 @@ SPORA_API_KEY=your_spora_api_key_here
 - Unit/integration tests use mocks only (`urllib.request.urlopen` is
   patched; fake services stand in for the provider) and never require a
   real `SPORA_API_KEY` or network access:
-  `python -m pytest tests/test_crop_calendar_service.py
+  `python -m pytest tests/test_crop_calendar_service.py`
   tests/test_crop_calendar_api.py
   tests/test_crop_calendar_intelligence.py -q`.
 - Live Spora verification is a separate explicit step using
@@ -758,6 +745,6 @@ backend regression.
 
 This is a university final-year project. Please consult with the project maintainer before making significant changes.
 
-## License
+## 📜 License
 
-University Educational Use Only
+University Educational Use Only.

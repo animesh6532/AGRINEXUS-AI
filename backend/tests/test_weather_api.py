@@ -1,6 +1,6 @@
 """
 Test the weather API endpoints with mocked services, plus smoke tests
-verifying that the Market Forecast endpoints remain registered.
+verifying that the Market endpoints remain registered.
 
 External calls are replaced via FastAPI dependency overrides, so no test
 in this file contacts the live Open-Meteo API.

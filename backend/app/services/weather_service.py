@@ -35,11 +35,13 @@ OPEN_METEO_BASE_URL = "https://api.open-meteo.com/v1/forecast"
 # Variables requested from Open-Meteo (kept explicit for reviewability).
 CURRENT_VARIABLES = (
     "temperature_2m,relative_humidity_2m,precipitation,"
-    "wind_speed_10m,wind_direction_10m,weather_code"
+    "wind_speed_10m,wind_direction_10m,weather_code,is_day,"
+    "apparent_temperature,cloud_cover,wind_gusts_10m"
 )
 HOURLY_VARIABLES = (
     "temperature_2m,relative_humidity_2m,precipitation,"
-    "wind_speed_10m,weather_code"
+    "wind_speed_10m,wind_direction_10m,weather_code,is_day,"
+    "cloud_cover,apparent_temperature"
 )
 DAILY_VARIABLES = (
     "weather_code,temperature_2m_max,temperature_2m_min,"
@@ -402,6 +404,10 @@ class WeatherService:
             "wind_speed": current.get("wind_speed_10m"),  # km/h
             "wind_direction": current.get("wind_direction_10m"),  # degrees
             "weather_code": current.get("weather_code"),  # WMO code
+            "is_day": current.get("is_day"),  # 1 day, 0 night
+            "apparent_temperature": current.get("apparent_temperature"),  # Celsius
+            "cloud_cover": current.get("cloud_cover"),  # %
+            "wind_gusts": current.get("wind_gusts_10m"),  # km/h
             "data_source": "open-meteo",
         }
 
@@ -454,7 +460,13 @@ class WeatherService:
                     ),
                     "precipitation": _hourly_value("precipitation", i),
                     "wind_speed": _hourly_value("wind_speed_10m", i),
+                    "wind_direction": _hourly_value("wind_direction_10m", i),
                     "weather_code": _hourly_value("weather_code", i),
+                    "is_day": _hourly_value("is_day", i),
+                    "cloud_cover": _hourly_value("cloud_cover", i),
+                    "apparent_temperature": _hourly_value(
+                        "apparent_temperature", i
+                    ),
                 })
 
 
