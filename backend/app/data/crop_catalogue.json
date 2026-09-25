@@ -1,0 +1,340 @@
+{
+  "rice": {
+    "crop_id": "rice",
+    "name": "Rice",
+    "scientific_name": "Oryza sativa",
+    "category": "Cereal",
+    "aliases": ["paddy", "dhan", "rice crop"],
+    "search_terms": [
+      "Oryza sativa rice paddy crop agriculture",
+      "Oryza sativa rice field plant",
+      "Rice paddy crop agriculture"
+    ],
+    "negative_terms": ["mango", "apple", "banana", "cotton", "potato", "orange"]
+  },
+  "maize": {
+    "crop_id": "maize",
+    "name": "Maize",
+    "scientific_name": "Zea mays",
+    "category": "Cereal",
+    "aliases": ["corn", "makka", "sweet corn"],
+    "search_terms": [
+      "Zea mays maize corn crop agriculture",
+      "Zea mays corn plant field",
+      "Maize corn crop agriculture"
+    ],
+    "negative_terms": ["mango", "rice", "wheat", "cotton", "apple", "banana"]
+  },
+  "jute": {
+    "crop_id": "jute",
+    "name": "Jute",
+    "scientific_name": "Corchorus capsularis",
+    "category": "Cash Crop",
+    "aliases": ["golden fiber", "pat"],
+    "search_terms": [
+      "Corchorus capsularis jute crop fiber agriculture",
+      "Corchorus capsularis plant field",
+      "Jute crop plant agriculture"
+    ],
+    "negative_terms": ["wheat", "maize", "corn", "apple", "mango"]
+  },
+  "cotton": {
+    "crop_id": "cotton",
+    "name": "Cotton",
+    "scientific_name": "Gossypium hirsutum",
+    "category": "Cash Crop",
+    "aliases": ["kapas", "cotton boll"],
+    "search_terms": [
+      "Gossypium hirsutum cotton boll plant agriculture",
+      "Gossypium hirsutum cotton crop field",
+      "Cotton plant boll agriculture"
+    ],
+    "negative_terms": ["rice", "wheat", "maize", "mango", "apple"]
+  },
+  "wheat": {
+    "crop_id": "wheat",
+    "name": "Wheat",
+    "scientific_name": "Triticum aestivum",
+    "category": "Cereal",
+    "aliases": ["gehun", "wheat crop"],
+    "search_terms": [
+      "Triticum aestivum wheat grain crop agriculture",
+      "Triticum aestivum wheat field plant",
+      "Wheat crop grain field"
+    ],
+    "negative_terms": ["mango", "banana", "apple", "cotton", "potato", "rice"]
+  },
+  "chickpea": {
+    "crop_id": "chickpea",
+    "name": "Chickpea",
+    "scientific_name": "Cicer arietinum",
+    "category": "Pulse",
+    "aliases": ["gram", "chana", "bengal gram"],
+    "search_terms": [
+      "Cicer arietinum chickpea gram pulse crop agriculture",
+      "Cicer arietinum plant pods field",
+      "Chickpea gram pulse agriculture"
+    ],
+    "negative_terms": ["mango", "apple", "wheat", "rice", "maize"]
+  },
+  "kidneybeans": {
+    "crop_id": "kidneybeans",
+    "name": "Kidney Beans",
+    "scientific_name": "Phaseolus vulgaris",
+    "category": "Pulse",
+    "aliases": ["rajma", "common bean"],
+    "search_terms": [
+      "Phaseolus vulgaris kidney bean rajma pulse agriculture",
+      "Phaseolus vulgaris bean plant pod",
+      "Kidney bean rajma crop"
+    ],
+    "negative_terms": ["mango", "wheat", "rice", "maize", "apple"]
+  },
+  "pigeonpeas": {
+    "crop_id": "pigeonpeas",
+    "name": "Pigeon Peas",
+    "scientific_name": "Cajanus cajan",
+    "category": "Pulse",
+    "aliases": ["arhar", "tur", "red gram"],
+    "search_terms": [
+      "Cajanus cajan pigeon pea arhar tur pulse agriculture",
+      "Cajanus cajan plant flower pod",
+      "Pigeon pea arhar crop"
+    ],
+    "negative_terms": ["mango", "wheat", "rice", "maize", "apple"]
+  },
+  "mothbeans": {
+    "crop_id": "mothbeans",
+    "name": "Moth Beans",
+    "scientific_name": "Vigna aconitifolia",
+    "category": "Pulse",
+    "aliases": ["moth", "matki"],
+    "search_terms": [
+      "Vigna aconitifolia moth bean pulse crop agriculture",
+      "Vigna aconitifolia plant field",
+      "Moth bean pulse crop"
+    ],
+    "negative_terms": ["mango", "wheat", "rice", "apple"]
+  },
+  "mungbean": {
+    "crop_id": "mungbean",
+    "name": "Mungbean",
+    "scientific_name": "Vigna radiata",
+    "category": "Pulse",
+    "aliases": ["green gram", "moong"],
+    "search_terms": [
+      "Vigna radiata mungbean green gram pulse agriculture",
+      "Vigna radiata plant pod field",
+      "Mungbean green gram crop"
+    ],
+    "negative_terms": ["mango", "wheat", "rice", "apple"]
+  },
+  "blackgram": {
+    "crop_id": "blackgram",
+    "name": "Blackgram",
+    "scientific_name": "Vigna mungo",
+    "category": "Pulse",
+    "aliases": ["urad", "black lentil"],
+    "search_terms": [
+      "Vigna mungo blackgram urad pulse crop agriculture",
+      "Vigna mungo plant pod",
+      "Blackgram urad pulse agriculture"
+    ],
+    "negative_terms": ["mango", "wheat", "rice", "apple"]
+  },
+  "lentil": {
+    "crop_id": "lentil",
+    "name": "Lentil",
+    "scientific_name": "Lens culinaris",
+    "category": "Pulse",
+    "aliases": ["masoor", "lentil crop"],
+    "search_terms": [
+      "Lens culinaris lentil masoor pulse agriculture",
+      "Lens culinaris plant field",
+      "Lentil masoor pulse crop"
+    ],
+    "negative_terms": ["mango", "wheat", "rice", "apple"]
+  },
+  "pomegranate": {
+    "crop_id": "pomegranate",
+    "name": "Pomegranate",
+    "scientific_name": "Punica granatum",
+    "category": "Fruit",
+    "aliases": ["anar", "pomegranate tree"],
+    "search_terms": [
+      "Punica granatum pomegranate fruit tree orchard agriculture",
+      "Punica granatum fruit tree branch",
+      "Pomegranate fruit orchard agriculture"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
+  },
+  "banana": {
+    "crop_id": "banana",
+    "name": "Banana",
+    "scientific_name": "Musa acuminata",
+    "category": "Fruit",
+    "aliases": ["kela", "banana plant", "banana tree"],
+    "search_terms": [
+      "Musa acuminata banana fruit plant orchard agriculture",
+      "Musa acuminata banana tree leaves fruit",
+      "Banana fruit plant orchard"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard", "potato"]
+  },
+  "mango": {
+    "crop_id": "mango",
+    "name": "Mango",
+    "scientific_name": "Mangifera indica",
+    "category": "Fruit",
+    "aliases": ["aam", "mango tree", "mango fruit"],
+    "search_terms": [
+      "Mangifera indica mango fruit tree orchard agriculture",
+      "Mangifera indica mango tree branch fruit",
+      "Mango tree fruit agriculture"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard", "potato"]
+  },
+  "grapes": {
+    "crop_id": "grapes",
+    "name": "Grapes",
+    "scientific_name": "Vitis vinifera",
+    "category": "Fruit",
+    "aliases": ["grapevine", "angoor"],
+    "search_terms": [
+      "Vitis vinifera grape grapevine vineyard fruit agriculture",
+      "Vitis vinifera fruit vine cluster",
+      "Grape vineyard fruit orchard"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
+  },
+  "watermelon": {
+    "crop_id": "watermelon",
+    "name": "Watermelon",
+    "scientific_name": "Citrullus lanatus",
+    "category": "Fruit",
+    "aliases": ["tarbooz", "watermelon vine"],
+    "search_terms": [
+      "Citrullus lanatus watermelon fruit vine agriculture",
+      "Citrullus lanatus melon field",
+      "Watermelon fruit vine field"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mango"]
+  },
+  "muskmelon": {
+    "crop_id": "muskmelon",
+    "name": "Muskmelon",
+    "scientific_name": "Cucumis melo",
+    "category": "Fruit",
+    "aliases": ["kharbooza", "cantaloupe"],
+    "search_terms": [
+      "Cucumis melo muskmelon cantaloupe melon fruit vine agriculture",
+      "Cucumis melo melon plant field",
+      "Muskmelon fruit vine agriculture"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mango"]
+  },
+  "apple": {
+    "crop_id": "apple",
+    "name": "Apple",
+    "scientific_name": "Malus domestica",
+    "category": "Fruit",
+    "aliases": ["seb", "apple tree", "apple orchard"],
+    "search_terms": [
+      "Malus domestica apple fruit tree orchard agriculture",
+      "Malus domestica red apple tree branch",
+      "Apple fruit orchard tree"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
+  },
+  "orange": {
+    "crop_id": "orange",
+    "name": "Orange",
+    "scientific_name": "Citrus sinensis",
+    "category": "Fruit",
+    "aliases": ["santra", "citrus", "orange tree"],
+    "search_terms": [
+      "Citrus sinensis orange fruit citrus tree grove agriculture",
+      "Citrus sinensis orange tree branch",
+      "Orange citrus fruit grove"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
+  },
+  "papaya": {
+    "crop_id": "papaya",
+    "name": "Papaya",
+    "scientific_name": "Carica papaya",
+    "category": "Fruit",
+    "aliases": ["papita", "papaya tree"],
+    "search_terms": [
+      "Carica papaya papaya fruit tree plant agriculture",
+      "Carica papaya fruit tree leaves",
+      "Papaya fruit plant farm"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
+  },
+  "coconut": {
+    "crop_id": "coconut",
+    "name": "Coconut",
+    "scientific_name": "Cocos nucifera",
+    "category": "Fruit",
+    "aliases": ["nariyal", "coconut palm", "coconut tree"],
+    "search_terms": [
+      "Cocos nucifera coconut palm fruit tree plantation agriculture",
+      "Cocos nucifera coconut palm tree",
+      "Coconut palm tree fruit"
+    ],
+    "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
+  },
+  "mustard": {
+    "crop_id": "mustard",
+    "name": "Mustard",
+    "scientific_name": "Brassica juncea",
+    "category": "Oilseed",
+    "aliases": ["sarson", "mustard flower"],
+    "search_terms": [
+      "Brassica juncea mustard sarson yellow flower oilseed agriculture",
+      "Brassica juncea mustard field yellow flowers",
+      "Mustard sarson yellow flower field"
+    ],
+    "negative_terms": ["mango", "apple", "banana", "rice", "wheat"]
+  },
+  "sugarcane": {
+    "crop_id": "sugarcane",
+    "name": "Sugarcane",
+    "scientific_name": "Saccharum officinarum",
+    "category": "Cash Crop",
+    "aliases": ["ganna", "cane"],
+    "search_terms": [
+      "Saccharum officinarum sugarcane crop stalk field agriculture",
+      "Saccharum officinarum cane field",
+      "Sugarcane crop stalk field"
+    ],
+    "negative_terms": ["mango", "apple", "banana", "wheat", "rice"]
+  },
+  "potato": {
+    "crop_id": "potato",
+    "name": "Potato",
+    "scientific_name": "Solanum tuberosum",
+    "category": "Vegetable",
+    "aliases": ["aalu", "potato tuber"],
+    "search_terms": [
+      "Solanum tuberosum potato tuber plant crop agriculture",
+      "Solanum tuberosum potato plant field",
+      "Potato crop tuber farm"
+    ],
+    "negative_terms": ["mango", "apple", "banana", "rice", "wheat"]
+  },
+  "groundnut": {
+    "crop_id": "groundnut",
+    "name": "Groundnut",
+    "scientific_name": "Arachis hypogaea",
+    "category": "Oilseed",
+    "aliases": ["peanut", "moongphali"],
+    "search_terms": [
+      "Arachis hypogaea groundnut peanut plant pod oilseed agriculture",
+      "Arachis hypogaea peanut plant field",
+      "Groundnut peanut crop pod"
+    ],
+    "negative_terms": ["mango", "apple", "banana", "rice", "wheat"]
+  }
+}

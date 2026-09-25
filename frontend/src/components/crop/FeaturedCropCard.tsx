@@ -1,7 +1,9 @@
 import React from 'react';
-import { Sprout, Check, AlertTriangle, ChevronRight, Sparkles, Droplets, Thermometer, Calendar, Layers, ShieldCheck } from 'lucide-react';
+import { Check, AlertTriangle, ChevronRight, Sparkles, Layers, ShieldCheck, HelpCircle } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { SmartCropRecommendationItem } from '../../types/api';
+import { getCropImageMetadata } from '../../utils/cropImageMap';
+import { CropImage } from './CropImage';
 
 interface FeaturedCropCardProps {
   item: SmartCropRecommendationItem;
@@ -9,13 +11,6 @@ interface FeaturedCropCardProps {
   isCompared?: boolean;
   onToggleCompare?: (item: SmartCropRecommendationItem) => void;
 }
-
-const safeFormatScore = (value: number | undefined | null, decimals = 0): string => {
-  if (value == null || typeof value !== 'number' || isNaN(value)) {
-    return '—';
-  }
-  return value.toFixed(decimals);
-};
 
 const getSowingBadge = (sowingStatus?: string) => {
   switch (sowingStatus) {
@@ -38,10 +33,19 @@ export const FeaturedCropCard: React.FC<FeaturedCropCardProps> = ({
   isCompared = false,
   onToggleCompare,
 }) => {
-  const sowingBadge = getSowingBadge((item as any).sowing_feasibility);
+  const sowingBadge = getSowingBadge(item.sowing_feasibility);
+  const imageMeta = getCropImageMetadata(item.crop);
 
-  // Map image path based on crop key
-  const cropImagePath = `/images/crops/${item.crop.toLowerCase()}.webp`;
+  // Terminology Fix: Decouple ML Evidence from Catalogue status
+  const getMlSupportLabel = () => {
+    if (item.ml_prediction?.supported) {
+      if (item.ml_prediction.probability != null) {
+        return `ML SUPPORT: Available (${(item.ml_prediction.probability * 100).toFixed(0)}%)`;
+      }
+      return 'ML SUPPORT: Unavailable (Incomplete Soil NPK)';
+    }
+    return 'ML SUPPORT: Catalogue-only assessment';
+  };
 
   return (
     <GlassCard
@@ -50,17 +54,8 @@ export const FeaturedCropCard: React.FC<FeaturedCropCardProps> = ({
     >
       <div className="grid grid-cols-1 lg:grid-cols-12">
         {/* Left Column: Crop Image & Visual Hero (40% desktop) */}
-        <div className="lg:col-span-5 relative min-h-[240px] lg:min-h-[360px] overflow-hidden bg-[#0B1C10]">
-          <img
-            src={cropImagePath}
-            alt={item.display_name}
-            onError={(e) => {
-              // Fallback to default crop image if specific crop image fails
-              (e.target as HTMLImageElement).src = '/images/crop-intelligence.webp';
-            }}
-            className="w-full h-full object-cover object-center opacity-85 group-hover:scale-105 transition-transform duration-700"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0B1C10] via-[#0B1C10]/30 to-transparent lg:bg-gradient-to-r lg:from-transparent lg:to-[#0B1C10]/40" />
+        <div className="lg:col-span-5 relative min-h-[260px] lg:min-h-[380px] overflow-hidden bg-[#0B1C10]">
+          <CropImage crop={item} className="w-full h-full" showAttribution={true} />
 
           {/* Rank #1 Badge Overlay */}
           <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
@@ -105,7 +100,7 @@ export const FeaturedCropCard: React.FC<FeaturedCropCardProps> = ({
           {/* Header Row: Score & Badges */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#E2E7DA] pb-5">
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-[#EEF3E8] text-[#2F6B3C] border border-[#E2E7DA]">
                   ● {item.suitability_level}
                 </span>
@@ -114,7 +109,7 @@ export const FeaturedCropCard: React.FC<FeaturedCropCardProps> = ({
                 </span>
               </div>
               <p className="text-xs text-[#536056] pt-1">
-                Highest overall agronomic alignment with field coordinates & climate.
+                Highest overall agronomic alignment with field coordinates & seasonal climate.
               </p>
             </div>
 
@@ -148,26 +143,24 @@ export const FeaturedCropCard: React.FC<FeaturedCropCardProps> = ({
             </div>
           )}
 
-          {/* Telemetry Indicator Pills */}
+          {/* Telemetry Indicator Pills with Explicit Terminology */}
           <div className="grid grid-cols-3 gap-3 text-xs pt-1">
             <div className="p-3 rounded-2xl bg-white border border-[#E2E7DA] text-center">
-              <span className="text-[10px] text-[#536056] font-bold uppercase block">ML Evidence</span>
-              <span className="font-extrabold text-[#2F6B3C] font-mono block mt-0.5">
-                {item.ml_prediction?.supported && item.ml_prediction.probability != null
-                  ? `${(item.ml_prediction.probability * 100).toFixed(0)}% Match`
-                  : 'Catalogue Crop'}
+              <span className="text-[10px] text-[#536056] font-bold uppercase block">ML Support</span>
+              <span className="font-extrabold text-[#2F6B3C] text-[11px] block mt-0.5">
+                {getMlSupportLabel()}
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-white border border-[#E2E7DA] text-center">
               <span className="text-[10px] text-[#536056] font-bold uppercase block">Water Need</span>
               <span className="font-extrabold text-[#0B1C10] capitalize block mt-0.5">
-                {item.profile_details?.water_requirement || 'Moderate'}
+                {item.profile_details?.water_requirement || 'Medium'}
               </span>
             </div>
 
             <div className="p-3 rounded-2xl bg-white border border-[#E2E7DA] text-center">
-              <span className="text-[10px] text-[#536056] font-bold uppercase block">Growth Horizon</span>
+              <span className="text-[10px] text-[#536056] font-bold uppercase block">Growth Duration</span>
               <span className="font-extrabold text-[#0B1C10] font-mono block mt-0.5">
                 {item.profile_details?.growth_duration_days?.[0] || 90}-{item.profile_details?.growth_duration_days?.[1] || 120} Days
               </span>

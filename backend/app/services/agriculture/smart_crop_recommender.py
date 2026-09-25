@@ -148,6 +148,26 @@ class SmartCropRecommender:
         # Sort recommendations by suitability_score descending
         recommendations.sort(key=lambda r: r.suitability_score, reverse=True)
 
+        # 6. Dynamically resolve verified image metadata for each recommendation item concurrently
+        try:
+            import asyncio
+            from ..image_resolver import get_image_resolver
+            resolver = get_image_resolver()
+            
+            async def resolve_safe(crop_key: str):
+                try:
+                    res = await resolver.resolve_entity_image(crop_key)
+                    return res.get("image") if res else {"available": False, "reason": "Unavailable"}
+                except Exception as err:
+                    logger.warning(f"Image resolution error for '{crop_key}': {err}")
+                    return {"available": False, "reason": str(err)}
+
+            image_results = await asyncio.gather(*[resolve_safe(rec.crop) for rec in recommendations])
+            for rec, img in zip(recommendations, image_results):
+                rec.image = img
+        except Exception as resolver_err:
+            logger.warning(f"Image resolver initialization warning: {resolver_err}")
+
         # Calculate Overall Data Completeness
         # Location=20%, Weather=20%, Season=20%, Soil pH/Texture=20%, NPK=20%
         loc_score = 1.0

@@ -494,12 +494,30 @@ export interface SmartCropRecommendationItem {
   ml_supported: boolean;
   category: string;
   suitability_score: number;
-  suitability_level: "Highly Suitable" | "Suitable" | "Conditionally Suitable" | "Low Suitability" | "Insufficient Data";
+  suitability_level: "Highly Suitable" | "Suitable" | "Conditionally Suitable" | "Low Suitability" | "Insufficient Data" | "Not Suitable";
+  land_suitability?: string;
+  sowing_feasibility?: string;
+  is_sowing_recommended_now?: boolean;
   ml_prediction?: {
     supported: boolean;
     probability: number | null;
   };
+  image?: {
+    available: boolean;
+    url?: string | null;
+    thumbnail_url?: string | null;
+    provider?: string | null;
+    source_url?: string | null;
+    author?: string | null;
+    license?: string | null;
+    license_url?: string | null;
+    alt?: string | null;
+    relevance_score?: number | null;
+    reason?: string | null;
+  } | null;
   factor_scores: SmartCropFactorScores;
+  limiting_factors?: string[];
+  positive_factors?: string[];
   reasons: string[];
   warnings: string[];
   missing_data: string[];

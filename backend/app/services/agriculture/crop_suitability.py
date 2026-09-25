@@ -29,6 +29,7 @@ class CropSuitabilityResult(BaseModel):
     sowing_feasibility: str  # "IDEAL_WINDOW", "GOOD_WINDOW", "EARLY", "LATE", "OUTSIDE_WINDOW", "INSUFFICIENT_DATA"
     is_sowing_recommended_now: bool
     ml_prediction: Optional[Dict[str, Any]] = None  # {supported: bool, probability: float}
+    image: Optional[Dict[str, Any]] = None  # {available: bool, url: str, provider: str, ...}
     factor_scores: Dict[str, float]
     limiting_factors: List[str]
     positive_factors: List[str]

@@ -1,7 +1,9 @@
 import React from 'react';
-import { Sprout, Check, AlertTriangle, ChevronRight, Sparkles } from 'lucide-react';
+import { Check, AlertTriangle, ChevronRight } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { SmartCropRecommendationItem } from '../../types/api';
+import { getCropImageMetadata } from '../../utils/cropImageMap';
+import { CropImage } from './CropImage';
 
 interface AlternativeCropCardProps {
   rank: number;
@@ -10,13 +12,6 @@ interface AlternativeCropCardProps {
   isCompared?: boolean;
   onToggleCompare?: (item: SmartCropRecommendationItem) => void;
 }
-
-const safeFormatScore = (value: number | undefined | null, decimals = 0): string => {
-  if (value == null || typeof value !== 'number' || isNaN(value)) {
-    return '—';
-  }
-  return value.toFixed(decimals);
-};
 
 const getLevelBadgeColor = (level: string) => {
   switch (level) {
@@ -40,7 +35,17 @@ export const AlternativeCropCard: React.FC<AlternativeCropCardProps> = ({
   isCompared = false,
   onToggleCompare,
 }) => {
-  const cropImagePath = `/images/crops/${item.crop.toLowerCase()}.webp`;
+  const imageMeta = getCropImageMetadata(item.crop);
+
+  const getMlSupportLabel = () => {
+    if (item.ml_prediction?.supported) {
+      if (item.ml_prediction.probability != null) {
+        return `ML ${(item.ml_prediction.probability * 100).toFixed(0)}%`;
+      }
+      return 'ML N/A';
+    }
+    return 'Catalogue';
+  };
 
   return (
     <GlassCard
@@ -65,8 +70,10 @@ export const AlternativeCropCard: React.FC<AlternativeCropCardProps> = ({
               #{rank}
             </div>
 
+            <CropImage crop={item} className="w-10 h-10 rounded-xl shrink-0 border border-gray-200" showAttribution={false} />
+
             <div>
-              <h4 className="text-lg font-extrabold font-editorial text-[#0B1C10] capitalize line-clamp-1">
+              <h4 className="text-base font-extrabold font-editorial text-[#0B1C10] capitalize line-clamp-1">
                 {item.display_name}
               </h4>
               <p className="text-[11px] italic text-[#536056] font-editorial line-clamp-1">
@@ -117,9 +124,7 @@ export const AlternativeCropCard: React.FC<AlternativeCropCardProps> = ({
       {/* Card Footer CTA */}
       <div className="pt-2 border-t border-[#E2E7DA]/60 flex items-center justify-between">
         <span className="text-[10px] text-[#536056] font-mono">
-          {item.ml_prediction?.supported && item.ml_prediction.probability != null
-            ? `ML ${(item.ml_prediction.probability * 100).toFixed(0)}%`
-            : 'Catalogue'}
+          {getMlSupportLabel()}
         </span>
 
         <button

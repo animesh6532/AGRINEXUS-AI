@@ -102,6 +102,11 @@ export const api = {
     return handleResponse<SmartCropResponse>(res);
   },
 
+  async getCropImage(cropId: string, refresh: boolean = false): Promise<any> {
+    const res = await fetch(`${BASE_URL}/api/v1/images/crop/${encodeURIComponent(cropId)}?refresh=${refresh}`);
+    return handleResponse<any>(res);
+  },
+
 
   async predictDisease(file: File, includeGradcam: boolean = false): Promise<DiseasePredictResponse> {
     const formData = new FormData();

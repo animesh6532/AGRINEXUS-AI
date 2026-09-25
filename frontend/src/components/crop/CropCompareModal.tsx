@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Check, AlertTriangle, Sparkles, Scale } from 'lucide-react';
 import { GlassCard } from '../ui/GlassCard';
 import { SmartCropRecommendationItem } from '../../types/api';
+import { CropImage } from './CropImage';
 
 interface CropCompareModalProps {
   crops: SmartCropRecommendationItem[];
@@ -58,9 +59,12 @@ export const CropCompareModal: React.FC<CropCompareModalProps> = ({ crops, onClo
                 {crops.map((c) => (
                   <th key={c.crop} className="p-4 min-w-[220px] bg-white border-r border-[#E2E7DA] last:border-r-0">
                     <div className="flex items-center justify-between gap-2">
-                      <div>
-                        <h4 className="font-extrabold text-base text-[#0B1C10] capitalize">{c.display_name}</h4>
-                        <span className="text-[10px] text-[#536056] italic font-editorial block">{c.scientific_name}</span>
+                      <div className="flex items-center gap-3">
+                        <CropImage crop={c} className="w-10 h-10 rounded-xl shrink-0 border border-gray-200" showAttribution={false} />
+                        <div>
+                          <h4 className="font-extrabold text-base text-[#0B1C10] capitalize">{c.display_name}</h4>
+                          <span className="text-[10px] text-[#536056] italic font-editorial block">{c.scientific_name}</span>
+                        </div>
                       </div>
                       <button
                         type="button"
