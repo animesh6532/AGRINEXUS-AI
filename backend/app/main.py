@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
 from .core import dependencies, config, logging
-from .api import market, weather, crop_calendar, decision, risk_opportunity
+from .api import market, weather, crop_calendar, decision, risk_opportunity, smart_alert, action_plan
 from .api.v1.router import api_v1_router
 from .services.model_registry import ModelRegistry
 from .database import connection
@@ -71,6 +71,8 @@ app.include_router(weather.router)
 app.include_router(crop_calendar.router)
 app.include_router(decision.router)
 app.include_router(risk_opportunity.router)
+app.include_router(smart_alert.router)
+app.include_router(action_plan.router)
 app.include_router(api_v1_router)
 
 

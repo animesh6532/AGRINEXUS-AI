@@ -740,6 +740,120 @@ backend regression.
 
 
 
+## Smart Alerts Module
+
+**Smart Alerts is a deterministic, explainable alert-intelligence
+layer AFTER Risk & Opportunity Analysis and BEFORE the frontend / AI
+Farming Assistant.** It converts important risks, opportunities,
+conflicts and data-quality conditions from the existing Risk &
+Opportunity system into concise, traceable alerts. It is NOT another
+ML model: no external API calls, no ML calls, no invented facts,
+confidence, recommendations or validity periods.
+
+### Architecture
+
+```text
+External Data -> Weather / Market / Crop Calendar
+  -> Friend's 7 ML Predictions -> Context/Decision Engine
+  -> Risk & Opportunity Analysis -> SMART ALERTS
+  -> Frontend / AI Farming Assistant
+```
+
+### Files
+
+| File | Role |
+| --- | --- |
+| `app/schemas/smart_alert.py` | Alert/preference/request/response schemas (reuses `SupportingSignal`, `ContributingSource`, `RiskOpportunityResponse`, `DecisionStatus`) |
+| `app/intelligence/smart_alert.py` | Deterministic filtering, dedupe, sorting, message generation |
+| `app/services/smart_alert_service.py` | DI service (health, generate, rules) |
+| `app/api/smart_alert.py` | `POST /api/smart-alerts/generate`, `GET /api/smart-alerts/health`, `GET /api/smart-alerts/rules` |
+| `tests/test_smart_alert.py` | 22 deterministic tests, no external/ML calls |
+
+### Alert priority rules (deterministic)
+
+- Risks: CRITICAL/HIGH always alert; MEDIUM alerts only when actionable (recommended follow-up, `valid_until`, or time sensitivity); LOW suppressed.
+- Opportunities: HIGH always alert; MEDIUM alerts only with suggested action or time window; LOW suppressed.
+- Conflicts: alert when important/unresolved (recommended action or unresolved reason present); empty boilerplate suppressed.
+- Data quality: alert when material (`affected_analysis` non-empty or type in missing_data/stale_data/unavailable_model); minor/informational suppressed.
+- `min_priority` / `include_*` preferences filter further; `max_alerts` truncation NEVER drops CRITICAL alerts.
+
+### Deduplication
+
+Stable SHA-256 over `alert_type | source_id | category | crop | stage`.
+Repeated identical upstream signals share one alert (first wins).
+Never uses Python `hash()`.
+
+### Traceability
+
+Every alert preserves `source_id`/`source_type`, evidence,
+contributing sources/signals, reasoning, `valid_until`/`time_window`,
+recommended action, crop and stage. Messages are concise and derived
+only from upstream fields.
+
+### API Endpoints
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /api/smart-alerts/generate` | Generate alerts from a `RiskOpportunityResponse` + preferences |
+| `GET /api/smart-alerts/health` | Service health, version, ruleset version |
+| `GET /api/smart-alerts/rules` | Active deterministic rules and ordering |
+
+No new external API key is required; actual notification delivery
+(SMS/push/email) is out of scope for this layer.
+
+### Testing
+
+```bash
+python -m pytest tests/test_smart_alert.py -q
+```
+
+## Personalized Action Plan
+
+```text
+External Data -> Weather / Market / Crop Calendar
+  -> Friend's 7 ML Predictions -> Context/Decision Engine
+  -> Risk & Opportunity Analysis -> Smart Alerts
+  -> PERSONALIZED ACTION PLAN -> AI Farming Assistant
+```
+
+Purpose: convert current farm intelligence (Decision Engine output, Risk &
+Opportunity analysis, Smart Alerts) plus FarmContext/farmer context into a
+prioritized, explainable, farmer-specific sequence of concrete actions.
+
+| File | Role |
+| --- | --- |
+| `app/schemas/action_plan.py` | Action/preference/request/response schemas (reuses FarmContext, DecisionResponse, RiskOpportunityResponse, SmartAlertResponse, SupportingSignal, ContributingSource) |
+| `app/intelligence/action_plan.py` | Deterministic conversion, personalization, dedupe, sorting |
+| `app/services/action_plan_service.py` | DI service (health, generate, rules) |
+| `app/api/action_plan.py` | `POST /api/action-plan/generate`, `GET /api/action-plan/health`, `GET /api/action-plan/categories` |
+| `tests/test_action_plan.py` | 13 deterministic tests, no external/ML calls |
+
+Rules: NOT an ML model; no external/weather/market/ML calls; never
+fabricates facts, confidence, dosages, or validity. CRITICAL/HIGH always
+act; MEDIUM acts only when actionable; LOW suppressed; CRITICAL never
+removed by `max_actions`. Conflicts give `needs_review` actions (never
+silently resolved); data-quality notices preserved verbatim, never
+actionized; expired items never produce active actions. Every action keeps
+`source_id`/`source_type`, evidence, contributing sources/signals,
+reasoning, `valid_until`/`time_window`. Dedupe key is stable SHA-256 over
+`action_type|category|event|crop|stage`.
+
+| Endpoint | Description |
+| --- | --- |
+| `POST /api/action-plan/generate` | Generate plan from farm/decision/risk/alert context + preferences |
+| `GET /api/action-plan/health` | Service health, version, ruleset version |
+| `GET /api/action-plan/categories` | Action-type vocabulary and ordering |
+
+```bash
+python -m pytest tests/test_action_plan.py -q -p no:warnings
+```
+
+Limitations: orchestrates existing intelligence only; cannot invent
+agronomic facts. Time windows reuse upstream values or documented coarse
+buckets (immediately/within 6 hours/today/within 24 hours/next 2 days).
+
+
+
 
 ## Contributing
 

@@ -1,2 +1,0 @@
-CTX ['farm_context', 'decision_engine_output', 'source_metadata']
-RESP ['status', 'risks', 'opportunities', 'data_quality', 'data_quality_notices', 'conflict_notices', 'summary', 'engine_version', 'ruleset_version', 'analysis_timestamp', 'total_risks', 'total_opportunities']
