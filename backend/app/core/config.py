@@ -54,6 +54,19 @@ class Settings(BaseSettings):
         description="API key for data.gov.in or agmarknet.gov.in"
     )
 
+    # Image Resolution & Verification Configuration
+    IMAGE_SEARCH_ENABLED: bool = True
+    PEXELS_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Pexels API key for agricultural photography resolution"
+    )
+    IMAGE_CACHE_TTL: int = 86400           # 24 hours image metadata cache
+    IMAGE_MIN_WIDTH: int = 640
+    IMAGE_MIN_HEIGHT: int = 360
+    IMAGE_MIN_RELEVANCE_SCORE: int = 70    # Minimum relevance score to accept candidate (0-100)
+    IMAGE_REQUEST_TIMEOUT: float = 8.0     # Maximum provider search timeout in seconds
+    IMAGE_MAX_CANDIDATES: int = 20
+
     # API Base URLs
     AGMARKNET_API_BASE_URL: str = "https://api.data.gov.in"
     DATA_GOV_IN_BASE_URL: str = "https://api.data.gov.in"

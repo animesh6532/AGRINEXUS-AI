@@ -1,6 +1,8 @@
 import React from 'react';
 import { X, Sprout, Check, AlertTriangle, ExternalLink, ShieldCheck, Thermometer, Droplets, Layers, Calendar } from 'lucide-react';
 import { SmartCropRecommendationItem } from '../../types/api';
+import { getCropImageMetadata } from '../../utils/cropImageMap';
+import { CropImage } from './CropImage';
 
 interface CropDetailModalProps {
   item: SmartCropRecommendationItem | null;
@@ -11,16 +13,25 @@ export const CropDetailModal: React.FC<CropDetailModalProps> = ({ item, onClose 
   if (!item) return null;
 
   const profile = item.profile_details;
+  const imageMeta = getCropImageMetadata(item.crop);
+
+  const getMlSupportLabel = () => {
+    if (item.ml_prediction?.supported) {
+      if (item.ml_prediction.probability != null) {
+        return `ML SUPPORT: Available (${(item.ml_prediction.probability * 100).toFixed(0)}% Probability)`;
+      }
+      return 'ML SUPPORT: Unavailable (Missing soil P/K)';
+    }
+    return 'ML SUPPORT: Catalogue-only assessment';
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
       <div className="relative w-full max-w-3xl bg-[#FAFBF7] border border-[#E2E7DA] rounded-3xl shadow-2xl overflow-hidden my-8 space-y-6 p-6 sm:p-8 max-h-[90vh] overflow-y-auto selection:bg-[#D4E768] selection:text-[#0B1C10]">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-[#E2E7DA] pb-5">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-[#EEF3E8] text-[#2F6B3C] flex items-center justify-center">
-              <Sprout className="w-6 h-6" />
-            </div>
+          <div className="flex items-center gap-4">
+            <CropImage crop={item} className="w-16 h-16 rounded-2xl shrink-0 border border-[#E2E7DA] shadow-sm" showAttribution={false} />
             <div>
               <h2 className="text-2xl sm:text-3xl font-black font-editorial text-[#0B1C10] capitalize">
                 {item.display_name}
@@ -50,18 +61,16 @@ export const CropDetailModal: React.FC<CropDetailModalProps> = ({ item, onClose 
           </div>
 
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#536056] block">Suitability Score</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#536056] block">Suitability Index</span>
             <span className="text-xl font-black font-mono text-[#0B1C10] block mt-0.5">
               {item.suitability_score} / 100
             </span>
           </div>
 
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#536056] block">ML Prediction</span>
-            <span className="text-sm font-extrabold text-[#0B1C10] block mt-0.5 font-mono">
-              {item.ml_prediction?.supported && item.ml_prediction.probability != null
-                ? `${(item.ml_prediction.probability * 100).toFixed(0)}% Match`
-                : 'Catalogue Crop'}
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#536056] block">ML Evidence</span>
+            <span className="text-xs font-extrabold text-[#0B1C10] block mt-0.5 font-sans">
+              {getMlSupportLabel()}
             </span>
           </div>
         </div>

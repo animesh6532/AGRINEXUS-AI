@@ -89,6 +89,7 @@ class SmartCropRecommendationItemSchema(BaseModel):
     sowing_feasibility: str
     is_sowing_recommended_now: bool
     ml_prediction: Optional[Dict[str, Any]] = None
+    image: Optional[Dict[str, Any]] = None
     factor_scores: Dict[str, float]
     limiting_factors: List[str] = Field(default_factory=list)
     positive_factors: List[str] = Field(default_factory=list)

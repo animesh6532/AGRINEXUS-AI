@@ -31,6 +31,7 @@ class SmartCropRecommender:
         self,
         latitude: float,
         longitude: float,
+        mode: str = "auto",
         location_name: Optional[str] = None,
         district: Optional[str] = None,
         state: Optional[str] = None,
@@ -49,7 +50,17 @@ class SmartCropRecommender:
         """
         Run complete Smart Crop Recommendation pipeline.
         """
-        logger.info(f"Starting Smart Crop Recommendation for lat={latitude}, lon={longitude}, state={state}")
+        logger.info(f"Starting Smart Crop Recommendation for lat={latitude}, lon={longitude}, state={state}, mode={mode}")
+
+        # Enforce Mode Isolation: In 'auto' mode, ignore any user overrides
+        if mode == "auto":
+            user_n = None
+            user_p = None
+            user_k = None
+            user_ph = None
+            weather_override_temp = None
+            weather_override_humidity = None
+            weather_override_rain = None
 
         # 1. Weather Context
         weather_ctx = await self.weather_service.get_weather_context(
@@ -148,6 +159,29 @@ class SmartCropRecommender:
         # Sort recommendations by suitability_score descending
         recommendations.sort(key=lambda r: r.suitability_score, reverse=True)
 
+        # 6. Dynamically resolve verified image metadata for visible recommendations (top 8) only
+        try:
+            import asyncio
+            from ..image_resolver import get_image_resolver
+            resolver = get_image_resolver()
+            
+            async def resolve_safe(crop_key: str):
+                try:
+                    res = await resolver.resolve_entity_image(crop_key)
+                    return res.get("image") if res else {"available": False, "reason": "Unavailable"}
+                except Exception as err:
+                    logger.warning(f"Image resolution error for '{crop_key}': {err}")
+                    return {"available": False, "reason": str(err)}
+
+            visible_recs = recommendations[:8]
+            image_results = await asyncio.gather(*[resolve_safe(rec.crop) for rec in visible_recs])
+            for rec, img in zip(visible_recs, image_results):
+                rec.image = img
+            for rec in recommendations[8:]:
+                rec.image = {"available": False, "reason": "Not in top visible recommendations"}
+        except Exception as resolver_err:
+            logger.warning(f"Image resolver initialization warning: {resolver_err}")
+
         # Calculate Overall Data Completeness
         # Location=20%, Weather=20%, Season=20%, Soil pH/Texture=20%, NPK=20%
         loc_score = 1.0
@@ -164,7 +198,7 @@ class SmartCropRecommender:
         return {
             "success": True,
             "engine_version": "1.0.0",
-            "mode": "auto" if not any([user_n, user_p, user_k, weather_override_temp]) else "hybrid",
+            "mode": mode,
             "data_completeness": overall_completeness,
             "location": {
                 "latitude": latitude,

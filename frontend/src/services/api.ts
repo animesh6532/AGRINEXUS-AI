@@ -102,6 +102,11 @@ export const api = {
     return handleResponse<SmartCropResponse>(res);
   },
 
+  async getCropImage(cropId: string, refresh: boolean = false): Promise<any> {
+    const res = await fetch(`${BASE_URL}/api/v1/images/crop/${encodeURIComponent(cropId)}?refresh=${refresh}`);
+    return handleResponse<any>(res);
+  },
+
 
   async predictDisease(file: File, includeGradcam: boolean = false): Promise<DiseasePredictResponse> {
     const formData = new FormData();
@@ -264,4 +269,142 @@ export const api = {
     const res = await fetch(url);
     return handleResponse<CropScheduleResponse>(res);
   },
+
+  // ------------------------------------------------------------------
+  // Farmer Profile & Personalized Farm Command Center (/api/v1/farmer)
+  // ------------------------------------------------------------------
+  async getFarmerProfile(userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/profile`, { headers });
+    return handleResponse<any>(res);
+  },
+
+  async updateFarmerProfile(payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/profile`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async getFarmerDashboard(userId?: string, lat?: number, lon?: number, displayName?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+
+    let url = `${BASE_URL}/api/v1/farmer/dashboard`;
+    const params: string[] = [];
+    if (lat !== undefined && lon !== undefined) {
+      params.push(`lat=${lat}`, `lon=${lon}`);
+    }
+    if (displayName) {
+      params.push(`display_name=${encodeURIComponent(displayName)}`);
+    }
+    if (params.length > 0) {
+      url += `?${params.join('&')}`;
+    }
+
+    const res = await fetch(url, { headers });
+    return handleResponse<any>(res);
+  },
+
+  async createFarm(payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/farms`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async updateFarm(farmId: number, payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/farms/${farmId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async deleteFarm(farmId: number, userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/farms/${farmId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return handleResponse<any>(res);
+  },
+
+  async createField(payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/fields`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async updateField(fieldId: number, payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/fields/${fieldId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async deleteField(fieldId: number, userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/fields/${fieldId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return handleResponse<any>(res);
+  },
+
+  async createCrop(payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/crops`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async updateCrop(cropId: number, payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/crops/${cropId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async deleteCrop(cropId: number, userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/crops/${cropId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return handleResponse<any>(res);
+  },
 };
+

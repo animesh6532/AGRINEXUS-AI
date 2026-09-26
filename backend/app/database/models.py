@@ -1,32 +1,269 @@
 """
 Database models for the AgriNexus-AI backend.
-Defines SQLAlchemy models for storing agricultural market data.
+Defines SQLAlchemy models for storing agricultural market data, farmer profiles,
+fields, crop plantings, and farming knowledge records.
 """
 
 from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
     Boolean,
-    LargeBinary,
+    Column,
     Date,
     DateTime,
     Float,
-    UniqueConstraint,
+    ForeignKey,
     Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declared_attr
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 
 from ..core.logging import logger
 
 
 # Create base class for declarative models
 Base = declarative_base()
+
+
+def normalize_area_to_m2(value: float, unit: str) -> float:
+    """Normalize land area to square meters based on unit."""
+    if not value or value < 0:
+        return 0.0
+    u = (unit or "").lower().strip()
+    if u in ("acre", "acres"):
+        return value * 4046.86
+    elif u in ("hectare", "hectares", "ha"):
+        return value * 10000.0
+    elif u in ("bigha", "bighas"):
+        return value * 1337.8
+    elif u in ("sqm", "m2", "square meter", "square meters"):
+        return value
+    return value * 4046.86  # default to acre conversion
+
+
+class FarmerProfile(Base):
+    """
+    Model representing a persistent farmer profile.
+    Central source of truth for the farmer's account and personal details.
+    """
+    __tablename__ = "farmer_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String(100), nullable=False, unique=True, index=True)
+    full_name = Column(String(150), nullable=False)
+    phone = Column(String(30), nullable=True)
+    email = Column(String(150), nullable=True)
+    preferred_language = Column(String(20), default="en", nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    farms = relationship("Farm", back_populates="farmer", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<FarmerProfile(id={self.id}, user_id='{self.user_id}', full_name='{self.full_name}')>"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "full_name": self.full_name,
+            "phone": self.phone,
+            "email": self.email,
+            "preferred_language": self.preferred_language,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Farm(Base):
+    """
+    Model representing a farm owned/managed by a farmer.
+    Can contain multiple fields.
+    """
+    __tablename__ = "farms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    farmer_id = Column(Integer, ForeignKey("farmer_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    farm_name = Column(String(150), nullable=False)
+    location_name = Column(String(250), nullable=True)
+    latitude = Column(Float, nullable=False)
+    longitude = Column(Float, nullable=False)
+    area_value = Column(Float, nullable=False)
+    area_unit = Column(String(30), default="acre", nullable=False)
+    total_area_m2 = Column(Float, nullable=False)
+    soil_type_manual = Column(String(100), nullable=True)
+    water_source = Column(String(100), nullable=True)
+    irrigation_method = Column(String(100), nullable=True)
+    ownership_type = Column(String(50), nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    farmer = relationship("FarmerProfile", back_populates="farms")
+    fields = relationship("Field", back_populates="farm", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<Farm(id={self.id}, name='{self.farm_name}', area={self.area_value} {self.area_unit})>"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "farmer_id": self.farmer_id,
+            "farm_name": self.farm_name,
+            "location_name": self.location_name,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "area_value": self.area_value,
+            "area_unit": self.area_unit,
+            "total_area_m2": self.total_area_m2,
+            "soil_type_manual": self.soil_type_manual,
+            "water_source": self.water_source,
+            "irrigation_method": self.irrigation_method,
+            "ownership_type": self.ownership_type,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class Field(Base):
+    """
+    Model representing a specific field within a farm.
+    Stores field boundary/area and soil telemetry/test results.
+    """
+    __tablename__ = "fields"
+
+    id = Column(Integer, primary_key=True, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id", ondelete="CASCADE"), nullable=False, index=True)
+    field_name = Column(String(150), nullable=False)
+    area_value = Column(Float, nullable=False)
+    area_unit = Column(String(30), default="acre", nullable=False)
+    total_area_m2 = Column(Float, nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
+    soil_type = Column(String(100), nullable=True)
+    soil_test_available = Column(Boolean, default=False, nullable=False)
+
+    # Soil parameters & provenance (MEASURED / ESTIMATED / UNKNOWN)
+    ph = Column(Float, nullable=True)
+    ph_provenance = Column(String(30), default="UNKNOWN", nullable=False)
+
+    nitrogen = Column(Float, nullable=True)
+    nitrogen_provenance = Column(String(30), default="UNKNOWN", nullable=False)
+
+    phosphorus = Column(Float, nullable=True)
+    phosphorus_provenance = Column(String(30), default="UNKNOWN", nullable=False)
+
+    potassium = Column(Float, nullable=True)
+    potassium_provenance = Column(String(30), default="UNKNOWN", nullable=False)
+
+    organic_carbon = Column(Float, nullable=True)
+    organic_carbon_provenance = Column(String(30), default="UNKNOWN", nullable=False)
+
+    ec = Column(Float, nullable=True)
+    ec_provenance = Column(String(30), default="UNKNOWN", nullable=False)
+
+    texture = Column(String(50), nullable=True)
+    texture_provenance = Column(String(30), default="UNKNOWN", nullable=False)
+
+    moisture = Column(Float, nullable=True)
+    moisture_provenance = Column(String(30), default="UNKNOWN", nullable=False)
+
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    farm = relationship("Farm", back_populates="fields")
+    plantings = relationship("CropPlanting", back_populates="field", cascade="all, delete-orphan")
+
+    def __repr__(self) -> str:
+        return f"<Field(id={self.id}, name='{self.field_name}', farm_id={self.farm_id})>"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "farm_id": self.farm_id,
+            "field_name": self.field_name,
+            "area_value": self.area_value,
+            "area_unit": self.area_unit,
+            "total_area_m2": self.total_area_m2,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+            "soil_type": self.soil_type,
+            "soil_test_available": self.soil_test_available,
+            "soil_data": {
+                "ph": {"value": self.ph, "provenance": self.ph_provenance},
+                "nitrogen": {"value": self.nitrogen, "provenance": self.nitrogen_provenance},
+                "phosphorus": {"value": self.phosphorus, "provenance": self.phosphorus_provenance},
+                "potassium": {"value": self.potassium, "provenance": self.potassium_provenance},
+                "organic_carbon": {"value": self.organic_carbon, "provenance": self.organic_carbon_provenance},
+                "ec": {"value": self.ec, "provenance": self.ec_provenance},
+                "texture": {"value": self.texture, "provenance": self.texture_provenance},
+                "moisture": {"value": self.moisture, "provenance": self.moisture_provenance},
+            },
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class CropPlanting(Base):
+    """
+    Model representing an active or planned crop cultivation on a field.
+    """
+    __tablename__ = "crop_plantings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    field_id = Column(Integer, ForeignKey("fields.id", ondelete="CASCADE"), nullable=False, index=True)
+    crop_id = Column(String(100), nullable=True)
+    crop_name = Column(String(100), nullable=False, index=True)
+    scientific_name = Column(String(150), nullable=True)
+    variety = Column(String(100), nullable=True)
+    category = Column(String(100), nullable=True)
+    sowing_date = Column(Date, nullable=True)
+    expected_harvest_date = Column(Date, nullable=True)
+    growth_stage = Column(String(100), nullable=True)
+    growth_stage_source = Column(String(50), default="farmer", nullable=False)
+    cultivation_type = Column(String(100), nullable=True)
+    irrigation_method = Column(String(100), nullable=True)
+    water_availability = Column(String(100), nullable=True)
+    status = Column(String(50), default="ACTIVE", nullable=False, index=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    field = relationship("Field", back_populates="plantings")
+
+    def __repr__(self) -> str:
+        return f"<CropPlanting(id={self.id}, crop='{self.crop_name}', field_id={self.field_id})>"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "field_id": self.field_id,
+            "crop_id": self.crop_id,
+            "crop_name": self.crop_name,
+            "scientific_name": self.scientific_name,
+            "variety": self.variety,
+            "category": self.category,
+            "sowing_date": self.sowing_date.isoformat() if self.sowing_date else None,
+            "expected_harvest_date": self.expected_harvest_date.isoformat() if self.expected_harvest_date else None,
+            "growth_stage": self.growth_stage,
+            "growth_stage_source": self.growth_stage_source,
+            "cultivation_type": self.cultivation_type,
+            "irrigation_method": self.irrigation_method,
+            "water_availability": self.water_availability,
+            "status": self.status,
+            "notes": self.notes,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class MarketObservation(Base):
@@ -65,7 +302,7 @@ class MarketObservation(Base):
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
-        nullable=False
+        nullable=False,
     )
 
     # Ensure we don't store duplicate observations for the same
@@ -79,7 +316,7 @@ class MarketObservation(Base):
             "variety",
             "grade",
             "observation_date",
-            name="uix_market_observation_unique"
+            name="uix_market_observation_unique",
         ),
         Index("ix_market_observation_commodity_date", "commodity", "observation_date"),
         Index("ix_market_observation_market_date", "market", "observation_date"),
@@ -166,7 +403,7 @@ class ForecastResult(Base):
             "forecast_date",
             "target_date",
             "model_name",
-            name="uix_forecast_result_unique"
+            name="uix_forecast_result_unique",
         ),
         Index("ix_forecast_result_commodity_target", "commodity", "target_date"),
     )
@@ -235,4 +472,4 @@ class FarmingKnowledgeRecord(Base):
             "verified": self.verified,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
-        }
+        }
