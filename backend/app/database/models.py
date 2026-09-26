@@ -4,7 +4,7 @@ Defines SQLAlchemy models for storing agricultural market data, farmer profiles,
 fields, crop plantings, and farming knowledge records.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
@@ -175,17 +175,34 @@ class Field(Base):
     moisture = Column(Float, nullable=True)
     moisture_provenance = Column(String(30), default="UNKNOWN", nullable=False)
 
+    # Boundary geometry & geospatial fields
+    boundary_geojson = Column(Text, nullable=True)
+    perimeter_m = Column(Float, nullable=True)
+    centroid_lat = Column(Float, nullable=True)
+    centroid_lng = Column(Float, nullable=True)
+    geometry_source = Column(String(30), default="MANUAL", nullable=False)  # GEOMETRIC or MANUAL
+    geometry_updated_at = Column(DateTime, nullable=True)
+
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     farm = relationship("Farm", back_populates="fields")
     plantings = relationship("CropPlanting", back_populates="field", cascade="all, delete-orphan")
+    observations = relationship("PlantObservation", back_populates="field", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         return f"<Field(id={self.id}, name='{self.field_name}', farm_id={self.farm_id})>"
 
     def to_dict(self) -> dict:
+        import json
+        boundary = None
+        if self.boundary_geojson:
+            try:
+                boundary = json.loads(self.boundary_geojson)
+            except Exception:
+                boundary = None
+
         return {
             "id": self.id,
             "farm_id": self.farm_id,
@@ -195,6 +212,12 @@ class Field(Base):
             "total_area_m2": self.total_area_m2,
             "latitude": self.latitude,
             "longitude": self.longitude,
+            "boundary_geojson": boundary,
+            "perimeter_m": self.perimeter_m,
+            "centroid_lat": self.centroid_lat,
+            "centroid_lng": self.centroid_lng,
+            "geometry_source": self.geometry_source,
+            "geometry_updated_at": self.geometry_updated_at.isoformat() if self.geometry_updated_at else None,
             "soil_type": self.soil_type,
             "soil_test_available": self.soil_test_available,
             "soil_data": {
@@ -211,6 +234,225 @@ class Field(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class PlantObservation(Base):
+    """
+    Model representing a field/plant-level observation or scouting record.
+    Supports attached photo analysis via existing CV disease/pest models.
+    """
+    __tablename__ = "plant_observations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    field_id = Column(Integer, ForeignKey("fields.id", ondelete="CASCADE"), nullable=False, index=True)
+    crop_planting_id = Column(Integer, ForeignKey("crop_plantings.id", ondelete="SET NULL"), nullable=True, index=True)
+    observation_date = Column(Date, default=date.today, nullable=False)
+    image_url = Column(String(500), nullable=True)
+    disease_result = Column(String(200), nullable=True)
+    pest_result = Column(String(200), nullable=True)
+    severity = Column(String(50), default="INFO", nullable=False)
+    notes = Column(Text, nullable=True)
+    location_in_field = Column(String(150), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    field = relationship("Field", back_populates="observations")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "field_id": self.field_id,
+            "crop_planting_id": self.crop_planting_id,
+            "observation_date": self.observation_date.isoformat() if self.observation_date else None,
+            "image_url": self.image_url,
+            "disease_result": self.disease_result,
+            "pest_result": self.pest_result,
+            "severity": self.severity,
+            "notes": self.notes,
+            "location_in_field": self.location_in_field,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ActionItemRecord(Base):
+    """
+    Model storing personalized action items and farmer completion state.
+    """
+    __tablename__ = "action_item_records"
+
+    id = Column(String(100), primary_key=True, index=True)
+    farmer_id = Column(Integer, ForeignKey("farmer_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    field_id = Column(Integer, ForeignKey("fields.id", ondelete="SET NULL"), nullable=True, index=True)
+    crop_id = Column(Integer, ForeignKey("crop_plantings.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = Column(String(250), nullable=False)
+    action_text = Column(Text, nullable=False)
+    reason = Column(Text, nullable=False)
+    action_type = Column(String(50), default="general", nullable=False)
+    priority = Column(String(30), default="MEDIUM", nullable=False)  # CRITICAL, HIGH, MEDIUM, LOW
+    time_window = Column(String(30), default="TODAY", nullable=False)  # TODAY, TOMORROW, THIS_WEEK, NEXT_WEEK, UPCOMING
+    status = Column(String(30), default="TODO", nullable=False)  # TODO, IN_PROGRESS, DONE, DISMISSED, EXPIRED
+    source = Column(String(100), default="RiskEngine", nullable=False)
+    due_date = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    completed_by = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "farmer_id": self.farmer_id,
+            "field_id": self.field_id,
+            "crop_id": self.crop_id,
+            "title": self.title,
+            "action_text": self.action_text,
+            "reason": self.reason,
+            "action_type": self.action_type,
+            "priority": self.priority,
+            "time_window": self.time_window,
+            "status": self.status,
+            "source": self.source,
+            "due_date": self.due_date.isoformat() if self.due_date else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "completed_by": self.completed_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AlertNotificationRecord(Base):
+    """
+    Model storing persistent smart farm alerts and delivery state.
+    """
+    __tablename__ = "alert_notification_records"
+
+    id = Column(String(100), primary_key=True, index=True)
+    farmer_id = Column(Integer, ForeignKey("farmer_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    field_id = Column(Integer, ForeignKey("fields.id", ondelete="SET NULL"), nullable=True)
+    crop_id = Column(Integer, ForeignKey("crop_plantings.id", ondelete="SET NULL"), nullable=True)
+    category = Column(String(50), nullable=False)  # Weather, Irrigation, Pest, Soil, Market, Calendar, Action
+    severity = Column(String(30), default="INFO", nullable=False)  # CRITICAL, HIGH, MEDIUM, LOW, INFO
+    title = Column(String(250), nullable=False)
+    description = Column(Text, nullable=False)
+    trigger_evidence = Column(Text, nullable=True)
+    potential_impact = Column(Text, nullable=True)
+    recommended_action = Column(Text, nullable=True)
+    status = Column(String(30), default="UNREAD", nullable=False)  # UNREAD, READ, DISMISSED, RESOLVED
+    fingerprint = Column(String(200), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=True)
+
+    deliveries = relationship("NotificationDeliveryRecord", back_populates="alert", cascade="all, delete-orphan")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "farmer_id": self.farmer_id,
+            "field_id": self.field_id,
+            "crop_id": self.crop_id,
+            "category": self.category,
+            "severity": self.severity,
+            "title": self.title,
+            "description": self.description,
+            "trigger_evidence": self.trigger_evidence,
+            "potential_impact": self.potential_impact,
+            "recommended_action": self.recommended_action,
+            "status": self.status,
+            "fingerprint": self.fingerprint,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+        }
+
+
+class NotificationPreferenceRecord(Base):
+    """
+    Model storing farmer notification channel & category preferences.
+    """
+    __tablename__ = "notification_preference_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    farmer_id = Column(Integer, ForeignKey("farmer_profiles.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+
+    # Channels
+    channel_in_app = Column(Boolean, default=True, nullable=False)
+    channel_email = Column(Boolean, default=True, nullable=False)
+    channel_sms = Column(Boolean, default=False, nullable=False)
+    channel_whatsapp = Column(Boolean, default=False, nullable=False)
+
+    # Categories
+    cat_critical_risks = Column(Boolean, default=True, nullable=False)
+    cat_weather = Column(Boolean, default=True, nullable=False)
+    cat_crop_health = Column(Boolean, default=True, nullable=False)
+    cat_irrigation = Column(Boolean, default=True, nullable=False)
+    cat_market = Column(Boolean, default=True, nullable=False)
+    cat_calendar = Column(Boolean, default=True, nullable=False)
+    cat_action_reminders = Column(Boolean, default=True, nullable=False)
+
+    # Quiet hours
+    quiet_hours_enabled = Column(Boolean, default=False, nullable=False)
+    quiet_hours_start = Column(String(10), default="22:00", nullable=False)
+    quiet_hours_end = Column(String(10), default="06:00", nullable=False)
+    critical_override = Column(Boolean, default=True, nullable=False)
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    def to_dict(self) -> dict:
+        return {
+            "farmer_id": self.farmer_id,
+            "channels": {
+                "in_app": self.channel_in_app,
+                "email": self.channel_email,
+                "sms": self.channel_sms,
+                "whatsapp": self.channel_whatsapp,
+            },
+            "categories": {
+                "critical_risks": self.cat_critical_risks,
+                "weather": self.cat_weather,
+                "crop_health": self.cat_crop_health,
+                "irrigation": self.cat_irrigation,
+                "market": self.cat_market,
+                "calendar": self.cat_calendar,
+                "action_reminders": self.cat_action_reminders,
+            },
+            "quiet_hours": {
+                "enabled": self.quiet_hours_enabled,
+                "start": self.quiet_hours_start,
+                "end": self.quiet_hours_end,
+                "critical_override": self.critical_override,
+            },
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class NotificationDeliveryRecord(Base):
+    """
+    Model logging delivery attempts across Email, SMS, WhatsApp providers.
+    """
+    __tablename__ = "notification_delivery_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    alert_id = Column(String(100), ForeignKey("alert_notification_records.id", ondelete="CASCADE"), nullable=False, index=True)
+    channel = Column(String(30), nullable=False)  # EMAIL, SMS, WHATSAPP, IN_APP
+    recipient = Column(String(200), nullable=False)
+    provider_message_id = Column(String(200), nullable=True)
+    status = Column(String(30), default="PENDING", nullable=False)  # PENDING, SENT, DELIVERED, FAILED
+    sent_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    delivered_at = Column(DateTime, nullable=True)
+    failure_reason = Column(Text, nullable=True)
+
+    alert = relationship("AlertNotificationRecord", back_populates="deliveries")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "alert_id": self.alert_id,
+            "channel": self.channel,
+            "recipient": self.recipient,
+            "provider_message_id": self.provider_message_id,
+            "status": self.status,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
+            "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
+            "failure_reason": self.failure_reason,
+        }
+
 
 
 class CropPlanting(Base):

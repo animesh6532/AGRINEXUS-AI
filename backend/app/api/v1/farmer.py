@@ -201,3 +201,61 @@ def delete_crop_planting(
     if not success:
         raise HTTPException(status_code=404, detail="Crop planting not found or unauthorized")
     return {"success": True, "message": "Crop planting deleted successfully"}
+
+
+@router.post("/observations")
+def create_plant_observation(
+    payload: Dict[str, Any],
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Create a new plant/field observation or scouting record."""
+    repo = FarmerRepository(db)
+    obs = repo.create_plant_observation(user_id, payload)
+    if not obs:
+        raise HTTPException(status_code=404, detail="Field not found or unauthorized")
+    return obs.to_dict()
+
+
+@router.post("/actions/{action_id}/complete")
+def complete_action_item(
+    action_id: str,
+    payload: Optional[Dict[str, Any]] = None,
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Mark a personalized action plan item as DONE, SNOOZED, or DISMISSED."""
+    repo = FarmerRepository(db)
+    status_val = (payload or {}).get("status", "DONE")
+    success = repo.complete_action_item(action_id, user_id, status=status_val)
+    return {"success": True, "action_id": action_id, "status": status_val}
+
+
+@router.get("/notifications/preferences")
+def get_notification_preferences(
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Get farmer notification channel and category preferences."""
+    from ...services.notification_service import NotificationDispatcher
+    repo = FarmerRepository(db)
+    profile = repo.get_or_create_profile(user_id)
+    dispatcher = NotificationDispatcher(db)
+    prefs = dispatcher.get_or_create_preferences(profile.id)
+    return prefs.to_dict()
+
+
+@router.put("/notifications/preferences")
+def update_notification_preferences(
+    payload: Dict[str, Any],
+    user_id: str = Depends(get_current_user_id),
+    db: Session = Depends(get_db),
+):
+    """Update farmer notification channel and category preferences."""
+    from ...services.notification_service import NotificationDispatcher
+    repo = FarmerRepository(db)
+    profile = repo.get_or_create_profile(user_id)
+    dispatcher = NotificationDispatcher(db)
+    updated = dispatcher.update_preferences(profile.id, payload)
+    return updated.to_dict()
+

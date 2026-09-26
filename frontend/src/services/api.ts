@@ -472,6 +472,46 @@ export const api = {
     return handleResponse<any>(res);
   },
 
+  async createObservation(payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/observations`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async completeActionItem(actionId: string, status: string = 'DONE', userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/actions/${actionId}/complete`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ status }),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async getNotificationPreferences(userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/notifications/preferences`, { headers });
+    return handleResponse<any>(res);
+  },
+
+  async updateNotificationPreferences(payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/notifications/preferences`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
   // ------------------------------------------------------------------
   // Farm AI Copilot / Assistant (/api/v1/assistant)
   // ------------------------------------------------------------------

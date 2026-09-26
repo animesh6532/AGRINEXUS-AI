@@ -3,6 +3,25 @@ export interface SoilValueWithProvenance {
   provenance: 'MEASURED' | 'ESTIMATED' | 'UNKNOWN';
 }
 
+export interface GeoJSONPolygon {
+  type: 'Polygon';
+  coordinates: number[][][]; // [[[lng, lat], [lng, lat], ...]]
+}
+
+export interface PlantObservationRecord {
+  id: number;
+  field_id: number;
+  crop_planting_id?: number;
+  observation_date: string;
+  image_url?: string;
+  disease_result?: string;
+  pest_result?: string;
+  severity: string;
+  notes?: string;
+  location_in_field?: string;
+  created_at?: string;
+}
+
 export interface CropPlanting {
   id: number;
   field_id: number;
@@ -33,6 +52,12 @@ export interface FieldRecord {
   total_area_m2: number;
   latitude?: number;
   longitude?: number;
+  boundary_geojson?: GeoJSONPolygon | null;
+  perimeter_m?: number;
+  centroid_lat?: number;
+  centroid_lng?: number;
+  geometry_source?: 'GEOMETRIC' | 'MANUAL';
+  geometry_updated_at?: string;
   soil_type?: string;
   soil_test_available: boolean;
   soil_data: {
@@ -47,6 +72,7 @@ export interface FieldRecord {
   };
   notes?: string;
   plantings: CropPlanting[];
+  observations?: PlantObservationRecord[];
   created_at?: string;
   updated_at?: string;
 }
@@ -81,6 +107,98 @@ export interface FarmerProfile {
   farms: FarmRecord[];
   created_at?: string;
   updated_at?: string;
+}
+
+export interface RiskItem {
+  id: str;
+  category: string;
+  title: string;
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  confidence: string;
+  reasoning: string;
+  recommended_follow_up?: string;
+  affected_crop?: string;
+  affected_stage?: string;
+  evidence?: any[];
+  detected_at?: string;
+  valid_until?: string;
+}
+
+export interface OpportunityItem {
+  id: str;
+  category: string;
+  title: string;
+  description: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  confidence: string;
+  reasoning: string;
+  suggested_action?: string;
+  time_window?: string;
+  affected_crop?: string;
+  affected_stage?: string;
+  evidence?: any[];
+  detected_at?: string;
+}
+
+export interface ActionPlanItem {
+  id: string;
+  action_type: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: 'active' | 'monitoring' | 'needs_review' | 'TODO' | 'DONE' | 'DISMISSED';
+  title: string;
+  action: string;
+  reason: string;
+  affected_crop?: string;
+  affected_stage?: string;
+  location?: string;
+  recommended_time?: string;
+  time_window?: string;
+  due_date?: string;
+}
+
+export interface SmartAlertItem {
+  id: string;
+  priority: 'Critical' | 'High' | 'Moderate' | 'Info';
+  category: string;
+  title: string;
+  description: string;
+  trigger_evidence?: string;
+  potential_impact?: string;
+  recommended_action?: string;
+  status?: string;
+  crop_name?: string;
+  field_name?: string;
+  timestamp: string;
+  actionable: boolean;
+}
+
+export interface NotificationPreferences {
+  farmer_id: number;
+  channels: {
+    in_app: boolean;
+    email: boolean;
+    sms: boolean;
+    whatsapp: boolean;
+  };
+  categories: {
+    critical_risks: boolean;
+    weather: boolean;
+    crop_health: boolean;
+    irrigation: boolean;
+    market: boolean;
+    calendar: boolean;
+    action_reminders: boolean;
+  };
+  quiet_hours: {
+    enabled: boolean;
+    start: string;
+    end: string;
+    critical_override: boolean;
+  };
 }
 
 export interface WeatherImpactItem {
@@ -160,18 +278,6 @@ export interface CropTimelineItem {
   evidence_status: string;
 }
 
-export interface FarmAlertItem {
-  id: string;
-  priority: 'Critical' | 'High' | 'Moderate' | 'Info';
-  category: string;
-  title: string;
-  description: string;
-  crop_name?: string;
-  field_name?: string;
-  timestamp: string;
-  actionable: boolean;
-}
-
 export interface ImpactMatrixRow {
   crop_name: string;
   field_name: string;
@@ -200,6 +306,7 @@ export interface TodayFarmStatus {
   water_summary: string;
   market_summary: string;
   action_items_count: number;
+  critical_risks_count?: number;
 }
 
 export interface ActiveCropCard {
@@ -239,7 +346,18 @@ export interface FarmDashboardResponse {
   pest_items: PestRiskItem[];
   market_watch: MarketWatchItem[];
   crop_calendar_events: any[];
-  alerts: FarmAlertItem[];
+  risks_and_opportunities?: {
+    risks: RiskItem[];
+    opportunities: OpportunityItem[];
+    summary?: any;
+  };
+  action_plan?: {
+    actions: ActionPlanItem[];
+    total_actions: number;
+  };
+  alerts: SmartAlertItem[];
+  plant_observations?: PlantObservationRecord[];
+  notification_preferences?: NotificationPreferences;
   timeline: CropTimelineItem[];
   impact_matrix: ImpactMatrixRow[];
   data_quality: DataQualitySummary;

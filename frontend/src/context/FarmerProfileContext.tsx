@@ -32,6 +32,9 @@ interface FarmerProfileContextType {
   deleteFarm: (farmId: number) => Promise<boolean>;
   deleteField: (fieldId: number) => Promise<boolean>;
   deleteCrop: (cropId: number) => Promise<boolean>;
+  completeAction: (actionId: number) => Promise<boolean>;
+  saveObservation: (data: any) => Promise<any>;
+  saveNotificationPreferences: (prefs: any) => Promise<any>;
   selectFarm: (farm: FarmRecord | null) => void;
   selectField: (field: FieldRecord | null) => void;
   selectCrop: (crop: CropPlanting | null) => void;
@@ -235,6 +238,39 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const completeAction = async (actionId: number): Promise<boolean> => {
+    try {
+      await api.completeActionItem(actionId, userId);
+      await fetchDashboard();
+      return true;
+    } catch (err: any) {
+      console.error('Failed to complete action item:', err);
+      return false;
+    }
+  };
+
+  const saveObservation = async (data: any): Promise<any> => {
+    try {
+      const res = await api.createObservation(data, userId);
+      await fetchDashboard();
+      return res;
+    } catch (err: any) {
+      console.error('Failed to save plant observation:', err);
+      throw err;
+    }
+  };
+
+  const saveNotificationPreferences = async (prefs: any): Promise<any> => {
+    try {
+      const res = await api.updateNotificationPreferences(prefs, userId);
+      await fetchDashboard();
+      return res;
+    } catch (err: any) {
+      console.error('Failed to save notification preferences:', err);
+      throw err;
+    }
+  };
+
   const farms = farmer?.farms || [];
   const fields: FieldRecord[] = farms.flatMap((f) => f.fields || []);
   const activeCrops: CropPlanting[] = fields
@@ -264,6 +300,9 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         deleteFarm,
         deleteField,
         deleteCrop,
+        completeAction,
+        saveObservation,
+        saveNotificationPreferences,
         selectFarm: setSelectedFarm,
         selectField: setSelectedField,
         selectCrop: setSelectedCrop,

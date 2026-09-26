@@ -17,6 +17,13 @@ from ..services.crop_calendar_service import CropCalendarService
 from ..intelligence.weather_intelligence import WeatherIntelligence
 from ..intelligence.market_intelligence import MarketIntelligence
 from ..intelligence.crop_calendar_intelligence import CropCalendarIntelligence
+from ..services.risk_opportunity_service import RiskOpportunityService
+from ..services.smart_alert_service import SmartAlertService
+from ..services.action_plan_service import ActionPlanService
+from ..services.notification_service import NotificationDispatcher
+from ..schemas.decision import FarmContext
+from ..schemas.action_plan import ActionPlanRequest
+
 
 
 class FarmerRepository:
@@ -120,6 +127,9 @@ class FarmerRepository:
 
     def create_field(self, user_id: str, field_data: dict) -> Optional[models.Field]:
         try:
+            import json
+            from ..utils import geo
+
             profile = self.get_or_create_profile(user_id)
             farm_id = field_data.get("farm_id")
             farm = self.db.query(models.Farm).filter(models.Farm.id == farm_id, models.Farm.farmer_id == profile.id).first()
@@ -128,7 +138,39 @@ class FarmerRepository:
 
             area_val = field_data.get("area_value", 1.0)
             area_unit = field_data.get("area_unit", "acre")
+
+            # Check for polygon boundary geometry
+            boundary_obj = field_data.get("boundary_geojson")
+            boundary_json_str = None
+            perimeter_m = None
+            centroid_lat = field_data.get("latitude", farm.latitude)
+            centroid_lng = field_data.get("longitude", farm.longitude)
+            geom_source = "MANUAL"
             total_m2 = models.normalize_area_to_m2(area_val, area_unit)
+
+            if boundary_obj:
+                if isinstance(boundary_obj, dict):
+                    boundary_json_str = json.dumps(boundary_obj)
+                    coords = boundary_obj.get("coordinates", [[]])[0]
+                elif isinstance(boundary_obj, str):
+                    boundary_json_str = boundary_obj
+                    try:
+                        parsed = json.loads(boundary_obj)
+                        coords = parsed.get("coordinates", [[]])[0]
+                    except Exception:
+                        coords = []
+                else:
+                    coords = []
+
+                if coords and len(coords) >= 3:
+                    calc_m2 = geo.calculate_polygon_area_m2(coords)
+                    if calc_m2 > 0:
+                        total_m2 = calc_m2
+                        geom_source = "GEOMETRIC"
+                    perimeter_m = geo.calculate_polygon_perimeter_m(coords)
+                    c_lat, c_lng = geo.calculate_polygon_centroid(coords)
+                    if c_lat != 0.0 or c_lng != 0.0:
+                        centroid_lat, centroid_lng = c_lat, c_lng
 
             field = models.Field(
                 farm_id=farm.id,
@@ -136,8 +178,14 @@ class FarmerRepository:
                 area_value=area_val,
                 area_unit=area_unit,
                 total_area_m2=total_m2,
-                latitude=field_data.get("latitude", farm.latitude),
-                longitude=field_data.get("longitude", farm.longitude),
+                latitude=centroid_lat,
+                longitude=centroid_lng,
+                boundary_geojson=boundary_json_str,
+                perimeter_m=perimeter_m,
+                centroid_lat=centroid_lat,
+                centroid_lng=centroid_lng,
+                geometry_source=geom_source,
+                geometry_updated_at=datetime.now(timezone.utc) if boundary_json_str else None,
                 soil_type=field_data.get("soil_type", farm.soil_type_manual),
                 soil_test_available=field_data.get("soil_test_available", False),
                 ph=field_data.get("ph"),
@@ -169,6 +217,9 @@ class FarmerRepository:
 
     def update_field(self, field_id: int, user_id: str, field_data: dict) -> Optional[models.Field]:
         try:
+            import json
+            from ..utils import geo
+
             profile = self.get_or_create_profile(user_id)
             field = (
                 self.db.query(models.Field)
@@ -180,10 +231,38 @@ class FarmerRepository:
                 return None
 
             for key, val in field_data.items():
-                if hasattr(field, key):
+                if hasattr(field, key) and key != "boundary_geojson":
                     setattr(field, key, val)
 
-            if "area_value" in field_data or "area_unit" in field_data:
+            if "boundary_geojson" in field_data:
+                boundary_obj = field_data["boundary_geojson"]
+                if isinstance(boundary_obj, dict):
+                    field.boundary_geojson = json.dumps(boundary_obj)
+                    coords = boundary_obj.get("coordinates", [[]])[0]
+                elif isinstance(boundary_obj, str):
+                    field.boundary_geojson = boundary_obj
+                    try:
+                        parsed = json.loads(boundary_obj)
+                        coords = parsed.get("coordinates", [[]])[0]
+                    except Exception:
+                        coords = []
+                else:
+                    field.boundary_geojson = None
+                    coords = []
+
+                if coords and len(coords) >= 3:
+                    calc_m2 = geo.calculate_polygon_area_m2(coords)
+                    if calc_m2 > 0:
+                        field.total_area_m2 = calc_m2
+                        field.geometry_source = "GEOMETRIC"
+                    field.perimeter_m = geo.calculate_polygon_perimeter_m(coords)
+                    c_lat, c_lng = geo.calculate_polygon_centroid(coords)
+                    if c_lat != 0.0 or c_lng != 0.0:
+                        field.centroid_lat, field.centroid_lng = c_lat, c_lng
+                        field.latitude, field.longitude = c_lat, c_lng
+                    field.geometry_updated_at = datetime.now(timezone.utc)
+
+            if ("area_value" in field_data or "area_unit" in field_data) and field.geometry_source != "GEOMETRIC":
                 field.total_area_m2 = models.normalize_area_to_m2(field.area_value, field.area_unit)
 
             field.updated_at = datetime.now(timezone.utc)
@@ -193,6 +272,60 @@ class FarmerRepository:
         except Exception as e:
             self.db.rollback()
             logger.error(f"Error updating field {field_id} for user {user_id}: {e}")
+            raise
+
+    def create_plant_observation(self, user_id: str, obs_data: dict) -> Optional[models.PlantObservation]:
+        try:
+            profile = self.get_or_create_profile(user_id)
+            field_id = obs_data.get("field_id")
+            field = (
+                self.db.query(models.Field)
+                .join(models.Farm)
+                .filter(models.Field.id == field_id, models.Farm.farmer_id == profile.id)
+                .first()
+            )
+            if not field:
+                return None
+
+            obs = models.PlantObservation(
+                field_id=field.id,
+                crop_planting_id=obs_data.get("crop_planting_id"),
+                observation_date=obs_data.get("observation_date") or date.today(),
+                image_url=obs_data.get("image_url"),
+                disease_result=obs_data.get("disease_result"),
+                pest_result=obs_data.get("pest_result"),
+                severity=obs_data.get("severity", "INFO"),
+                notes=obs_data.get("notes"),
+                location_in_field=obs_data.get("location_in_field"),
+            )
+            self.db.add(obs)
+            self.db.commit()
+            self.db.refresh(obs)
+            return obs
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error creating plant observation for user {user_id}: {e}")
+            raise
+
+    def complete_action_item(self, action_id: str, user_id: str, status: str = "DONE") -> bool:
+        try:
+            profile = self.get_or_create_profile(user_id)
+            action = self.db.query(models.ActionItemRecord).filter(
+                models.ActionItemRecord.id == action_id,
+                models.ActionItemRecord.farmer_id == profile.id
+            ).first()
+
+            if not action:
+                return False
+
+            action.status = status
+            action.completed_at = datetime.now(timezone.utc)
+            action.completed_by = profile.full_name
+            self.db.commit()
+            return True
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error updating action item {action_id}: {e}")
             raise
 
     def delete_field(self, field_id: int, user_id: str) -> bool:
@@ -322,7 +455,8 @@ class FarmerRepository:
 class FarmIntelligenceService:
     """
     Central service aggregating live personalized intelligence for a farmer profile.
-    Coordinates Weather, Soil, Crop Calendar, Pest, Irrigation, Fertilizer, and Market modules.
+    Coordinates Weather, Soil, Crop Calendar, Pest, Irrigation, Fertilizer, Market,
+    Risk & Opportunity, Action Plan, and Smart Alert modules.
     """
 
     def __init__(self, db: Session):
@@ -334,6 +468,10 @@ class FarmIntelligenceService:
         self.weather_intel = WeatherIntelligence()
         self.market_intel = MarketIntelligence(db=db)
         self.calendar_intel = CropCalendarIntelligence()
+        self.risk_opp_service = RiskOpportunityService()
+        self.smart_alert_service = SmartAlertService()
+        self.action_plan_service = ActionPlanService()
+        self.notification_dispatcher = NotificationDispatcher(db=db)
 
     async def get_dashboard(self, user_id: str, location_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Aggregate full personalized farm intelligence for the Farm Command Center."""
@@ -403,10 +541,74 @@ class FarmIntelligenceService:
         # Personalize Timeline
         timeline = self._build_timeline(active_crops, fields, forecast_weather)
 
-        # Personalize Alerts
-        alerts = self._build_alerts(
-            weather_impacts, soil_impacts, irrigation_items, fertilizer_items, pest_items, market_watch, active_crops
+        # ---------------------------------------------------------------------
+        # DETERMINISTIC RISK & OPPORTUNITY + SMART ALERT + ACTION PLAN PIPELINE
+        # ---------------------------------------------------------------------
+        crop_name = active_crops[0].crop_name if active_crops else "Rice"
+        sowing_date_str = active_crops[0].sowing_date.isoformat() if active_crops and active_crops[0].sowing_date else None
+        stage_str = active_crops[0].growth_stage if active_crops else "Vegetative"
+
+        farm_context = FarmContext(
+            crop=crop_name,
+            variety=active_crops[0].variety if active_crops else None,
+            growth_stage=stage_str,
+            sowing_date=sowing_date_str,
+            location=location_name,
+            latitude=lat,
+            longitude=lon,
+            soil_ph=fields[0].ph if fields else None,
+            soil_nitrogen=fields[0].nitrogen if fields else None,
+            soil_phosphorus=fields[0].phosphorus if fields else None,
+            soil_potassium=fields[0].potassium if fields else None,
+            current_temperature=current_weather.get("temperature") if current_weather else None,
+            relative_humidity=current_weather.get("relative_humidity") if current_weather else None,
+            precipitation=current_weather.get("precipitation") if current_weather else None,
+            forecast_rain_sum=weather_impacts[0].get("rain_forecast_mm") if weather_impacts else None,
         )
+
+        risk_opp_res = self.risk_opp_service.analyze_farm_context(farm_context)
+        smart_alert_res = self.smart_alert_service.generate(risk_opp_res)
+        action_plan_res = self.action_plan_service.generate(ActionPlanRequest(
+            farm_context=farm_context,
+            risk_opportunity=risk_opp_res,
+            smart_alerts=smart_alert_res,
+        ))
+
+        # Process & dispatch alerts to user notification preferences
+        dispatched_alerts = []
+        for alert_item in smart_alert_res.alerts:
+            cat_val = getattr(alert_item, 'alert_type', getattr(alert_item, 'category', getattr(alert_item, 'type', 'general')))
+            if hasattr(cat_val, "value"):
+                cat_val = cat_val.value
+            prio_val = alert_item.priority.value if hasattr(alert_item.priority, "value") else str(alert_item.priority)
+
+            msg_text = getattr(alert_item, "message", getattr(alert_item, "description", getattr(alert_item, "alert", "")))
+            reason_text = getattr(alert_item, "reasoning", getattr(alert_item, "reason", ""))
+
+            raw_dict = {
+                "category": str(cat_val),
+                "severity": str(prio_val),
+                "title": getattr(alert_item, "title", "Farm Alert"),
+                "description": msg_text,
+                "trigger_evidence": reason_text or msg_text,
+                "potential_impact": msg_text,
+                "recommended_action": getattr(alert_item, "recommended_action", getattr(alert_item, "action", "")),
+                "field_id": fields[0].id if fields else None,
+                "crop_id": active_crops[0].id if active_crops else None,
+                "fingerprint": f"{profile.id}_{getattr(alert_item, 'id', 'alert')}_{getattr(alert_item, 'title', '')}",
+            }
+            rec = self.notification_dispatcher.dispatch_alert(profile, raw_dict)
+            if rec:
+                dispatched_alerts.append(rec.to_dict())
+
+        # Fetch observations
+        obs_records = []
+        for field in fields:
+            for obs in field.observations:
+                obs_records.append(obs.to_dict())
+
+        # Fetch notification preferences
+        notification_prefs = self.notification_dispatcher.get_or_create_preferences(profile.id).to_dict()
 
         # Personalize Impact Matrix
         impact_matrix = self._build_impact_matrix(
@@ -433,7 +635,8 @@ class FarmIntelligenceService:
             "soil_summary": "Soil data measured/estimated" if any(f.soil_test_available for f in fields) else "Soil test recommended",
             "water_summary": f"Monitoring {len(active_crops)} active crop field(s)",
             "market_summary": f"Tracking {len(market_watch)} active crop market(s)",
-            "action_items_count": len(alerts),
+            "action_items_count": len(action_plan_res.actions),
+            "critical_risks_count": len([r for r in risk_opp_res.risks if r.severity.value == "critical" or r.severity.value == "high"]),
         }
 
         # Build profile response dict
@@ -445,6 +648,7 @@ class FarmIntelligenceService:
                     {
                         **fl.to_dict(),
                         "plantings": [cp.to_dict() for cp in fl.plantings],
+                        "observations": [ob.to_dict() for ob in fl.observations],
                     }
                     for fl in f.fields
                 ],
@@ -468,7 +672,11 @@ class FarmIntelligenceService:
             "pest_items": pest_items,
             "market_watch": market_watch,
             "crop_calendar_events": [],
-            "alerts": alerts,
+            "risks_and_opportunities": risk_opp_res.model_dump(),
+            "action_plan": action_plan_res.model_dump(),
+            "alerts": dispatched_alerts if dispatched_alerts else self._build_alerts(weather_impacts, soil_impacts, irrigation_items, fertilizer_items, pest_items, market_watch, active_crops),
+            "plant_observations": obs_records,
+            "notification_preferences": notification_prefs,
             "timeline": timeline,
             "impact_matrix": impact_matrix,
             "data_quality": data_quality,
