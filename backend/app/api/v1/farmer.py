@@ -24,6 +24,7 @@ from ...schemas.farmer import (
     FieldUpdate,
 )
 from ...database.models import User
+from ...services.farmer_service import FarmerRepository, FarmIntelligenceService
 from .auth import get_current_user
 
 router = APIRouter(prefix="/farmer", tags=["Farmer Profile & Command Center"])
