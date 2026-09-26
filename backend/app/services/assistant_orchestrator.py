@@ -9,7 +9,7 @@ import json
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 from sqlalchemy.orm import Session
 
 from app.database.connection import SessionLocal
@@ -390,7 +390,7 @@ class AssistantOrchestrator:
         }
 
     @staticmethod
-    async def process_chat_stream(
+    def process_chat_stream(
         user_id: str,
         message: str,
         conversation_id: Optional[str] = None,
@@ -399,8 +399,8 @@ class AssistantOrchestrator:
         crop_id: Optional[int] = None,
         lat: Optional[float] = None,
         lon: Optional[float] = None,
-    ) -> AsyncGenerator[str, None]:
-        """Generates SSE formatted events for real-time copilot streaming."""
+    ) -> Generator[str, None, None]:
+        """Generates SSE formatted events for real-time copilot streaming (sync generator)."""
         # 1. Start event
         cid = conversation_id or str(uuid.uuid4())
         yield f"event: message_start\ndata: {json.dumps({'conversation_id': cid, 'timestamp': datetime.utcnow().isoformat()})}\n\n"

@@ -60,13 +60,13 @@ class TitleUpdatePayload(BaseModel):
     status_code=status.HTTP_200_OK,
     summary="Chat with Farm AI Copilot (JSON)",
 )
-async def chat_with_copilot(
+def chat_with_copilot(
     payload: CopilotChatRequest,
     user_id: str = Depends(get_current_user_id),
 ) -> Dict[str, Any]:
     """Execute copilot reasoning and return structured JSON response."""
     try:
-        p_ctx = payload.page_context.dict() if payload.page_context else None
+        p_ctx = payload.page_context.model_dump() if payload.page_context else None
         res = AssistantOrchestrator.process_chat(
             user_id=user_id,
             message=payload.message,
@@ -90,12 +90,12 @@ async def chat_with_copilot(
     "/chat/stream",
     summary="Chat with Farm AI Copilot (SSE Streaming)",
 )
-async def stream_copilot_chat(
+def stream_copilot_chat(
     payload: CopilotChatRequest,
     user_id: str = Depends(get_current_user_id),
 ):
     """Stream SSE events for copilot interaction."""
-    p_ctx = payload.page_context.dict() if payload.page_context else None
+    p_ctx = payload.page_context.model_dump() if payload.page_context else None
     return StreamingResponse(
         AssistantOrchestrator.process_chat_stream(
             user_id=user_id,
