@@ -50,7 +50,7 @@ def test_mango_never_returns_cereal_image():
         tags=["wheat", "cereal", "grain", "agriculture"]
     )
 
-    cereal_score = RelevanceScorer.calculate_score(cereal_candidate, mango)
+    ident, qual, cereal_score = RelevanceScorer.calculate_score(cereal_candidate, mango)
     assert cereal_score == 0.0, f"Cereal candidate received score {cereal_score}, expected 0.0 rejection"
 
     # Candidate 2: Valid mango orchard photo
@@ -65,7 +65,7 @@ def test_mango_never_returns_cereal_image():
         height=800
     )
 
-    mango_score = RelevanceScorer.calculate_score(mango_candidate, mango)
+    ident_m, qual_m, mango_score = RelevanceScorer.calculate_score(mango_candidate, mango)
     assert mango_score >= 85.0, f"Mango candidate received score {mango_score}, expected >= 85.0"
 
 
@@ -97,7 +97,7 @@ def test_unresolved_entity_handling_no_scientific_name_fabrication():
 
 
 # ==============================================================================
-# 3. RELEVANCE SCORING MATRIX
+# 3. RELEVANCE SCORING MATRIX & PEXELS NATURAL LANGUAGE TESTING
 # ==============================================================================
 def test_relevance_scoring_matrix():
     """Test individual point contributions in RelevanceScorer."""
@@ -114,16 +114,51 @@ def test_relevance_scoring_matrix():
         width=1920
     )
 
-    score = RelevanceScorer.calculate_score(candidate, rice)
-    # Scientific (+40) + Canonical (+25) + Alias (+15) + Ag Context (+10) + Tags (+5) + Quality (+5) = 100
-    assert score >= 90.0
+    ident, qual, score = RelevanceScorer.calculate_score(candidate, rice)
+    assert score >= 85.0
+
+
+def test_pexels_natural_language_title_scoring():
+    """
+    Verify legitimate Pexels candidates for Coconut and Jute with natural language titles
+    and NO scientific name receive high relevance scores (>= 75.0) and pass threshold.
+    """
+    catalogue = get_crop_catalogue()
+
+    # Jute candidate: "Jute plants growing in a rural field"
+    jute = catalogue.get_entity("jute")
+    jute_candidate = ImageCandidate(
+        url="https://images.pexels.com/photos/jute.jpg",
+        title="Jute plants growing in a rural field",
+        description="Farmer field with green jute stalk plant",
+        provider="Pexels",
+        source_url="https://www.pexels.com/photo/jute",
+        width=1600,
+        height=1000
+    )
+    ident_j, qual_j, final_jute = RelevanceScorer.calculate_score(jute_candidate, jute)
+    assert final_jute >= 75.0, f"Jute candidate scored {final_jute}, expected >= 75.0"
+
+    # Coconut candidate: "coconut palm tree with green coconuts"
+    coconut = catalogue.get_entity("coconut")
+    coco_candidate = ImageCandidate(
+        url="https://images.pexels.com/photos/coconut.jpg",
+        title="coconut palm tree with green coconuts",
+        description="Tropical coconut grove plantation",
+        provider="Pexels",
+        source_url="https://www.pexels.com/photo/coconut",
+        width=1600,
+        height=1000
+    )
+    ident_c, qual_c, final_coco = RelevanceScorer.calculate_score(coco_candidate, coconut)
+    assert final_coco >= 75.0, f"Coconut candidate scored {final_coco}, expected >= 75.0"
 
 
 # ==============================================================================
 # 4. LOW SCORE REJECTION & CANDIDATE VALIDATION
 # ==============================================================================
 def test_low_relevance_score_rejection():
-    """Verify candidates scoring below minimum threshold (75) are rejected."""
+    """Verify candidates scoring below minimum threshold (70) are rejected."""
     catalogue = get_crop_catalogue()
     apple = catalogue.get_entity("apple")
 
@@ -136,8 +171,8 @@ def test_low_relevance_score_rejection():
         tags=["leaf", "garden"]
     )
 
-    score = RelevanceScorer.calculate_score(low_score_candidate, apple)
-    assert score < 75.0
+    ident, qual, score = RelevanceScorer.calculate_score(low_score_candidate, apple)
+    assert score < 70.0
 
 
 def test_ssrf_url_validation():
@@ -163,8 +198,8 @@ def test_image_cache_persistence(tmp_path):
         "image": {"available": True, "url": "https://example.com/mango.jpg", "provider": "Test"}
     }
 
-    cache.set("crop:mango", "mango", test_data, ttl_seconds=3600)
-    cached = cache.get("crop:mango")
+    cache.set("crop:mango:v2", "mango", test_data, ttl_seconds=3600)
+    cached = cache.get("crop:mango:v2")
 
     assert cached is not None
     assert cached["image"]["available"] is True
@@ -198,7 +233,6 @@ def test_image_resolution_api_endpoints(client):
 
 def test_smart_crop_recommendation_includes_image_payload(client, monkeypatch):
     """Verify POST /api/v1/crop/recommend-smart returns image payload in each recommendation."""
-    # Fast mock for external provider search in automated test suite
     async def mock_search(self, query, entity, max_candidates=10):
         return [
             ImageCandidate(
@@ -227,4 +261,3 @@ def test_smart_crop_recommendation_includes_image_payload(client, monkeypatch):
     top_rec = data["recommendations"][0]
     assert "image" in top_rec
     assert "available" in top_rec["image"]
-

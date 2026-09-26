@@ -10,6 +10,7 @@
       "Oryza sativa rice field plant",
       "Rice paddy crop agriculture"
     ],
+    "positive_terms": ["rice", "rice paddy", "rice field", "rice crop", "paddy field", "oryza", "rice plant", "paddy"],
     "negative_terms": ["mango", "apple", "banana", "cotton", "potato", "orange"]
   },
   "maize": {
@@ -23,6 +24,7 @@
       "Zea mays corn plant field",
       "Maize corn crop agriculture"
     ],
+    "positive_terms": ["maize", "corn", "corn cob", "corn field", "maize crop", "sweet corn", "zea mays", "makka"],
     "negative_terms": ["mango", "rice", "wheat", "cotton", "apple", "banana"]
   },
   "jute": {
@@ -36,6 +38,7 @@
       "Corchorus capsularis plant field",
       "Jute crop plant agriculture"
     ],
+    "positive_terms": ["jute", "jute plant", "jute crop", "jute field", "jute stalk", "jute fiber", "corchorus", "golden fiber", "pat"],
     "negative_terms": ["wheat", "maize", "corn", "apple", "mango"]
   },
   "cotton": {
@@ -49,6 +52,7 @@
       "Gossypium hirsutum cotton crop field",
       "Cotton plant boll agriculture"
     ],
+    "positive_terms": ["cotton", "cotton boll", "cotton field", "cotton plant", "cotton crop", "gossypium", "kapas"],
     "negative_terms": ["rice", "wheat", "maize", "mango", "apple"]
   },
   "wheat": {
@@ -62,6 +66,7 @@
       "Triticum aestivum wheat field plant",
       "Wheat crop grain field"
     ],
+    "positive_terms": ["wheat", "wheat field", "wheat grain", "wheat crop", "wheat stalk", "triticum", "golden wheat", "gehun"],
     "negative_terms": ["mango", "banana", "apple", "cotton", "potato", "rice"]
   },
   "chickpea": {
@@ -75,6 +80,7 @@
       "Cicer arietinum plant pods field",
       "Chickpea gram pulse agriculture"
     ],
+    "positive_terms": ["chickpea", "gram", "chana", "chickpea plant", "chickpea pod", "cicer", "bengal gram"],
     "negative_terms": ["mango", "apple", "wheat", "rice", "maize"]
   },
   "kidneybeans": {
@@ -88,6 +94,7 @@
       "Phaseolus vulgaris bean plant pod",
       "Kidney bean rajma crop"
     ],
+    "positive_terms": ["kidney bean", "rajma", "bean pod", "bean plant", "phaseolus", "common bean"],
     "negative_terms": ["mango", "wheat", "rice", "maize", "apple"]
   },
   "pigeonpeas": {
@@ -101,6 +108,7 @@
       "Cajanus cajan plant flower pod",
       "Pigeon pea arhar crop"
     ],
+    "positive_terms": ["pigeon pea", "arhar", "tur", "red gram", "pigeonpea plant", "cajanus"],
     "negative_terms": ["mango", "wheat", "rice", "maize", "apple"]
   },
   "mothbeans": {
@@ -114,6 +122,7 @@
       "Vigna aconitifolia plant field",
       "Moth bean pulse crop"
     ],
+    "positive_terms": ["moth bean", "matki", "vigna aconitifolia", "moth bean plant"],
     "negative_terms": ["mango", "wheat", "rice", "apple"]
   },
   "mungbean": {
@@ -127,6 +136,7 @@
       "Vigna radiata plant pod field",
       "Mungbean green gram crop"
     ],
+    "positive_terms": ["mungbean", "green gram", "moong", "mung bean pod", "vigna radiata"],
     "negative_terms": ["mango", "wheat", "rice", "apple"]
   },
   "blackgram": {
@@ -140,6 +150,7 @@
       "Vigna mungo plant pod",
       "Blackgram urad pulse agriculture"
     ],
+    "positive_terms": ["blackgram", "urad", "black lentil", "vigna mungo", "black gram"],
     "negative_terms": ["mango", "wheat", "rice", "apple"]
   },
   "lentil": {
@@ -153,6 +164,7 @@
       "Lens culinaris plant field",
       "Lentil masoor pulse crop"
     ],
+    "positive_terms": ["lentil", "masoor", "lens culinaris", "lentil plant", "lentil crop"],
     "negative_terms": ["mango", "wheat", "rice", "apple"]
   },
   "pomegranate": {
@@ -166,6 +178,7 @@
       "Punica granatum fruit tree branch",
       "Pomegranate fruit orchard agriculture"
     ],
+    "positive_terms": ["pomegranate", "pomegranate tree", "pomegranate fruit", "pomegranate orchard", "anar", "punica granatum"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
   },
   "banana": {
@@ -179,6 +192,7 @@
       "Musa acuminata banana tree leaves fruit",
       "Banana fruit plant orchard"
     ],
+    "positive_terms": ["banana", "banana tree", "banana plant", "banana bunch", "banana fruit", "banana leaves", "musa acuminata", "kela"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard", "potato"]
   },
   "mango": {
@@ -192,6 +206,7 @@
       "Mangifera indica mango tree branch fruit",
       "Mango tree fruit agriculture"
     ],
+    "positive_terms": ["mango", "mango tree", "mango fruit", "mango orchard", "mangifera", "ripe mango", "green mango", "aam", "mango grove"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard", "potato"]
   },
   "grapes": {
@@ -205,6 +220,7 @@
       "Vitis vinifera fruit vine cluster",
       "Grape vineyard fruit orchard"
     ],
+    "positive_terms": ["grapes", "grapevine", "vineyard", "grape cluster", "vitis vinifera", "angoor", "grape vine"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
   },
   "watermelon": {
@@ -218,6 +234,7 @@
       "Citrullus lanatus melon field",
       "Watermelon fruit vine field"
     ],
+    "positive_terms": ["watermelon", "watermelon vine", "watermelon fruit", "citrullus lanatus", "tarbooz"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mango"]
   },
   "muskmelon": {
@@ -231,6 +248,7 @@
       "Cucumis melo melon plant field",
       "Muskmelon fruit vine agriculture"
     ],
+    "positive_terms": ["muskmelon", "cantaloupe", "melon vine", "cucumis melo", "kharbooza"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mango"]
   },
   "apple": {
@@ -244,6 +262,7 @@
       "Malus domestica red apple tree branch",
       "Apple fruit orchard tree"
     ],
+    "positive_terms": ["apple", "apple tree", "apple orchard", "red apple", "malus domestica", "seb"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
   },
   "orange": {
@@ -257,6 +276,7 @@
       "Citrus sinensis orange tree branch",
       "Orange citrus fruit grove"
     ],
+    "positive_terms": ["orange", "citrus tree", "orange grove", "orange fruit", "citrus sinensis", "santra"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
   },
   "papaya": {
@@ -270,6 +290,7 @@
       "Carica papaya fruit tree leaves",
       "Papaya fruit plant farm"
     ],
+    "positive_terms": ["papaya", "papaya tree", "papaya fruit", "papaya plant", "carica papaya", "papita"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
   },
   "coconut": {
@@ -283,6 +304,7 @@
       "Cocos nucifera coconut palm tree",
       "Coconut palm tree fruit"
     ],
+    "positive_terms": ["coconut", "coconut palm", "coconut tree", "coconut fruit", "coconut plantation", "coconut grove", "green coconut", "mature coconut", "palm", "nariyal"],
     "negative_terms": ["wheat", "rice", "maize", "corn", "barley", "mustard"]
   },
   "mustard": {
@@ -296,6 +318,7 @@
       "Brassica juncea mustard field yellow flowers",
       "Mustard sarson yellow flower field"
     ],
+    "positive_terms": ["mustard", "mustard field", "yellow mustard", "sarson", "mustard flower", "brassica"],
     "negative_terms": ["mango", "apple", "banana", "rice", "wheat"]
   },
   "sugarcane": {
@@ -309,6 +332,7 @@
       "Saccharum officinarum cane field",
       "Sugarcane crop stalk field"
     ],
+    "positive_terms": ["sugarcane", "cane field", "sugarcane stalk", "sugarcane crop", "saccharum", "ganna"],
     "negative_terms": ["mango", "apple", "banana", "wheat", "rice"]
   },
   "potato": {
@@ -322,6 +346,7 @@
       "Solanum tuberosum potato plant field",
       "Potato crop tuber farm"
     ],
+    "positive_terms": ["potato", "potato plant", "potato tuber", "potato field", "potato crop", "solanum tuberosum", "aalu"],
     "negative_terms": ["mango", "apple", "banana", "rice", "wheat"]
   },
   "groundnut": {
@@ -335,6 +360,7 @@
       "Arachis hypogaea peanut plant field",
       "Groundnut peanut crop pod"
     ],
+    "positive_terms": ["groundnut", "peanut", "peanut plant", "groundnut field", "arachis", "moongphali"],
     "negative_terms": ["mango", "apple", "banana", "rice", "wheat"]
   }
 }

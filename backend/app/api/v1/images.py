@@ -37,6 +37,8 @@ class ImageDetailSchema(BaseModel):
     license: Optional[str] = None
     license_url: Optional[str] = None
     alt: Optional[str] = None
+    identity_score: Optional[float] = None
+    quality_score: Optional[float] = None
     relevance_score: Optional[float] = None
     reason: Optional[str] = None
 
@@ -92,22 +94,33 @@ async def refresh_crop_image(crop_id: str):
     summary="Get image resolution system and provider health status"
 )
 async def get_images_health():
-    """Return health status of image search providers and configuration."""
+    """Return detailed health status of image search providers and configuration."""
+    import asyncio
     pexels = PexelsImageProvider()
     wikimedia = WikimediaImageProvider()
     gbif = GBIFImageProvider()
     inat = INaturalistImageProvider()
 
+    pexels_health, wikimedia_health, gbif_health, inat_health = await asyncio.gather(
+        pexels.check_health(),
+        wikimedia.check_health(),
+        gbif.check_health(),
+        inat.check_health()
+    )
+
     return {
         "status": "healthy" if settings.IMAGE_SEARCH_ENABLED else "disabled",
         "enabled": settings.IMAGE_SEARCH_ENABLED,
-        "cache": "sqlite_active",
-        "cache_ttl_seconds": settings.IMAGE_CACHE_TTL,
+        "cache": {
+            "available": True,
+            "ttl_seconds": settings.IMAGE_CACHE_TTL
+        },
         "min_relevance_score": settings.IMAGE_MIN_RELEVANCE_SCORE,
         "providers": {
-            "pexels": "configured" if pexels.is_configured() else "not_configured",
-            "wikimedia": "available" if wikimedia.is_configured() else "disabled",
-            "gbif": "available" if gbif.is_configured() else "disabled",
-            "inaturalist": "available" if inat.is_configured() else "disabled"
+            "pexels": pexels_health,
+            "wikimedia": wikimedia_health,
+            "gbif": gbif_health,
+            "inaturalist": inat_health
         }
     }
+

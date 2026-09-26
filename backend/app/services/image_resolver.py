@@ -4,8 +4,9 @@ Resolves, ranks, validates, and caches high-relevance agricultural crop photos a
 Guarantees:
 - Deterministic relevance scoring (0-100)
 - Entity-aware negative keyword matching (e.g., Mango NEVER returns cereal/wheat images)
-- Rejection of low-scoring candidates (< 75 threshold)
+- Rejection of low-scoring candidates (< 70 threshold)
 - Persistent SQLite cache with configurable TTL (IMAGE_CACHE_TTL)
+- Request coalescing (single-flight pattern) for concurrent resolution calls
 - Fault-tolerant provider fallback (never fails recommendation API)
 """
 
@@ -146,20 +147,20 @@ class RelevanceScorer:
     AG_KEYWORDS = [
         "crop", "plant", "tree", "fruit", "field", "agriculture", "farm",
         "orchard", "harvest", "botanical", "cultivation", "leaf", "leaves",
-        "branch", "flora", "bloom", "growing", "soil"
+        "branch", "flora", "bloom", "growing", "soil", "stalk", "fiber", "grove", "plantation"
     ]
 
     @classmethod
-    def calculate_score(cls, candidate: ImageCandidate, entity: CropEntity) -> float:
+    def calculate_score(cls, candidate: ImageCandidate, entity: CropEntity) -> Tuple[float, float, float]:
         """
-        Calculate deterministic relevance score (0-100).
+        Calculate identity_score, quality_score, and final_relevance_score (0-100).
         Scoring Matrix:
-        - Scientific name exact match: +40
-        - Canonical name exact match: +25
-        - Alias match: +15
+        - Canonical name exact match: +40
+        - Scientific name exact match: +35
+        - Strong alias match: +30
+        - Entity-specific visual positive term match: +25
+        - Provider title/description depth: +15
         - Ag context keywords: +10
-        - Tag/description match: +5
-        - Resolution / aspect quality: +5
         - Negative Keyword Penalty: -60 or rejection
         """
         text_corpus = f"{candidate.title} {candidate.description or ''} {' '.join(candidate.tags)}".lower()
@@ -167,41 +168,62 @@ class RelevanceScorer:
         # 1. Negative Keyword Penalty Check (Entity-Aware)
         for neg_term in entity.negative_terms:
             if neg_term.lower() in text_corpus:
-                # Check if candidate strongly specifies current crop scientific name
                 sci_match = entity.scientific_name and entity.scientific_name.lower() in text_corpus
-                if not sci_match:
-                    logger.info(f"Candidate rejected for '{entity.crop_id}' due to negative keyword match '{neg_term}' in title '{candidate.title}'")
-                    return 0.0
+                canon_match = entity.name.lower() in text_corpus
+                if not (sci_match and canon_match):
+                    logger.debug(f"Candidate rejected for '{entity.crop_id}' due to negative keyword match '{neg_term}' in title '{candidate.title}'")
+                    return 0.0, 0.0, 0.0
 
-        score = 0.0
+        identity_score = 0.0
 
-        # 2. Scientific Name Match (+40)
-        if entity.scientific_name and entity.scientific_name.lower() in text_corpus:
-            score += 40.0
-
-        # 3. Canonical Name Match (+25)
+        # 2. Canonical Name Match (+40)
         if entity.name.lower() in text_corpus or entity.crop_id in text_corpus:
-            score += 25.0
+            identity_score += 40.0
 
-        # 4. Alias Match (+15)
+        # 3. Scientific Name Match (+35)
+        if entity.scientific_name and entity.scientific_name.lower() in text_corpus:
+            identity_score += 35.0
+
+        # 4. Strong Alias Match (+30)
         for alias in entity.aliases:
             if alias.lower() in text_corpus:
-                score += 15.0
+                identity_score += 30.0
                 break
 
-        # 5. Agricultural Context Keywords (+10)
+        # 5. Entity-Specific Positive Term Match (+25)
+        positive_terms = getattr(entity, "positive_terms", [])
+        positive_matches = sum(1 for term in positive_terms if term.lower() in text_corpus)
+        identity_score += min(25.0, positive_matches * 15.0)
+
+        # 6. Provider Title/Description Depth (+15)
+        if candidate.title and len(candidate.title) >= 5:
+            identity_score += 15.0
+
+        # 7. Agricultural Context Keywords (+10)
         ag_matches = sum(1 for kw in cls.AG_KEYWORDS if kw in text_corpus)
-        score += min(10.0, ag_matches * 3.5)
+        identity_score += min(10.0, ag_matches * 3.5)
 
-        # 6. Description / Tag Depth (+5)
-        if len(candidate.tags) >= 2 or len(candidate.description or "") >= 20:
-            score += 5.0
+        identity_score = min(100.0, max(0.0, identity_score))
 
-        # 7. Resolution / Quality Aspect (+5)
+        # Quality Score Calculation
+        quality_score = 50.0
         if candidate.width and candidate.width >= settings.IMAGE_MIN_WIDTH:
-            score += 5.0
+            quality_score += 25.0
+        if candidate.height and candidate.height >= settings.IMAGE_MIN_HEIGHT:
+            quality_score += 15.0
+        if len(candidate.description or "") >= 20 or len(candidate.tags) >= 2:
+            quality_score += 10.0
 
-        return round(min(100.0, max(0.0, score)), 1)
+        quality_score = min(100.0, max(0.0, quality_score))
+
+        # Final Relevance Score (Weighted identity 85%, quality 15%)
+        final_relevance = round(min(100.0, max(0.0, (identity_score * 0.85) + (quality_score * 0.15))), 1)
+
+        candidate.identity_score = round(identity_score, 1)
+        candidate.quality_score = round(quality_score, 1)
+        candidate.relevance_score = final_relevance
+
+        return candidate.identity_score, candidate.quality_score, final_relevance
 
 
 class CandidateValidator:
@@ -241,9 +263,21 @@ class CandidateValidator:
 class ImageResolver:
     """Orchestrator for Dynamic Crop Image Resolution."""
 
+    _instance = None
+
+    def __new__(cls, cache: Optional[ImageCache] = None):
+        if cls._instance is None:
+            cls._instance = super(ImageResolver, cls).__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
     def __init__(self, cache: Optional[ImageCache] = None):
+        if getattr(self, "_initialized", False):
+            return
+        self._initialized = True
         self.cache = cache or ImageCache()
         self.catalogue = get_crop_catalogue()
+        self._in_flight_tasks: Dict[str, asyncio.Task] = {}
 
         # Active providers sequence
         self.providers: List[ImageProvider] = [
@@ -256,10 +290,10 @@ class ImageResolver:
     async def resolve_entity_image(self, crop_name: str, force_refresh: bool = False) -> Dict[str, Any]:
         """
         Resolve canonical crop entity and find highest relevance verified image.
-        Returns standard Pydantic response dict matching API contract.
+        Uses single-flight task coalescing to prevent duplicate concurrent resolution requests.
         """
         entity = self.catalogue.get_entity(crop_name)
-        cache_key = f"crop:{entity.crop_id}"
+        cache_key = f"crop:{entity.crop_id}:v2"
 
         # 1. Check persistent cache
         if not force_refresh:
@@ -268,60 +302,74 @@ class ImageResolver:
                 logger.info(f"image_cache_hit entity={entity.crop_id}")
                 return cached
 
+        # Single-flight request coalescing
+        if cache_key in self._in_flight_tasks:
+            logger.info(f"image_resolution_coalesced entity={entity.crop_id}")
+            return await self._in_flight_tasks[cache_key]
+
+        # Create resolution task
+        task = asyncio.create_task(self._do_resolve_entity_image(entity, cache_key, force_refresh))
+        self._in_flight_tasks[cache_key] = task
+        try:
+            return await task
+        finally:
+            self._in_flight_tasks.pop(cache_key, None)
+
+    async def _do_resolve_entity_image(self, entity: CropEntity, cache_key: str, force_refresh: bool) -> Dict[str, Any]:
+        """Execute external resolution across providers."""
+        start_time = time.time()
         logger.info(f"image_resolution_started entity={entity.crop_id} scientific_name={entity.scientific_name}")
 
         all_candidates: List[ImageCandidate] = []
 
-        # 2. Build controlled search queries
-        search_queries: List[str] = list(entity.search_terms)
-        if not search_queries:
-            if entity.scientific_name:
-                search_queries.append(f"{entity.scientific_name} {entity.name} plant agriculture")
-            search_queries.append(f"{entity.name} crop plant agriculture")
+        # Build deduplicated controlled queries
+        pexels_query = f"{entity.name} {entity.category} plant agriculture"
+        bio_query = entity.scientific_name if entity.scientific_name else f"{entity.name} plant"
 
-        # 3. Query configured providers in parallel/fallback sequence
+        # Query configured providers
         for provider in self.providers:
             if not provider.is_configured():
                 continue
 
-            for query in search_queries[:2]:  # Top 2 controlled queries
-                try:
-                    candidates = await asyncio.wait_for(
-                        provider.search(query, entity, max_candidates=settings.IMAGE_MAX_CANDIDATES),
-                        timeout=settings.IMAGE_REQUEST_TIMEOUT
-                    )
-                    if candidates:
-                        logger.info(f"image_provider_success provider={provider.provider_name} entity={entity.crop_id} candidates={len(candidates)}")
-                        all_candidates.extend(candidates)
-                except Exception as e:
-                    logger.warning(f"Provider {provider.provider_name} search failed: {e}")
+            query = pexels_query if provider.provider_name == "Pexels" else bio_query
+            try:
+                candidates = await asyncio.wait_for(
+                    provider.search(query, entity, max_candidates=settings.IMAGE_MAX_CANDIDATES),
+                    timeout=settings.IMAGE_REQUEST_TIMEOUT
+                )
+                if candidates:
+                    all_candidates.extend(candidates)
+            except Exception as e:
+                logger.warning(f"Provider {provider.provider_name} search failed for '{query}': {e}")
 
-        # 4. Relevance Scoring & Negative Keyword Filtering
+        # Relevance Scoring & Negative Keyword Filtering
         valid_candidates: List[Tuple[ImageCandidate, float]] = []
 
         for candidate in all_candidates:
-            score = RelevanceScorer.calculate_score(candidate, entity)
-            candidate.relevance_score = score
+            ident_score, qual_score, final_score = RelevanceScorer.calculate_score(candidate, entity)
+            if final_score >= settings.IMAGE_MIN_RELEVANCE_SCORE:
+                valid_candidates.append((candidate, final_score))
 
-            if score >= settings.IMAGE_MIN_RELEVANCE_SCORE:
-                valid_candidates.append((candidate, score))
-            else:
-                logger.info(f"image_candidate_rejected entity={entity.crop_id} provider={candidate.provider} score={score} title='{candidate.title}'")
-
-        # 5. Sort candidates by score descending
+        # Sort candidates by score descending
         valid_candidates.sort(key=lambda x: x[1], reverse=True)
 
         selected_candidate: Optional[ImageCandidate] = None
 
-        # 6. Candidate Validation Gate
+        # Candidate Validation Gate
         for candidate, score in valid_candidates:
             if await CandidateValidator.validate_candidate(candidate):
                 selected_candidate = candidate
-                logger.info(f"image_resolution_success entity={entity.crop_id} provider={candidate.provider} score={score}")
                 break
 
-        # 7. Construct Normalized Response Payload
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        # Construct Normalized Response Payload
         if selected_candidate:
+            logger.info(
+                f"image_resolution_summary entity={entity.crop_id} providers={len(self.providers)} "
+                f"candidates={len(all_candidates)} accepted={len(valid_candidates)} "
+                f"best_provider={selected_candidate.provider} best_score={selected_candidate.relevance_score} duration_ms={duration_ms}"
+            )
             response_payload = {
                 "success": True,
                 "entity": {
@@ -341,12 +389,17 @@ class ImageResolver:
                     "license": selected_candidate.license or "CC BY-SA",
                     "license_url": selected_candidate.license_url or "https://creativecommons.org/licenses/",
                     "alt": selected_candidate.title or f"{entity.name} plant agriculture photo",
+                    "identity_score": selected_candidate.identity_score,
+                    "quality_score": selected_candidate.quality_score,
                     "relevance_score": selected_candidate.relevance_score,
                     "reason": "Successfully resolved high-relevance crop photo"
                 }
             }
         else:
-            logger.info(f"image_resolution_failed entity={entity.crop_id} reason=no_valid_candidate_above_threshold")
+            logger.info(
+                f"image_resolution_summary entity={entity.crop_id} providers={len(self.providers)} "
+                f"candidates={len(all_candidates)} accepted=0 best_provider=none best_score=none duration_ms={duration_ms}"
+            )
             response_payload = {
                 "success": True,
                 "entity": {
@@ -365,13 +418,15 @@ class ImageResolver:
                     "author": None,
                     "license": None,
                     "license_url": None,
-                    "alt": f"{entity.name} image unavailable",
+                    "alt": f"{entity.name} reference image unavailable",
+                    "identity_score": None,
+                    "quality_score": None,
                     "relevance_score": None,
                     "reason": "No sufficiently relevant image found matching quality & safety threshold"
                 }
             }
 
-        # 8. Store in persistent cache
+        # Store in persistent cache
         self.cache.set(cache_key, entity.crop_id, response_payload, settings.IMAGE_CACHE_TTL)
         return response_payload
 

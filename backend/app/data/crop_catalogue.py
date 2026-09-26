@@ -24,6 +24,7 @@ class CropEntity(BaseModel):
     category: str = "General"
     aliases: List[str] = Field(default_factory=list)
     search_terms: List[str] = Field(default_factory=list)
+    positive_terms: List[str] = Field(default_factory=list)
     negative_terms: List[str] = Field(default_factory=list)
     is_resolved: bool = True
 

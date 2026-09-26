@@ -46,6 +46,7 @@ async def recommend_crop_smart(payload: SmartCropRequest):
         res = await recommender.generate_smart_recommendations(
             latitude=payload.location.latitude,
             longitude=payload.location.longitude,
+            mode=payload.mode,
             location_name=payload.location.displayName,
             district=payload.location.district,
             state=payload.location.state,

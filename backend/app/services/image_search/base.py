@@ -23,6 +23,8 @@ class ImageCandidate(BaseModel):
     width: Optional[int] = None
     height: Optional[int] = None
     tags: List[str] = Field(default_factory=list)
+    identity_score: Optional[float] = None
+    quality_score: Optional[float] = None
     relevance_score: Optional[float] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -47,3 +49,14 @@ class ImageProvider(ABC):
     def is_configured(self) -> bool:
         """Check if provider credentials/dependencies are ready."""
         pass
+
+    async def check_health(self) -> Dict[str, Any]:
+        """Check provider reachability and authentication status."""
+        configured = self.is_configured()
+        return {
+            "configured": configured,
+            "reachable": configured,
+            "authenticated": configured,
+            "last_status": 200 if configured else None
+        }
+

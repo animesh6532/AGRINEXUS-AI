@@ -81,4 +81,70 @@ class PexelsImageProvider(ImageProvider):
         except Exception as e:
             logger.warning(f"Pexels search failed for query '{query}': {e}")
 
-        return candidates
+    async def check_health(self) -> dict:
+        """Perform lightweight health and authentication verification check for Pexels API."""
+        if not self.is_configured():
+            return {
+                "configured": False,
+                "reachable": False,
+                "authenticated": False,
+                "last_status": None,
+                "message": "PEXELS_API_KEY is missing or unconfigured"
+            }
+
+        headers = {"Authorization": settings.PEXELS_API_KEY.strip()}
+        params = {"query": "nature", "per_page": 1}
+
+        try:
+            async with httpx.AsyncClient(timeout=4.0) as client:
+                res = await client.get(PEXELS_SEARCH_URL, headers=headers, params=params)
+                status_code = res.status_code
+                if status_code == 200:
+                    return {
+                        "configured": True,
+                        "reachable": True,
+                        "authenticated": True,
+                        "last_status": 200,
+                        "message": "Pexels API authenticated and operational"
+                    }
+                elif status_code == 401:
+                    return {
+                        "configured": True,
+                        "reachable": True,
+                        "authenticated": False,
+                        "last_status": 401,
+                        "message": "Invalid Pexels API Key"
+                    }
+                elif status_code == 403:
+                    return {
+                        "configured": True,
+                        "reachable": True,
+                        "authenticated": False,
+                        "last_status": 403,
+                        "message": "Pexels API request forbidden"
+                    }
+                elif status_code == 429:
+                    return {
+                        "configured": True,
+                        "reachable": True,
+                        "authenticated": True,
+                        "last_status": 429,
+                        "message": "Pexels API rate limited"
+                    }
+                else:
+                    return {
+                        "configured": True,
+                        "reachable": False,
+                        "authenticated": False,
+                        "last_status": status_code,
+                        "message": f"Pexels API returned HTTP {status_code}"
+                    }
+        except Exception as e:
+            return {
+                "configured": True,
+                "reachable": False,
+                "authenticated": False,
+                "last_status": None,
+                "message": f"Pexels health check failed: {str(e)}"
+            }
+
