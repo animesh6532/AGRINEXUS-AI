@@ -14,6 +14,7 @@ from .soil import router as soil_router
 from .yield_api import router as yield_router
 from .live import router as live_router
 from .images import router as images_router
+from .farmer import router as farmer_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
@@ -28,4 +29,6 @@ api_v1_router.include_router(pest_router)
 api_v1_router.include_router(soil_router)
 api_v1_router.include_router(yield_router)
 api_v1_router.include_router(live_router)
+api_v1_router.include_router(farmer_router)
+
 
