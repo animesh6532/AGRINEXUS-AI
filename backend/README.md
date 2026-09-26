@@ -852,8 +852,147 @@ Limitations: orchestrates existing intelligence only; cannot invent
 agronomic facts. Time windows reuse upstream values or documented coarse
 buckets (immediately/within 6 hours/today/within 24 hours/next 2 days).
 
+---
 
+## 🌾 AI Farming Assistant / Farming Chatbot
 
+```text
+External Data -> Weather / Market / Crop Calendar
+  -> Friend's 7 ML Predictions -> Decision Engine
+  -> Risk & Opportunity Analysis -> Smart Alerts
+  -> Personalized Action Plan
+  -> AI FARMING ASSISTANT
+  -> Farmer
+```
+
+### Purpose & Scope
+The **AI Farming Assistant** is the final conversational layer of AgriNexus-AI. It enables farmers to communicate naturally with the platform, ask general agricultural questions, and inquire about their dynamic farm situation without requiring an external LLM API in V1.
+
+- **Farming-Only Scope**: Handles crops, soil, fertilizer, irrigation, pests, diseases, farm operations, harvest, and agro-markets. Non-agricultural inquiries ("tell me a joke") are politely redirected.
+- **Not an ML Model**: Does not retrain or replace any ML model, nor duplicate decision engine logic.
+- **Zero Hallucination**: Never fabricates pesticide dosages, fertilizer quantities, weather, or market prices. Returns a grounded fallback when knowledge is insufficient.
+
+### Hybrid Routing Architecture
+Incoming queries are classified into two distinct operational flows:
+
+```text
+                        FARMER
+                           │
+                           ▼
+                ┌────────────────────┐
+                │ AI FARMING         │
+                │ ASSISTANT          │
+                └─────────┬──────────┘
+                          │
+                    Question Router
+                          │
+              ┌───────────┴────────────┐
+              │                        │
+              ▼                        ▼
+      STATIC KNOWLEDGE          DYNAMIC FARM QUERY
+              │                        │
+              ▼                        ▼
+       Embedding Search          AGRINEXUS DATA
+              │                  (Action Plan / Alerts /
+              ▼                   Risks / Decisions /
+       10,000+ Q&A                Weather / Markets)
+              │                        │
+              └───────────┬────────────┘
+                          ▼
+                    Grounded Answer
+                          │
+                          ▼
+                       FARMER
+```
+
+1. **Static Knowledge Routing**: Questions such as *"What is crop rotation?"*, *"What is NPK?"*, *"Why are rice leaves yellow?"*, or *"What causes brown spot in rice?"* route to the semantic vector search engine over the knowledge base.
+2. **Dynamic Farm Query Routing**: Questions such as *"What should I do today?"*, *"What are my biggest farm risks?"*, *"Why did I receive this alert?"*, or *"Why should I irrigate today?"* route directly to upstream AGRINEXUS intelligence outputs (Personalized Action Plan, Smart Alerts, Risk & Opportunity, Decision Engine, Weather, Market).
+
+### Farming Assistant Agricultural Knowledge Base & 10,000+ Audit Status
+
+The Farming Assistant utilizes a local, traceable, semantically searchable agricultural knowledge base.
+
+#### 1. Primary Ingested Dataset
+- **Dataset Name**: KisanVaani Agriculture Q&A
+- **Dataset Source URL**: [https://huggingface.co/datasets/KisanVaani/agriculture-qa-english-only](https://huggingface.co/datasets/KisanVaani/agriculture-qa-english-only)
+- **Dataset License**: Apache 2.0 (confirmed from HuggingFace dataset card)
+- **Original Source File**: `backend/data/knowledge_base/kisanvaani_agriculture_qa.parquet`
+- **Original Row Count**: 22,615 rows
+- **Usable Unique Q&A Count**: 2,331 unique records
+- **Invalid / Empty Rows**: 0 (all 22,615 rows contained non-empty questions and answers)
+- **Duplicate Rows Removed**: 20,284 exact question+answer duplicates removed (the HuggingFace release repeats ~2,225 unique questions across ~10 iterations).
+- **Questions with Multiple Distinct Answers**: 110 questions have multiple distinct valid answers in the dataset, all of which are preserved as distinct source records.
+
+#### 2. Normalization & Metadata Policy
+- **Normalization**: Handled via `backend/scripts/prepare_kisanvaani_kb.py`. Strips redundant whitespace, collapses tabs/newlines, handles array/list responses by concatenating elements without rewriting or paraphrasing text, preserving exact agronomic terminology.
+- **Deduplication Rule**: Exact duplicate pairs `(normalized_question, normalized_answer)` are deduplicated. Different answers to the same question are preserved as separate knowledge entries.
+- **Metadata Assignment**:
+  - `crop`: Deterministically detected from standard crop ontology (e.g., rice, wheat, maize, cassava, banana, tomato, etc.), else `null`.
+  - `crop_stage`: Deterministically detected from standard growth stages (germination, flowering, tillering, etc.), else `null`.
+  - `topic`: Deterministically categorized across 17 agronomic topics (`disease_management`, `soil_management`, `pest_management`, `fertilizer`, `irrigation`, `harvesting`, `planting`, `sustainable_agriculture`, etc.) using explicit keyword rules; defaults to `general_farming`.
+  - `keywords`: Deterministically derived from text tokens excluding stopwords.
+  - `language`: `"en"`
+  - `region`: `"global"`
+  - `source`: `"KisanVaani Agriculture Q&A"`
+  - `source_url`: `"https://huggingface.co/datasets/KisanVaani/agriculture-qa-english-only"`
+  - `verified`: `false` (Never marked as verified because AGRINEXUS human agronomic experts have not individually certified each record).
+
+#### 3. Ingestion & Conversion Pipeline
+1. **Preparation / Audit**:
+   ```bash
+   python backend/scripts/prepare_kisanvaani_kb.py
+   ```
+   Outputs: `backend/data/knowledge_base/kisanvaani_agriculture_qa_agrinexus.json`
+2. **Database Ingestion & Vector Indexing**:
+   ```bash
+   python backend/scripts/ingest_farming_kb.py --file backend/data/knowledge_base/kisanvaani_agriculture_qa_agrinexus.json
+   ```
+
+#### 4. Actual Final Database Count & 10,000+ Target Status
+- **Current Database Record Count**: 2,340 records (11 sample/expert-verified reference records + 2,329 newly ingested KisanVaani records).
+- **10,000+ Target Status**: **NOT MET** (2,340 / 10,000 records).
+- **Transparency Statement**: The 10,000+ target is **NOT MET** because the available legitimate source dataset produced only 2,331 usable unique records. In accordance with AGRINEXUS integrity principles, synthetic questions, duplicated records, or artificial modifications were **NOT** fabricated merely to inflate the record count.
+- **Recommended Additional Sources to Reach 10,000+**:
+  1. `talhakk/agriculture-qa` (HuggingFace: 25,410 rows: 15,000 general agriculture + 10,410 crop-specific QA across 10 major crops).
+  2. `liaad/agricultural-data` (HuggingFace: 17,715 agricultural rows).
+  The existing ingestion pipeline (`ingest_farming_kb.py`) is modular and ready to ingest either dataset as soon as downloaded.
+- **API Status Verification**: Reported transparently by `GET /api/farming-assistant/kb-status` (`is_target_met: false`, `record_count: 2340`, `target_count: 10000`).
+
+### Semantic Search & Local Vector Storage
+- **Local Embedding Model**: Uses `sentence-transformers/all-MiniLM-L6-v2` (384-dimensional dense vectors), cached locally. No OpenAI, Gemini, or Ollama API key is required.
+- **Fallback Embedder**: If SentenceTransformers cannot be initialized, seamlessly falls back to a Scikit-Learn TF-IDF semantic vectorizer with L2 normalization.
+- **Vector Storage**: SQLite persistence (`farming_knowledge_records` table) coupled with an in-memory normalized NumPy matrix for sub-millisecond cosine similarity search (`q_vec @ matrix.T`).
+- **Traceability**: Every response includes `sources` with record ID, source organization, topic, crop, and cosine relevance score.
+- **Conversation Memory**: Maintains bounded, privacy-conscious session history (default: 10 turns).
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/api/farming-assistant/chat` | Conversational query endpoint with intent routing and grounded answers |
+| `GET` | `/api/farming-assistant/health` | Service health, local embedding status, and record count |
+| `GET` | `/api/farming-assistant/capabilities` | Supported crops, topics, routing modes, and similarity thresholds |
+| `GET` | `/api/farming-assistant/kb-status` | Record count and verification against the 10,000+ requirement |
+| `POST` | `/api/farming-assistant/ingest` | Ingest and index a validated Q&A record |
+
+### Configuration (`backend/app/core/config.py`)
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `FARMING_ASSISTANT_TOP_K` | `3` | Maximum relevant Q&A records retrieved per query |
+| `FARMING_ASSISTANT_SIMILARITY_THRESHOLD` | `0.55` | Minimum cosine similarity required to accept a match |
+| `FARMING_ASSISTANT_MAX_CONTEXT` | `5` | Maximum dynamic context items included |
+| `FARMING_ASSISTANT_MAX_HISTORY` | `10` | Maximum messages stored per conversation session |
+| `FARMING_EMBEDDING_MODEL` | `sentence-transformers/all-MiniLM-L6-v2` | Local HuggingFace embedding model |
+| `FARMING_KB_PATH` | `data/knowledge_base/farming_kb.db` | Knowledge base storage path |
+
+### Future Optional LLM Integration
+For future iterations beyond V1, an LLM (Ollama, Gemini, OpenAI) may be added as an optional presentation layer. If enabled:
+- The LLM receives retrieved knowledge and AGRINEXUS structured outputs as strict context.
+- The LLM never acts as the source of truth for weather, prices, risks, alerts, or ML predictions.
+- No external LLM key is needed for V1.
+
+---
 
 ## Contributing
 

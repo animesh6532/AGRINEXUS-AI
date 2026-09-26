@@ -110,6 +110,14 @@ class Settings(BaseSettings):
     DEFAULT_FORECAST_HORIZON_DAYS: int = 7
     MIN_HISTORICAL_DAYS_REQUIRED: int = 30
 
+    # Farming Assistant Configuration
+    FARMING_ASSISTANT_TOP_K: int = 3
+    FARMING_ASSISTANT_SIMILARITY_THRESHOLD: float = 0.55
+    FARMING_ASSISTANT_MAX_CONTEXT: int = 5
+    FARMING_ASSISTANT_MAX_HISTORY: int = 10
+    FARMING_EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    FARMING_KB_PATH: str = "data/knowledge_base/farming_kb.db"
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
