@@ -1,23 +1,25 @@
 """
 Database models for the AgriNexus-AI backend.
-Defines SQLAlchemy models for storing agricultural market data.
+Defines SQLAlchemy models for storing agricultural market data, farmer profiles,
+fields, crop plantings, and farming knowledge records.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (
+    Boolean,
     Column,
-    Integer,
-    String,
     Date,
     DateTime,
     Float,
-    Boolean,
-    Text,
     ForeignKey,
-    UniqueConstraint,
     Index,
+    Integer,
+    LargeBinary,
+    String,
+    Text,
+    UniqueConstraint,
 )
 from sqlalchemy.ext.declarative import declared_attr
 from sqlalchemy.orm import declarative_base, relationship
@@ -300,7 +302,7 @@ class MarketObservation(Base):
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
-        nullable=False
+        nullable=False,
     )
 
     # Ensure we don't store duplicate observations for the same
@@ -314,7 +316,7 @@ class MarketObservation(Base):
             "variety",
             "grade",
             "observation_date",
-            name="uix_market_observation_unique"
+            name="uix_market_observation_unique",
         ),
         Index("ix_market_observation_commodity_date", "commodity", "observation_date"),
         Index("ix_market_observation_market_date", "market", "observation_date"),
@@ -401,7 +403,7 @@ class ForecastResult(Base):
             "forecast_date",
             "target_date",
             "model_name",
-            name="uix_forecast_result_unique"
+            name="uix_forecast_result_unique",
         ),
         Index("ix_forecast_result_commodity_target", "commodity", "target_date"),
     )
@@ -454,4 +456,60 @@ class IrrigationLog(Base):
             "notes": self.notes,
             "logged_at": self.logged_at.isoformat() if self.logged_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-        }
+        }
+
+
+class FarmingKnowledgeRecord(Base):
+    """
+    Model representing a validated agricultural Question & Answer knowledge record.
+    Preserves source traceability, agronomic context, and precomputed vector embeddings.
+    """
+    __tablename__ = "farming_knowledge_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question = Column(Text, nullable=False)
+    answer = Column(Text, nullable=False)
+    crop = Column(String(100), nullable=True, index=True)
+    crop_stage = Column(String(100), nullable=True, index=True)
+    topic = Column(String(100), nullable=False, index=True)
+    subtopic = Column(String(100), nullable=True)
+    keywords = Column(String(500), nullable=True)
+    language = Column(String(20), default="en", nullable=False)
+    region = Column(String(100), nullable=True)
+    source = Column(String(200), default="AGRINEXUS Farming Knowledge Base", nullable=False)
+    source_url = Column(String(500), nullable=True)
+    verified = Column(Boolean, default=True, nullable=False)
+    embedding = Column(LargeBinary, nullable=True)
+    embedding_dim = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        Index("ix_fkr_crop_topic", "crop", "topic"),
+    )
+
+    def to_dict(self) -> dict:
+        """Convert model instance to dictionary without binary embedding blob."""
+        return {
+            "id": self.id,
+            "question": self.question,
+            "answer": self.answer,
+            "crop": self.crop,
+            "crop_stage": self.crop_stage,
+            "topic": self.topic,
+            "subtopic": self.subtopic,
+            "keywords": self.keywords,
+            "language": self.language,
+            "region": self.region,
+            "source": self.source,
+            "source_url": self.source_url,
+            "verified": self.verified,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
