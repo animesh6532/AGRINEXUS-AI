@@ -47,7 +47,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   const { user } = useAuth();
   const { location } = useLocationContext();
 
-  const userId = user?.email || 'default_farmer';
+  const userId = user?.id || user?.email || 'default_farmer';
 
   const [farmer, setFarmer] = useState<FarmerProfile | null>(null);
   const [dashboardData, setDashboardData] = useState<FarmDashboardResponse | null>(null);

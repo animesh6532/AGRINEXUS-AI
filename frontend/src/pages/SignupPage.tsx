@@ -19,20 +19,23 @@ export const SignupPage: React.FC = () => {
   const { location: globalLocation } = useLocationContext();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      signup({
+    try {
+      await signup({
         name: name || 'Farmer',
         email: email || 'farmer@agrinexus.ai',
+        password,
         location: globalLocation?.displayName,
         primaryCrop,
-        farmType: 'Commercial Agronomy'
       });
-      setIsLoading(false);
       navigate('/dashboard');
-    }, 600);
+    } catch (err) {
+      console.error('Signup error:', err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

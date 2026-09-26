@@ -71,8 +71,49 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function getAuthHeaders(userId?: string, contentType?: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (contentType) headers['Content-Type'] = contentType;
+  const token = localStorage.getItem('agrinexus_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (userId) {
+    headers['X-User-ID'] = userId;
+  }
+  return headers;
+}
+
 // Centralized API Service Object
 export const api = {
+  // ------------------------------------------------------------------
+  // Auth Endpoints (/api/v1/auth)
+  // ------------------------------------------------------------------
+  async registerUser(payload: any): Promise<any> {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async loginUser(payload: any): Promise<any> {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async getCurrentUser(): Promise<any> {
+    const res = await fetch(`${BASE_URL}/api/v1/auth/me`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse<any>(res);
+  },
+
   // ------------------------------------------------------------------
   // System & Health Endpoints
   // ------------------------------------------------------------------
@@ -339,27 +380,22 @@ export const api = {
   // Farmer Profile & Personalized Farm Command Center (/api/v1/farmer)
   // ------------------------------------------------------------------
   async getFarmerProfile(userId?: string): Promise<any> {
-    const headers: Record<string, string> = {};
-    if (userId) headers['X-User-ID'] = userId;
-    const res = await fetch(`${BASE_URL}/api/v1/farmer/profile`, { headers });
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/profile`, {
+      headers: getAuthHeaders(userId),
+    });
     return handleResponse<any>(res);
   },
 
   async updateFarmerProfile(payload: any, userId?: string): Promise<any> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/profile`, {
       method: 'PUT',
-      headers,
+      headers: getAuthHeaders(userId, 'application/json'),
       body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },
 
   async getFarmerDashboard(userId?: string, lat?: number, lon?: number, displayName?: string): Promise<any> {
-    const headers: Record<string, string> = {};
-    if (userId) headers['X-User-ID'] = userId;
-
     let url = `${BASE_URL}/api/v1/farmer/dashboard`;
     const params: string[] = [];
     if (lat !== undefined && lon !== undefined) {
@@ -372,102 +408,86 @@ export const api = {
       url += `?${params.join('&')}`;
     }
 
-    const res = await fetch(url, { headers });
+    const res = await fetch(url, {
+      headers: getAuthHeaders(userId),
+    });
     return handleResponse<any>(res);
   },
 
   async createFarm(payload: any, userId?: string): Promise<any> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/farms`, {
       method: 'POST',
-      headers,
+      headers: getAuthHeaders(userId, 'application/json'),
       body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },
 
   async updateFarm(farmId: number, payload: any, userId?: string): Promise<any> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/farms/${farmId}`, {
       method: 'PUT',
-      headers,
+      headers: getAuthHeaders(userId, 'application/json'),
       body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },
 
   async deleteFarm(farmId: number, userId?: string): Promise<any> {
-    const headers: Record<string, string> = {};
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/farms/${farmId}`, {
       method: 'DELETE',
-      headers,
+      headers: getAuthHeaders(userId),
     });
     return handleResponse<any>(res);
   },
 
   async createField(payload: any, userId?: string): Promise<any> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/fields`, {
       method: 'POST',
-      headers,
+      headers: getAuthHeaders(userId, 'application/json'),
       body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },
 
   async updateField(fieldId: number, payload: any, userId?: string): Promise<any> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/fields/${fieldId}`, {
       method: 'PUT',
-      headers,
+      headers: getAuthHeaders(userId, 'application/json'),
       body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },
 
   async deleteField(fieldId: number, userId?: string): Promise<any> {
-    const headers: Record<string, string> = {};
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/fields/${fieldId}`, {
       method: 'DELETE',
-      headers,
+      headers: getAuthHeaders(userId),
     });
     return handleResponse<any>(res);
   },
 
   async createCrop(payload: any, userId?: string): Promise<any> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/crops`, {
       method: 'POST',
-      headers,
+      headers: getAuthHeaders(userId, 'application/json'),
       body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },
 
   async updateCrop(cropId: number, payload: any, userId?: string): Promise<any> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/crops/${cropId}`, {
       method: 'PUT',
-      headers,
+      headers: getAuthHeaders(userId, 'application/json'),
       body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },
 
   async deleteCrop(cropId: number, userId?: string): Promise<any> {
-    const headers: Record<string, string> = {};
-    if (userId) headers['X-User-ID'] = userId;
     const res = await fetch(`${BASE_URL}/api/v1/farmer/crops/${cropId}`, {
       method: 'DELETE',
-      headers,
+      headers: getAuthHeaders(userId),
     });
     return handleResponse<any>(res);
   },

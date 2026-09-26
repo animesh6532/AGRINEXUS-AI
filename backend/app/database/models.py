@@ -47,6 +47,35 @@ def normalize_area_to_m2(value: float, unit: str) -> float:
     return value * 4046.86  # default to acre conversion
 
 
+import uuid
+
+class User(Base):
+    """
+    Model representing an authenticated application user.
+    Root ownership entity for all farmer profiles, farms, fields, and activity events.
+    """
+    __tablename__ = "users"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    email = Column(String(150), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    full_name = Column(String(150), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    farmer_profile = relationship("FarmerProfile", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    activity_events = relationship("FarmActivityEvent", back_populates="user", cascade="all, delete-orphan")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "email": self.email,
+            "full_name": self.full_name,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class FarmerProfile(Base):
     """
     Model representing a persistent farmer profile.
@@ -55,7 +84,7 @@ class FarmerProfile(Base):
     __tablename__ = "farmer_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String(100), nullable=False, unique=True, index=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
     full_name = Column(String(150), nullable=False)
     phone = Column(String(30), nullable=True)
     email = Column(String(150), nullable=True)
@@ -63,6 +92,7 @@ class FarmerProfile(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
+    user = relationship("User", back_populates="farmer_profile")
     farms = relationship("Farm", back_populates="farmer", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
@@ -818,6 +848,47 @@ class Message(Base):
             "actions": json.loads(self.actions) if self.actions else [],
             "sources": json.loads(self.sources) if self.sources else [],
             "metadata": json.loads(self.metadata_json) if self.metadata_json else {},
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class FarmActivityEvent(Base):
+    """
+    Model storing historical activity events for the farmer timeline.
+    """
+    __tablename__ = "farm_activity_events"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    farm_id = Column(Integer, ForeignKey("farms.id", ondelete="CASCADE"), nullable=True, index=True)
+    field_id = Column(Integer, ForeignKey("fields.id", ondelete="SET NULL"), nullable=True, index=True)
+    crop_id = Column(Integer, ForeignKey("crop_plantings.id", ondelete="SET NULL"), nullable=True, index=True)
+    event_type = Column(String(50), nullable=False)
+    title = Column(String(250), nullable=False)
+    description = Column(Text, nullable=False)
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    user = relationship("User", back_populates="activity_events")
+
+    def to_dict(self) -> dict:
+        import json
+        meta = None
+        if self.metadata_json:
+            try:
+                meta = json.loads(self.metadata_json)
+            except Exception:
+                meta = None
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "farm_id": self.farm_id,
+            "field_id": self.field_id,
+            "crop_id": self.crop_id,
+            "event_type": self.event_type,
+            "title": self.title,
+            "description": self.description,
+            "metadata": meta,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 

@@ -23,14 +23,15 @@ from ...schemas.farmer import (
     FieldResponse,
     FieldUpdate,
 )
-from ...services.farmer_service import FarmerRepository, FarmIntelligenceService
+from ...database.models import User
+from .auth import get_current_user
 
 router = APIRouter(prefix="/farmer", tags=["Farmer Profile & Command Center"])
 
 
-def get_current_user_id(x_user_id: Optional[str] = Header(None, alias="X-User-ID")) -> str:
-    """Extract authenticated user ID from request header or default."""
-    return x_user_id.strip() if x_user_id and x_user_id.strip() else "default_farmer"
+def get_current_user_id(user: User = Depends(get_current_user)) -> str:
+    """Extract authenticated user ID from authenticated database User entity."""
+    return user.id
 
 
 @router.get("/profile", response_model=FarmerProfileResponse)
