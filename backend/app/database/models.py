@@ -416,3 +416,42 @@ class ForecastResult(Base):
             f"predicted_modal_price={self.predicted_modal_price}"
             f")>"
         )
+
+
+class IrrigationLog(Base):
+    """
+    Model representing historical/logged irrigation events for a field.
+    Enables water budget calculations, season totals, and historical tracking.
+    """
+    __tablename__ = "irrigation_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    field_id = Column(Integer, ForeignKey("fields.id", ondelete="CASCADE"), nullable=False, index=True)
+    farmer_id = Column(Integer, ForeignKey("farmer_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    water_amount_mm = Column(Float, nullable=False)
+    water_amount_liters = Column(Float, nullable=True)
+    method = Column(String(100), nullable=True)
+    duration_minutes = Column(Integer, nullable=True)
+    notes = Column(Text, nullable=True)
+    logged_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    field = relationship("Field")
+    farmer = relationship("FarmerProfile")
+
+    def __repr__(self) -> str:
+        return f"<IrrigationLog(id={self.id}, field_id={self.field_id}, mm={self.water_amount_mm}, logged_at='{self.logged_at}')>"
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "field_id": self.field_id,
+            "farmer_id": self.farmer_id,
+            "water_amount_mm": self.water_amount_mm,
+            "water_amount_liters": self.water_amount_liters,
+            "method": self.method,
+            "duration_minutes": self.duration_minutes,
+            "notes": self.notes,
+            "logged_at": self.logged_at.isoformat() if self.logged_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

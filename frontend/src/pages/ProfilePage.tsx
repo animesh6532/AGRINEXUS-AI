@@ -236,7 +236,7 @@ export const ProfilePage: React.FC = () => {
                 <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-sky-500">
                   <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                     <span className="flex items-center gap-1.5"><CloudSun className="w-4 h-4 text-sky-500" /> WEATHER</span>
-                    <Badge variant="blue">LIVE</Badge>
+                    <Badge variant="info">LIVE</Badge>
                   </div>
                   <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
                     {dashboardData?.today_status.weather_summary || '31°C • Rain 12mm'}
@@ -247,7 +247,7 @@ export const ProfilePage: React.FC = () => {
                 <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-emerald-500">
                   <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                     <span className="flex items-center gap-1.5"><Database className="w-4 h-4 text-emerald-500" /> SOIL STATUS</span>
-                    <Badge variant="green">TESTED</Badge>
+                    <Badge variant="success">TESTED</Badge>
                   </div>
                   <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
                     {dashboardData?.today_status.soil_summary || 'pH 6.5 • N 90 kg/ha'}
@@ -258,7 +258,7 @@ export const ProfilePage: React.FC = () => {
                 <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-blue-500">
                   <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                     <span className="flex items-center gap-1.5"><Droplets className="w-4 h-4 text-blue-500" /> WATER STATUS</span>
-                    <Badge variant="yellow">MONITOR</Badge>
+                    <Badge variant="warning">MONITOR</Badge>
                   </div>
                   <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
                     {dashboardData?.today_status.water_summary || '2 Active Crop Field(s)'}
@@ -269,7 +269,7 @@ export const ProfilePage: React.FC = () => {
                 <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-amber-500">
                   <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                     <span className="flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-amber-500" /> MARKET WATCH</span>
-                    <Badge variant="lime">RISING</Badge>
+                    <Badge variant="primary">RISING</Badge>
                   </div>
                   <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
                     {dashboardData?.today_status.market_summary || 'Tracking Active Crops'}
@@ -316,7 +316,7 @@ export const ProfilePage: React.FC = () => {
                                 </p>
                               </div>
                             </div>
-                            <Badge variant={card.weather_status === 'Warning' ? 'red' : 'green'}>
+                            <Badge variant={card.weather_status === 'Warning' ? 'danger' : 'success'}>
                               {card.growth_stage}
                             </Badge>
                           </div>
@@ -401,7 +401,7 @@ export const ProfilePage: React.FC = () => {
                             <span className="font-extrabold text-[#0B1C10] font-editorial text-sm">
                               {item.crop_name} ({item.field_name})
                             </span>
-                            <Badge variant={item.status === 'Warning' ? 'red' : 'green'}>{item.status}</Badge>
+                            <Badge variant={item.status === 'Warning' ? 'danger' : 'success'}>{item.status}</Badge>
                           </div>
                           <div className="space-y-1">
                             <p className="text-[#0B1C10] font-medium">
@@ -482,7 +482,7 @@ export const ProfilePage: React.FC = () => {
                         <div key={idx} className="p-4 rounded-2xl bg-[#EEF3E8]/80 border border-[#E2E7DA] space-y-2 text-xs">
                           <div className="flex items-center justify-between font-bold text-[#0B1C10]">
                             <span>{item.crop_name} • {item.field_name}</span>
-                            <Badge variant={item.status === 'MONITOR' ? 'yellow' : 'green'}>{item.status}</Badge>
+                            <Badge variant={item.status === 'MONITOR' ? 'warning' : 'success'}>{item.status}</Badge>
                           </div>
                           <p className="text-[#536056]">
                             <strong>Method:</strong> {item.irrigation_method} | <strong>Window:</strong> {item.next_window}
@@ -511,7 +511,7 @@ export const ProfilePage: React.FC = () => {
                         <div key={idx} className="p-4 rounded-2xl bg-[#EEF3E8]/80 border border-[#E2E7DA] space-y-2 text-xs">
                           <div className="flex items-center justify-between font-bold text-[#0B1C10]">
                             <span>{item.crop_name} ({item.field_name})</span>
-                            <Badge variant={item.model_available ? 'green' : 'gray'}>
+                            <Badge variant={item.model_available ? 'success' : 'neutral'}>
                               {item.model_available ? 'ML Available' : 'Regional Context'}
                             </Badge>
                           </div>
@@ -546,7 +546,7 @@ export const ProfilePage: React.FC = () => {
                         <div key={idx} className="p-4 rounded-2xl bg-[#EEF3E8]/80 border border-[#E2E7DA] space-y-2 text-xs">
                           <div className="flex items-center justify-between font-bold text-[#0B1C10]">
                             <span>{item.crop_name} • {item.field_name}</span>
-                            <Badge variant={item.risk_level === 'High' ? 'red' : item.risk_level === 'Moderate' ? 'yellow' : 'green'}>
+                            <Badge variant={item.risk_level === 'High' ? 'danger' : item.risk_level === 'Moderate' ? 'warning' : 'success'}>
                               Risk: {item.risk_level}
                             </Badge>
                           </div>
@@ -582,7 +582,7 @@ export const ProfilePage: React.FC = () => {
                         <div key={idx} className="p-4 rounded-2xl bg-[#EEF3E8]/80 border border-[#E2E7DA] space-y-2 text-xs">
                           <div className="flex items-center justify-between font-bold text-[#0B1C10]">
                             <span className="font-editorial text-sm">{item.crop_name}</span>
-                            <Badge variant="lime">{item.trend}</Badge>
+                            <Badge variant="primary">{item.trend}</Badge>
                           </div>
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-[#536056]">Market Price:</span>
@@ -645,7 +645,7 @@ export const ProfilePage: React.FC = () => {
                         <div key={alert.id} className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
                           <div className="flex items-center justify-between font-bold text-amber-950">
                             <span>{alert.title}</span>
-                            <Badge variant={alert.priority === 'High' ? 'red' : 'yellow'}>{alert.priority}</Badge>
+                            <Badge variant={alert.priority === 'High' ? 'danger' : 'warning'}>{alert.priority}</Badge>
                           </div>
                           <p className="text-amber-900/90">{alert.description}</p>
                         </div>
@@ -693,7 +693,7 @@ export const ProfilePage: React.FC = () => {
                           <td className="py-3 px-3">{row.pest}</td>
                           <td className="py-3 px-3 text-emerald-700 font-bold">{row.market}</td>
                           <td className="py-3 px-3">
-                            <Badge variant={row.attention_level === 'High' ? 'red' : row.attention_level === 'Medium' ? 'yellow' : 'green'}>
+                            <Badge variant={row.attention_level === 'High' ? 'danger' : row.attention_level === 'Medium' ? 'warning' : 'success'}>
                               {row.attention_level}
                             </Badge>
                           </td>
@@ -922,7 +922,7 @@ export const ProfilePage: React.FC = () => {
                 <GlassCard key={field.id} variant="solid" className="p-6 space-y-4 border border-[#E2E7DA]">
                   <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
                     <h4 className="text-lg font-extrabold font-editorial text-[#0B1C10]">{field.field_name} Soil Profile</h4>
-                    <Badge variant={field.soil_test_available ? 'green' : 'gray'}>
+                    <Badge variant={field.soil_test_available ? 'success' : 'neutral'}>
                       {field.soil_test_available ? 'Lab Test Available' : 'No Lab Test'}
                     </Badge>
                   </div>
@@ -930,26 +930,26 @@ export const ProfilePage: React.FC = () => {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                     <div className="p-3 rounded-2xl bg-[#EEF3E8] border border-[#E2E7DA] space-y-1">
                       <span className="text-[#536056] block font-bold">pH</span>
-                      <p className="text-base font-extrabold font-mono text-[#0B1C10]">{field.ph ?? '—'}</p>
-                      <span className="text-[10px] text-[#2F6B3C] font-semibold">{field.ph_provenance}</span>
+                      <p className="text-base font-extrabold font-mono text-[#0B1C10]">{field.soil_data?.ph?.value ?? '—'}</p>
+                      <span className="text-[10px] text-[#2F6B3C] font-semibold">{field.soil_data?.ph?.provenance}</span>
                     </div>
 
                     <div className="p-3 rounded-2xl bg-[#EEF3E8] border border-[#E2E7DA] space-y-1">
                       <span className="text-[#536056] block font-bold">Nitrogen (N)</span>
-                      <p className="text-base font-extrabold font-mono text-[#0B1C10]">{field.nitrogen ? `${field.nitrogen} kg/ha` : '—'}</p>
-                      <span className="text-[10px] text-[#2F6B3C] font-semibold">{field.nitrogen_provenance}</span>
+                      <p className="text-base font-extrabold font-mono text-[#0B1C10]">{field.soil_data?.nitrogen?.value ? `${field.soil_data.nitrogen.value} kg/ha` : '—'}</p>
+                      <span className="text-[10px] text-[#2F6B3C] font-semibold">{field.soil_data?.nitrogen?.provenance}</span>
                     </div>
 
                     <div className="p-3 rounded-2xl bg-[#EEF3E8] border border-[#E2E7DA] space-y-1">
                       <span className="text-[#536056] block font-bold">Phosphorus (P)</span>
-                      <p className="text-base font-extrabold font-mono text-[#0B1C10]">{field.phosphorus ? `${field.phosphorus} kg/ha` : '—'}</p>
-                      <span className="text-[10px] text-[#2F6B3C] font-semibold">{field.phosphorus_provenance}</span>
+                      <p className="text-base font-extrabold font-mono text-[#0B1C10]">{field.soil_data?.phosphorus?.value ? `${field.soil_data.phosphorus.value} kg/ha` : '—'}</p>
+                      <span className="text-[10px] text-[#2F6B3C] font-semibold">{field.soil_data?.phosphorus?.provenance}</span>
                     </div>
 
                     <div className="p-3 rounded-2xl bg-[#EEF3E8] border border-[#E2E7DA] space-y-1">
                       <span className="text-[#536056] block font-bold">Potassium (K)</span>
-                      <p className="text-base font-extrabold font-mono text-[#0B1C10]">{field.potassium ? `${field.potassium} kg/ha` : '—'}</p>
-                      <span className="text-[10px] text-[#2F6B3C] font-semibold">{field.potassium_provenance}</span>
+                      <p className="text-base font-extrabold font-mono text-[#0B1C10]">{field.soil_data?.potassium?.value ? `${field.soil_data.potassium.value} kg/ha` : '—'}</p>
+                      <span className="text-[10px] text-[#2F6B3C] font-semibold">{field.soil_data?.potassium?.provenance}</span>
                     </div>
                   </div>
                 </GlassCard>
@@ -1182,13 +1182,18 @@ const FieldFormModal: React.FC<{
   const [areaUnit, setAreaUnit] = useState(field?.area_unit || 'acre');
   const [soilType, setSoilType] = useState(field?.soil_type || 'Clay Loam');
   const [soilTest, setSoilTest] = useState(field?.soil_test_available || false);
-  const [ph, setPh] = useState(field?.ph || '');
-  const [n, setN] = useState(field?.nitrogen || '');
-  const [p, setP] = useState(field?.phosphorus || '');
-  const [k, setK] = useState(field?.potassium || '');
+  const [ph, setPh] = useState(field?.ph ?? '');
+  const [n, setN] = useState(field?.nitrogen ?? '');
+  const [p, setP] = useState(field?.phosphorus ?? '');
+  const [k, setK] = useState(field?.potassium ?? '');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const phVal = soilTest && ph !== '' ? Number(ph) : null;
+    const nVal = soilTest && n !== '' ? Number(n) : null;
+    const pVal = soilTest && p !== '' ? Number(p) : null;
+    const kVal = soilTest && k !== '' ? Number(k) : null;
+
     onSave({
       id: field?.id,
       farm_id: Number(farmId),
@@ -1197,10 +1202,14 @@ const FieldFormModal: React.FC<{
       area_unit: areaUnit,
       soil_type: soilType,
       soil_test_available: soilTest,
-      ph: ph !== '' ? Number(ph) : null,
-      nitrogen: n !== '' ? Number(n) : null,
-      phosphorus: p !== '' ? Number(p) : null,
-      potassium: k !== '' ? Number(k) : null,
+      ph: phVal,
+      ph_provenance: phVal !== null ? 'MEASURED' : 'UNKNOWN',
+      nitrogen: nVal,
+      nitrogen_provenance: nVal !== null ? 'MEASURED' : 'UNKNOWN',
+      phosphorus: pVal,
+      phosphorus_provenance: pVal !== null ? 'MEASURED' : 'UNKNOWN',
+      potassium: kVal,
+      potassium_provenance: kVal !== null ? 'MEASURED' : 'UNKNOWN',
     });
   };
 

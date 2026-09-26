@@ -593,3 +593,162 @@ export interface SmartCropResponse {
   };
   recommendations: SmartCropRecommendationItem[];
 }
+
+// ------------------------------------------------------------------
+// 14. IRRIGATION INTELLIGENCE & WATER MANAGEMENT
+// ------------------------------------------------------------------
+export interface FieldIrrigationContext {
+  field_id: number;
+  field_name: string;
+  farm_name: string;
+  crop_name: string;
+  variety?: string | null;
+  growth_stage: string;
+  area_value: number;
+  area_unit: string;
+  total_area_m2: number;
+  water_source: string;
+  irrigation_method: string;
+  soil_type: string;
+}
+
+export interface WaterStatusInfo {
+  current_swc: number;
+  field_capacity: number;
+  wilting_point: number;
+  critical_threshold: number;
+  status_code: string;
+  status_title: string;
+  status_description: string;
+  water_zone: string;
+}
+
+export interface IrrigationDecisionInfo {
+  state: "IRRIGATE_NOW" | "IRRIGATE_SOON" | "WAIT_FOR_RAIN" | "MONITOR" | "NO_IRRIGATION_REQUIRED" | "INSUFFICIENT_DATA";
+  state_title: string;
+  window: string;
+  net_depth_mm?: number | null;
+  gross_depth_mm?: number | null;
+  water_volume_liters?: number | null;
+  efficiency_pct?: number | null;
+  efficiency_note?: string | null;
+  reason: string;
+  actionable: boolean;
+}
+
+export interface ET0Info {
+  et0_today_mm: number;
+  et0_tomorrow_mm: number;
+  et0_3day_mm: number;
+  etc_today_mm?: number | null;
+  kc_value?: number | null;
+  kc_source: string;
+  kc_note: string;
+}
+
+export interface TrajectoryPoint {
+  label: string;
+  timestamp: string;
+  swc_projected: number;
+  rainfall_mm: number;
+  etc_mm: number;
+  threshold: number;
+  status: string;
+}
+
+export interface DailyPlanItem {
+  day: string;
+  date_str: string;
+  status: string;
+  rain_expected_mm: number;
+  etc_mm: number;
+  action: string;
+}
+
+export interface WaterBudgetInfo {
+  period: string;
+  rainfall_received_mm: number;
+  irrigation_applied_mm: number;
+  crop_consumed_mm: number;
+  estimated_deficit_mm: number;
+  season_total_liters: number;
+}
+
+export interface MLForecastSignal {
+  ml_predicted_swc_3h: number;
+  persistence_swc_3h: number;
+  target_unit: string;
+  horizon_hours: number;
+  baseline_note: string;
+}
+
+export interface WaterSavingOpportunity {
+  type: string;
+  title: string;
+  description: string;
+  potential_water_saved_liters?: number | null;
+}
+
+export interface WhatIfScenarioResult {
+  scenario_id: string;
+  scenario_name: string;
+  description: string;
+  water_applied_mm: number;
+  projected_swc_48h: number;
+  deficit_mm: number;
+  risk_level: string;
+  recommendation: string;
+}
+
+export interface IrrigationLogCreate {
+  field_id: number;
+  water_amount_mm: number;
+  method?: string;
+  duration_minutes?: number;
+  notes?: string;
+  logged_at?: string;
+}
+
+export interface IrrigationLogResponse {
+  id: number;
+  field_id: number;
+  farmer_id: number;
+  water_amount_mm: number;
+  water_amount_liters?: number | null;
+  method?: string | null;
+  duration_minutes?: number | null;
+  notes?: string | null;
+  logged_at: string;
+  created_at: string;
+}
+
+export interface WhatIfSimulationRequest {
+  field_id: number;
+  custom_irrigation_mm?: number;
+  delay_hours?: number;
+  simulated_rain_mm?: number;
+}
+
+export interface WhatIfSimulationResponse {
+  field_id: number;
+  base_swc: number;
+  scenarios: WhatIfScenarioResult[];
+}
+
+export interface IrrigationIntelligenceResponse {
+  field_context: FieldIrrigationContext;
+  water_status: WaterStatusInfo;
+  decision: IrrigationDecisionInfo;
+  et0: ET0Info;
+  water_balance_trajectory: TrajectoryPoint[];
+  seven_day_plan: DailyPlanItem[];
+  water_budget: WaterBudgetInfo;
+  ml_forecast: MLForecastSignal;
+  evidence_items: string[];
+  evidence_quality: string;
+  water_saving_opportunities: WaterSavingOpportunity[];
+  what_if_scenarios: WhatIfScenarioResult[];
+  irrigation_history: IrrigationLogResponse[];
+  generated_at: string;
+}
+

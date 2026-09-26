@@ -200,3 +200,87 @@ def test_edit_crop_updates_intelligence():
     crop_names2 = [card["crop_name"] for card in dash2["active_crop_cards"]]
     assert "Rice" not in crop_names2
     assert "Tomato" in crop_names2
+
+
+def test_authorization_isolation():
+    headers_user_a = {"X-User-ID": "user_a"}
+    headers_user_b = {"X-User-ID": "user_b"}
+
+    # User A creates farm
+    farm_a_res = client.post(
+        "/api/v1/farmer/farms",
+        json={"farm_name": "User A Farm", "area_value": 4.0, "latitude": 22.5, "longitude": 88.5},
+        headers=headers_user_a,
+    )
+    assert farm_a_res.status_code == 200
+    farm_a = farm_a_res.json()
+    farm_a_id = farm_a["id"]
+
+    # User B attempts to edit User A's farm -> 404
+    edit_res = client.put(f"/api/v1/farmer/farms/{farm_a_id}", json={"farm_name": "Hacked Farm"}, headers=headers_user_b)
+    assert edit_res.status_code == 404
+
+    # User B attempts to delete User A's farm -> 404
+    del_res = client.delete(f"/api/v1/farmer/farms/{farm_a_id}", headers=headers_user_b)
+    assert del_res.status_code == 404
+
+    # User A's farm remains intact
+    get_dash_a = client.get("/api/v1/farmer/dashboard", headers=headers_user_a).json()
+    assert get_dash_a["farmer"]["farms"][0]["farm_name"] == "User A Farm"
+
+
+def test_null_soil_updates_and_provenance():
+    headers = {"X-User-ID": "soil_test_user"}
+
+    farm_res = client.post(
+        "/api/v1/farmer/farms",
+        json={"farm_name": "Soil Farm", "area_value": 5.0, "latitude": 22.5, "longitude": 88.5},
+        headers=headers,
+    )
+    assert farm_res.status_code == 200
+    farm = farm_res.json()
+
+    field_res = client.post(
+        "/api/v1/farmer/fields",
+        json={
+            "farm_id": farm["id"],
+            "field_name": "Test Field",
+            "soil_test_available": True,
+            "nitrogen": 120.0,
+            "nitrogen_provenance": "MEASURED",
+            "area_value": 1.0,
+        },
+        headers=headers,
+    )
+    assert field_res.status_code == 200
+    field = field_res.json()
+
+    assert field["soil_data"]["nitrogen"]["value"] == 120.0
+    assert field["soil_data"]["nitrogen"]["provenance"] == "MEASURED"
+
+    # Now clear nitrogen explicitly
+    updated_field_res = client.put(
+        f"/api/v1/farmer/fields/{field['id']}",
+        json={"nitrogen": None, "nitrogen_provenance": "UNKNOWN"},
+        headers=headers,
+    )
+    assert updated_field_res.status_code == 200
+    updated_field = updated_field_res.json()
+
+    assert updated_field["soil_data"]["nitrogen"]["value"] is None
+    assert updated_field["soil_data"]["nitrogen"]["provenance"] == "UNKNOWN"
+
+
+def test_area_unit_conversions():
+    headers = {"X-User-ID": "area_test_user"}
+
+    farm_ha_res = client.post(
+        "/api/v1/farmer/farms",
+        json={"farm_name": "Hectare Farm", "area_value": 2.0, "area_unit": "hectare", "latitude": 22.5, "longitude": 88.5},
+        headers=headers,
+    )
+    assert farm_ha_res.status_code == 200
+    farm_ha = farm_ha_res.json()
+
+    assert farm_ha["total_area_m2"] == pytest.approx(20000.0, rel=1e-3)
+

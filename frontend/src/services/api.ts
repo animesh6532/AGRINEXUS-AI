@@ -26,6 +26,11 @@ import type {
   CropScheduleResponse,
   SmartCropRequest,
   SmartCropResponse,
+  IrrigationIntelligenceResponse,
+  IrrigationLogCreate,
+  IrrigationLogResponse,
+  WhatIfSimulationRequest,
+  WhatIfSimulationResponse,
 } from '../types/api';
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -136,6 +141,66 @@ export const api = {
       body: JSON.stringify(payload),
     });
     return handleResponse<IrrigationPredictionResponse>(res);
+  },
+
+  async getIrrigationIntelligence(
+    fieldId?: number,
+    lat?: number,
+    lon?: number,
+    userId?: string
+  ): Promise<IrrigationIntelligenceResponse> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+
+    const params: string[] = [];
+    if (fieldId !== undefined) params.push(`field_id=${fieldId}`);
+    if (lat !== undefined) params.push(`lat=${lat}`);
+    if (lon !== undefined) params.push(`lon=${lon}`);
+
+    const queryString = params.length > 0 ? `?${params.join('&')}` : '';
+    const res = await fetch(`${BASE_URL}/api/v1/irrigation/intelligence${queryString}`, { headers });
+    return handleResponse<IrrigationIntelligenceResponse>(res);
+  },
+
+  async logIrrigationEvent(
+    payload: IrrigationLogCreate,
+    userId?: string
+  ): Promise<IrrigationLogResponse> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+
+    const res = await fetch(`${BASE_URL}/api/v1/irrigation/log`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<IrrigationLogResponse>(res);
+  },
+
+  async getIrrigationLogs(
+    fieldId: number,
+    userId?: string
+  ): Promise<IrrigationLogResponse[]> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+
+    const res = await fetch(`${BASE_URL}/api/v1/irrigation/logs?field_id=${fieldId}`, { headers });
+    return handleResponse<IrrigationLogResponse[]>(res);
+  },
+
+  async simulateWhatIf(
+    payload: WhatIfSimulationRequest,
+    userId?: string
+  ): Promise<WhatIfSimulationResponse> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+
+    const res = await fetch(`${BASE_URL}/api/v1/irrigation/simulate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<WhatIfSimulationResponse>(res);
   },
 
   async predictPestVisual(file: File): Promise<VisualPestPredictResponse> {

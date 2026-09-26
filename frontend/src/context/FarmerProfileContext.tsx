@@ -56,6 +56,8 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
+  const requestIdRef = React.useRef<number>(0);
+
   const fetchProfile = useCallback(async () => {
     try {
       const data = await api.getFarmerProfile(userId);
@@ -70,32 +72,49 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const fetchDashboard = useCallback(
     async (locationOverride?: { latitude: number; longitude: number; displayName?: string }) => {
+      const currentRequestId = ++requestIdRef.current;
       setIsRefreshing(true);
       setError(null);
       try {
-        const lat = locationOverride?.latitude ?? location?.latitude;
-        const lon = locationOverride?.longitude ?? location?.longitude;
-        const name = locationOverride?.displayName ?? location?.displayName;
+        // Only pass lat/lon if locationOverride is explicitly supplied by caller.
+        // Otherwise, allow backend to use the primary farm's saved coordinates.
+        const lat = locationOverride?.latitude;
+        const lon = locationOverride?.longitude;
+        const name = locationOverride?.displayName;
 
         const data = await api.getFarmerDashboard(userId, lat, lon, name);
+        if (currentRequestId !== requestIdRef.current) {
+          // Stale response discarded to prevent race condition overwrites
+          return;
+        }
         setDashboardData(data);
         if (data.farmer) {
           setFarmer(data.farmer);
         }
       } catch (err: any) {
+        if (currentRequestId !== requestIdRef.current) return;
         console.error('Failed to fetch farm dashboard:', err);
         setError(err.message || 'Failed to load farm command center intelligence.');
       } finally {
-        setIsLoading(false);
-        setIsRefreshing(false);
+        if (currentRequestId === requestIdRef.current) {
+          setIsLoading(false);
+          setIsRefreshing(false);
+        }
       }
     },
-    [userId, location?.latitude, location?.longitude, location?.displayName]
+    [userId]
   );
 
+  // Clear state when user identity changes (login, logout, switch)
   useEffect(() => {
+    setFarmer(null);
+    setDashboardData(null);
+    setSelectedFarm(null);
+    setSelectedField(null);
+    setSelectedCrop(null);
+    setIsLoading(true);
     fetchDashboard();
-  }, [fetchDashboard]);
+  }, [userId]);
 
   const saveProfile = async (data: Partial<FarmerProfile>) => {
     setIsRefreshing(true);

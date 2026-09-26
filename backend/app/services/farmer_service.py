@@ -44,14 +44,19 @@ class FarmerRepository:
         return profile
 
     def update_profile(self, user_id: str, profile_data: dict) -> models.FarmerProfile:
-        profile = self.get_or_create_profile(user_id)
-        for key, val in profile_data.items():
-            if hasattr(profile, key) and val is not None:
-                setattr(profile, key, val)
-        profile.updated_at = datetime.utcnow()
-        self.db.commit()
-        self.db.refresh(profile)
-        return profile
+        try:
+            profile = self.get_or_create_profile(user_id)
+            for key, val in profile_data.items():
+                if hasattr(profile, key):
+                    setattr(profile, key, val)
+            profile.updated_at = datetime.now(timezone.utc)
+            self.db.commit()
+            self.db.refresh(profile)
+            return profile
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error updating farmer profile for user {user_id}: {e}")
+            raise
 
     def create_farm(self, user_id: str, farm_data: dict) -> models.Farm:
         profile = self.get_or_create_profile(user_id)
@@ -80,198 +85,238 @@ class FarmerRepository:
         return farm
 
     def update_farm(self, farm_id: int, user_id: str, farm_data: dict) -> Optional[models.Farm]:
-        profile = self.get_or_create_profile(user_id)
-        farm = self.db.query(models.Farm).filter(models.Farm.id == farm_id, models.Farm.farmer_id == profile.id).first()
-        if not farm:
-            return None
-        for key, val in farm_data.items():
-            if hasattr(farm, key) and val is not None:
-                setattr(farm, key, val)
-        if "area_value" in farm_data or "area_unit" in farm_data:
-            farm.total_area_m2 = models.normalize_area_to_m2(farm.area_value, farm.area_unit)
-        farm.updated_at = datetime.utcnow()
-        self.db.commit()
-        self.db.refresh(farm)
-        return farm
+        try:
+            profile = self.get_or_create_profile(user_id)
+            farm = self.db.query(models.Farm).filter(models.Farm.id == farm_id, models.Farm.farmer_id == profile.id).first()
+            if not farm:
+                return None
+            for key, val in farm_data.items():
+                if hasattr(farm, key):
+                    setattr(farm, key, val)
+            if "area_value" in farm_data or "area_unit" in farm_data:
+                farm.total_area_m2 = models.normalize_area_to_m2(farm.area_value, farm.area_unit)
+            farm.updated_at = datetime.now(timezone.utc)
+            self.db.commit()
+            self.db.refresh(farm)
+            return farm
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error updating farm {farm_id} for user {user_id}: {e}")
+            raise
 
     def delete_farm(self, farm_id: int, user_id: str) -> bool:
-        profile = self.get_or_create_profile(user_id)
-        farm = self.db.query(models.Farm).filter(models.Farm.id == farm_id, models.Farm.farmer_id == profile.id).first()
-        if not farm:
-            return False
-        self.db.delete(farm)
-        self.db.commit()
-        return True
+        try:
+            profile = self.get_or_create_profile(user_id)
+            farm = self.db.query(models.Farm).filter(models.Farm.id == farm_id, models.Farm.farmer_id == profile.id).first()
+            if not farm:
+                return False
+            self.db.delete(farm)
+            self.db.commit()
+            return True
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error deleting farm {farm_id} for user {user_id}: {e}")
+            raise
 
     def create_field(self, user_id: str, field_data: dict) -> Optional[models.Field]:
-        profile = self.get_or_create_profile(user_id)
-        farm_id = field_data.get("farm_id")
-        farm = self.db.query(models.Farm).filter(models.Farm.id == farm_id, models.Farm.farmer_id == profile.id).first()
-        if not farm:
-            return None
+        try:
+            profile = self.get_or_create_profile(user_id)
+            farm_id = field_data.get("farm_id")
+            farm = self.db.query(models.Farm).filter(models.Farm.id == farm_id, models.Farm.farmer_id == profile.id).first()
+            if not farm:
+                return None
 
-        area_val = field_data.get("area_value", 1.0)
-        area_unit = field_data.get("area_unit", "acre")
-        total_m2 = models.normalize_area_to_m2(area_val, area_unit)
+            area_val = field_data.get("area_value", 1.0)
+            area_unit = field_data.get("area_unit", "acre")
+            total_m2 = models.normalize_area_to_m2(area_val, area_unit)
 
-        field = models.Field(
-            farm_id=farm.id,
-            field_name=field_data.get("field_name", "Field A"),
-            area_value=area_val,
-            area_unit=area_unit,
-            total_area_m2=total_m2,
-            latitude=field_data.get("latitude", farm.latitude),
-            longitude=field_data.get("longitude", farm.longitude),
-            soil_type=field_data.get("soil_type", farm.soil_type_manual),
-            soil_test_available=field_data.get("soil_test_available", False),
-            ph=field_data.get("ph"),
-            ph_provenance=field_data.get("ph_provenance", "MEASURED" if field_data.get("ph") is not None else "UNKNOWN"),
-            nitrogen=field_data.get("nitrogen"),
-            nitrogen_provenance=field_data.get("nitrogen_provenance", "MEASURED" if field_data.get("nitrogen") is not None else "UNKNOWN"),
-            phosphorus=field_data.get("phosphorus"),
-            phosphorus_provenance=field_data.get("phosphorus_provenance", "MEASURED" if field_data.get("phosphorus") is not None else "UNKNOWN"),
-            potassium=field_data.get("potassium"),
-            potassium_provenance=field_data.get("potassium_provenance", "MEASURED" if field_data.get("potassium") is not None else "UNKNOWN"),
-            organic_carbon=field_data.get("organic_carbon"),
-            organic_carbon_provenance=field_data.get("organic_carbon_provenance", "MEASURED" if field_data.get("organic_carbon") is not None else "UNKNOWN"),
-            ec=field_data.get("ec"),
-            ec_provenance=field_data.get("ec_provenance", "MEASURED" if field_data.get("ec") is not None else "UNKNOWN"),
-            texture=field_data.get("texture"),
-            texture_provenance=field_data.get("texture_provenance", "MEASURED" if field_data.get("texture") is not None else "UNKNOWN"),
-            moisture=field_data.get("moisture"),
-            moisture_provenance=field_data.get("moisture_provenance", "MEASURED" if field_data.get("moisture") is not None else "UNKNOWN"),
-            notes=field_data.get("notes"),
-        )
-        self.db.add(field)
-        self.db.commit()
-        self.db.refresh(field)
-        return field
+            field = models.Field(
+                farm_id=farm.id,
+                field_name=field_data.get("field_name", "Field A"),
+                area_value=area_val,
+                area_unit=area_unit,
+                total_area_m2=total_m2,
+                latitude=field_data.get("latitude", farm.latitude),
+                longitude=field_data.get("longitude", farm.longitude),
+                soil_type=field_data.get("soil_type", farm.soil_type_manual),
+                soil_test_available=field_data.get("soil_test_available", False),
+                ph=field_data.get("ph"),
+                ph_provenance=field_data.get("ph_provenance", "MEASURED" if field_data.get("ph") is not None else "UNKNOWN"),
+                nitrogen=field_data.get("nitrogen"),
+                nitrogen_provenance=field_data.get("nitrogen_provenance", "MEASURED" if field_data.get("nitrogen") is not None else "UNKNOWN"),
+                phosphorus=field_data.get("phosphorus"),
+                phosphorus_provenance=field_data.get("phosphorus_provenance", "MEASURED" if field_data.get("phosphorus") is not None else "UNKNOWN"),
+                potassium=field_data.get("potassium"),
+                potassium_provenance=field_data.get("potassium_provenance", "MEASURED" if field_data.get("potassium") is not None else "UNKNOWN"),
+                organic_carbon=field_data.get("organic_carbon"),
+                organic_carbon_provenance=field_data.get("organic_carbon_provenance", "MEASURED" if field_data.get("organic_carbon") is not None else "UNKNOWN"),
+                ec=field_data.get("ec"),
+                ec_provenance=field_data.get("ec_provenance", "MEASURED" if field_data.get("ec") is not None else "UNKNOWN"),
+                texture=field_data.get("texture"),
+                texture_provenance=field_data.get("texture_provenance", "MEASURED" if field_data.get("texture") is not None else "UNKNOWN"),
+                moisture=field_data.get("moisture"),
+                moisture_provenance=field_data.get("moisture_provenance", "MEASURED" if field_data.get("moisture") is not None else "UNKNOWN"),
+                notes=field_data.get("notes"),
+            )
+            self.db.add(field)
+            self.db.commit()
+            self.db.refresh(field)
+            return field
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error creating field for user {user_id}: {e}")
+            raise
 
     def update_field(self, field_id: int, user_id: str, field_data: dict) -> Optional[models.Field]:
-        profile = self.get_or_create_profile(user_id)
-        field = (
-            self.db.query(models.Field)
-            .join(models.Farm)
-            .filter(models.Field.id == field_id, models.Farm.farmer_id == profile.id)
-            .first()
-        )
-        if not field:
-            return None
+        try:
+            profile = self.get_or_create_profile(user_id)
+            field = (
+                self.db.query(models.Field)
+                .join(models.Farm)
+                .filter(models.Field.id == field_id, models.Farm.farmer_id == profile.id)
+                .first()
+            )
+            if not field:
+                return None
 
-        for key, val in field_data.items():
-            if hasattr(field, key) and val is not None:
-                setattr(field, key, val)
+            for key, val in field_data.items():
+                if hasattr(field, key):
+                    setattr(field, key, val)
 
-        if "area_value" in field_data or "area_unit" in field_data:
-            field.total_area_m2 = models.normalize_area_to_m2(field.area_value, field.area_unit)
+            if "area_value" in field_data or "area_unit" in field_data:
+                field.total_area_m2 = models.normalize_area_to_m2(field.area_value, field.area_unit)
 
-        field.updated_at = datetime.utcnow()
-        self.db.commit()
-        self.db.refresh(field)
-        return field
+            field.updated_at = datetime.now(timezone.utc)
+            self.db.commit()
+            self.db.refresh(field)
+            return field
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error updating field {field_id} for user {user_id}: {e}")
+            raise
 
     def delete_field(self, field_id: int, user_id: str) -> bool:
-        profile = self.get_or_create_profile(user_id)
-        field = (
-            self.db.query(models.Field)
-            .join(models.Farm)
-            .filter(models.Field.id == field_id, models.Farm.farmer_id == profile.id)
-            .first()
-        )
-        if not field:
-            return False
-        self.db.delete(field)
-        self.db.commit()
-        return True
+        try:
+            profile = self.get_or_create_profile(user_id)
+            field = (
+                self.db.query(models.Field)
+                .join(models.Farm)
+                .filter(models.Field.id == field_id, models.Farm.farmer_id == profile.id)
+                .first()
+            )
+            if not field:
+                return False
+            self.db.delete(field)
+            self.db.commit()
+            return True
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error deleting field {field_id} for user {user_id}: {e}")
+            raise
 
     def create_crop_planting(self, user_id: str, crop_data: dict) -> Optional[models.CropPlanting]:
-        profile = self.get_or_create_profile(user_id)
-        field_id = crop_data.get("field_id")
-        field = (
-            self.db.query(models.Field)
-            .join(models.Farm)
-            .filter(models.Field.id == field_id, models.Farm.farmer_id == profile.id)
-            .first()
-        )
-        if not field:
-            return None
+        try:
+            profile = self.get_or_create_profile(user_id)
+            field_id = crop_data.get("field_id")
+            field = (
+                self.db.query(models.Field)
+                .join(models.Farm)
+                .filter(models.Field.id == field_id, models.Farm.farmer_id == profile.id)
+                .first()
+            )
+            if not field:
+                return None
 
-        s_date = crop_data.get("sowing_date")
-        if isinstance(s_date, str):
-            try:
-                s_date = date.fromisoformat(s_date)
-            except ValueError:
-                s_date = None
+            s_date = crop_data.get("sowing_date")
+            if isinstance(s_date, str):
+                try:
+                    s_date = date.fromisoformat(s_date)
+                except ValueError:
+                    s_date = None
 
-        h_date = crop_data.get("expected_harvest_date")
-        if isinstance(h_date, str):
-            try:
-                h_date = date.fromisoformat(h_date)
-            except ValueError:
-                h_date = None
+            h_date = crop_data.get("expected_harvest_date")
+            if isinstance(h_date, str):
+                try:
+                    h_date = date.fromisoformat(h_date)
+                except ValueError:
+                    h_date = None
 
-        crop = models.CropPlanting(
-            field_id=field.id,
-            crop_id=crop_data.get("crop_id"),
-            crop_name=crop_data.get("crop_name", "Rice"),
-            scientific_name=crop_data.get("scientific_name"),
-            variety=crop_data.get("variety"),
-            category=crop_data.get("category"),
-            sowing_date=s_date,
-            expected_harvest_date=h_date,
-            growth_stage=crop_data.get("growth_stage", "Vegetative"),
-            growth_stage_source=crop_data.get("growth_stage_source", "farmer"),
-            cultivation_type=crop_data.get("cultivation_type"),
-            irrigation_method=crop_data.get("irrigation_method"),
-            water_availability=crop_data.get("water_availability"),
-            status=crop_data.get("status", "ACTIVE"),
-            notes=crop_data.get("notes"),
-        )
-        self.db.add(crop)
-        self.db.commit()
-        self.db.refresh(crop)
-        return crop
+            crop = models.CropPlanting(
+                field_id=field.id,
+                crop_id=crop_data.get("crop_id"),
+                crop_name=crop_data.get("crop_name", "Rice"),
+                scientific_name=crop_data.get("scientific_name"),
+                variety=crop_data.get("variety"),
+                category=crop_data.get("category"),
+                sowing_date=s_date,
+                expected_harvest_date=h_date,
+                growth_stage=crop_data.get("growth_stage", "Vegetative"),
+                growth_stage_source=crop_data.get("growth_stage_source", "farmer"),
+                cultivation_type=crop_data.get("cultivation_type"),
+                irrigation_method=crop_data.get("irrigation_method"),
+                water_availability=crop_data.get("water_availability"),
+                status=crop_data.get("status", "ACTIVE"),
+                notes=crop_data.get("notes"),
+            )
+            self.db.add(crop)
+            self.db.commit()
+            self.db.refresh(crop)
+            return crop
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error creating crop planting for user {user_id}: {e}")
+            raise
 
     def update_crop_planting(self, crop_id: int, user_id: str, crop_data: dict) -> Optional[models.CropPlanting]:
-        profile = self.get_or_create_profile(user_id)
-        crop = (
-            self.db.query(models.CropPlanting)
-            .join(models.Field)
-            .join(models.Farm)
-            .filter(models.CropPlanting.id == crop_id, models.Farm.farmer_id == profile.id)
-            .first()
-        )
-        if not crop:
-            return None
+        try:
+            profile = self.get_or_create_profile(user_id)
+            crop = (
+                self.db.query(models.CropPlanting)
+                .join(models.Field)
+                .join(models.Farm)
+                .filter(models.CropPlanting.id == crop_id, models.Farm.farmer_id == profile.id)
+                .first()
+            )
+            if not crop:
+                return None
 
-        for key, val in crop_data.items():
-            if hasattr(crop, key) and val is not None:
-                if key in ("sowing_date", "expected_harvest_date") and isinstance(val, str):
-                    try:
-                        val = date.fromisoformat(val)
-                    except ValueError:
-                        continue
-                setattr(crop, key, val)
+            for key, val in crop_data.items():
+                if hasattr(crop, key):
+                    if key in ("sowing_date", "expected_harvest_date") and isinstance(val, str):
+                        try:
+                            val = date.fromisoformat(val)
+                        except ValueError:
+                            val = None
+                    setattr(crop, key, val)
 
-        crop.updated_at = datetime.utcnow()
-        self.db.commit()
-        self.db.refresh(crop)
-        return crop
+            crop.updated_at = datetime.now(timezone.utc)
+            self.db.commit()
+            self.db.refresh(crop)
+            return crop
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error updating crop planting {crop_id} for user {user_id}: {e}")
+            raise
 
     def delete_crop_planting(self, crop_id: int, user_id: str) -> bool:
-        profile = self.get_or_create_profile(user_id)
-        crop = (
-            self.db.query(models.CropPlanting)
-            .join(models.Field)
-            .join(models.Farm)
-            .filter(models.CropPlanting.id == crop_id, models.Farm.farmer_id == profile.id)
-            .first()
-        )
-        if not crop:
-            return False
-        self.db.delete(crop)
-        self.db.commit()
-        return True
+        try:
+            profile = self.get_or_create_profile(user_id)
+            crop = (
+                self.db.query(models.CropPlanting)
+                .join(models.Field)
+                .join(models.Farm)
+                .filter(models.CropPlanting.id == crop_id, models.Farm.farmer_id == profile.id)
+                .first()
+            )
+            if not crop:
+                return False
+            self.db.delete(crop)
+            self.db.commit()
+            return True
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error deleting crop planting {crop_id} for user {user_id}: {e}")
+            raise
 
 
 class FarmIntelligenceService:
