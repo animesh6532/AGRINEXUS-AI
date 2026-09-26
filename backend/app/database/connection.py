@@ -44,7 +44,7 @@ def get_db() -> Session:
 def create_tables():
     """
     Create all database tables and perform lightweight schema auto-migrations
-    for existing databases (adding missing columns).
+    for existing databases (adding missing columns dynamically).
     """
     try:
         from . import models  # Import here to avoid circular imports
@@ -52,26 +52,36 @@ def create_tables():
 
         models.Base.metadata.create_all(bind=engine)
 
-        # Inspect existing columns and auto-migrate missing ones (for SQLite/Postgres)
         inspector = inspect(engine)
-        if "fields" in inspector.get_table_names():
-            existing_cols = {c["name"] for c in inspector.get_columns("fields")}
-            missing_cols = [
+        table_names = inspector.get_table_names()
+
+        table_column_map = {
+            "farmer_profiles": [
+                ("timezone", "VARCHAR(50) DEFAULT 'Asia/Kolkata'"),
+                ("location", "VARCHAR(250)"),
+                ("preferred_units", "VARCHAR(30) DEFAULT 'acre'"),
+            ],
+            "fields": [
                 ("boundary_geojson", "TEXT"),
                 ("perimeter_m", "FLOAT"),
                 ("centroid_lat", "FLOAT"),
                 ("centroid_lng", "FLOAT"),
                 ("geometry_source", "VARCHAR(30) DEFAULT 'MANUAL'"),
                 ("geometry_updated_at", "DATETIME"),
-            ]
-            with engine.connect() as conn:
-                for col_name, col_type in missing_cols:
-                    if col_name not in existing_cols:
-                        logger.info(f"Auto-migrating database: Adding column '{col_name}' to 'fields' table")
-                        conn.execute(text(f"ALTER TABLE fields ADD COLUMN {col_name} {col_type}"))
-                conn.commit()
+            ],
+        }
 
-        logger.info("Database tables created and verified successfully")
+        with engine.connect() as conn:
+            for tname, missing_cols in table_column_map.items():
+                if tname in table_names:
+                    existing_cols = {c["name"] for c in inspector.get_columns(tname)}
+                    for col_name, col_type in missing_cols:
+                        if col_name not in existing_cols:
+                            logger.info(f"Auto-migrating database: Adding missing column '{col_name}' to table '{tname}'")
+                            conn.execute(text(f"ALTER TABLE {tname} ADD COLUMN {col_name} {col_type}"))
+            conn.commit()
+
+        logger.info("Database connection verified and schema auto-migration completed successfully")
     except Exception as e:
         logger.error(f"Error creating/migrating database tables: {e}")
         raise

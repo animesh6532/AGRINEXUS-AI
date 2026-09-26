@@ -72,30 +72,59 @@ class NotificationDispatcher:
 
     def update_preferences(self, farmer_id: int, pref_data: dict) -> models.NotificationPreferenceRecord:
         prefs = self.get_or_create_preferences(farmer_id)
+        
+        # Check nested structures
         channels = pref_data.get("channels", {})
-        if "in_app" in channels: prefs.channel_in_app = channels["in_app"]
-        if "email" in channels: prefs.channel_email = channels["email"]
-        if "sms" in channels: prefs.channel_sms = channels["sms"]
-        if "whatsapp" in channels: prefs.channel_whatsapp = channels["whatsapp"]
+        if "in_app" in channels: prefs.channel_in_app = bool(channels["in_app"])
+        if "email" in channels: prefs.channel_email = bool(channels["email"])
+        if "sms" in channels: prefs.channel_sms = bool(channels["sms"])
+        if "whatsapp" in channels: prefs.channel_whatsapp = bool(channels["whatsapp"])
 
         categories = pref_data.get("categories", {})
-        if "critical_risks" in categories: prefs.cat_critical_risks = categories["critical_risks"]
-        if "weather" in categories: prefs.cat_weather = categories["weather"]
-        if "crop_health" in categories: prefs.cat_crop_health = categories["crop_health"]
-        if "irrigation" in categories: prefs.cat_irrigation = categories["irrigation"]
-        if "market" in categories: prefs.cat_market = categories["market"]
-        if "calendar" in categories: prefs.cat_calendar = categories["calendar"]
-        if "action_reminders" in categories: prefs.cat_action_reminders = categories["action_reminders"]
+        if "critical_risks" in categories: prefs.cat_critical_risks = bool(categories["critical_risks"])
+        if "weather" in categories: prefs.cat_weather = bool(categories["weather"])
+        if "crop_health" in categories: prefs.cat_crop_health = bool(categories["crop_health"])
+        if "irrigation" in categories: prefs.cat_irrigation = bool(categories["irrigation"])
+        if "market" in categories: prefs.cat_market = bool(categories["market"])
+        if "calendar" in categories: prefs.cat_calendar = bool(categories["calendar"])
+        if "action_reminders" in categories: prefs.cat_action_reminders = bool(categories["action_reminders"])
 
         quiet = pref_data.get("quiet_hours", {})
-        if "enabled" in quiet: prefs.quiet_hours_enabled = quiet["enabled"]
-        if "start" in quiet: prefs.quiet_hours_start = quiet["start"]
-        if "end" in quiet: prefs.quiet_hours_end = quiet["end"]
-        if "critical_override" in quiet: prefs.critical_override = quiet["critical_override"]
+        if "enabled" in quiet: prefs.quiet_hours_enabled = bool(quiet["enabled"])
+        if "start" in quiet: prefs.quiet_hours_start = str(quiet["start"])
+        if "end" in quiet: prefs.quiet_hours_end = str(quiet["end"])
+        if "critical_override" in quiet: prefs.critical_override = bool(quiet["critical_override"])
 
-        prefs.updated_at = datetime.now(timezone.utc)
-        self.db.commit()
-        self.db.refresh(prefs)
+        # Check flat key overrides (Phase 8 contract support)
+        if "in_app_enabled" in pref_data: prefs.channel_in_app = bool(pref_data["in_app_enabled"])
+        if "email_enabled" in pref_data: prefs.channel_email = bool(pref_data["email_enabled"])
+        if "sms_enabled" in pref_data: prefs.channel_sms = bool(pref_data["sms_enabled"])
+        if "whatsapp_enabled" in pref_data: prefs.channel_whatsapp = bool(pref_data["whatsapp_enabled"])
+        if "weather_enabled" in pref_data: prefs.cat_weather = bool(pref_data["weather_enabled"])
+        if "irrigation_enabled" in pref_data: prefs.cat_irrigation = bool(pref_data["irrigation_enabled"])
+        if "pest_enabled" in pref_data or "disease_enabled" in pref_data or "crop_health_enabled" in pref_data:
+            val = pref_data.get("pest_enabled") or pref_data.get("disease_enabled") or pref_data.get("crop_health_enabled")
+            prefs.cat_crop_health = bool(val)
+        if "market_enabled" in pref_data: prefs.cat_market = bool(pref_data["market_enabled"])
+        if "crop_calendar_enabled" in pref_data or "calendar_enabled" in pref_data:
+            val = pref_data.get("crop_calendar_enabled") or pref_data.get("calendar_enabled")
+            prefs.cat_calendar = bool(val)
+        if "critical_risk_enabled" in pref_data or "critical_risks_enabled" in pref_data:
+            val = pref_data.get("critical_risk_enabled") or pref_data.get("critical_risks_enabled")
+            prefs.cat_critical_risks = bool(val)
+
+        if "quiet_hours_start" in pref_data: prefs.quiet_hours_start = str(pref_data["quiet_hours_start"])
+        if "quiet_hours_end" in pref_data: prefs.quiet_hours_end = str(pref_data["quiet_hours_end"])
+        if "quiet_hours_enabled" in pref_data: prefs.quiet_hours_enabled = bool(pref_data["quiet_hours_enabled"])
+
+        try:
+            prefs.updated_at = datetime.now(timezone.utc)
+            self.db.commit()
+            self.db.refresh(prefs)
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"Error persisting notification preferences for farmer {farmer_id}: {e}")
+            raise
         return prefs
 
     def dispatch_alert(

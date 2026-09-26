@@ -249,6 +249,8 @@ def get_notification_preferences(
 
 
 @router.put("/notifications/preferences")
+@router.post("/notifications/preferences")
+@router.patch("/notifications/preferences")
 def update_notification_preferences(
     payload: Dict[str, Any],
     user_id: str = Depends(get_current_user_id),
@@ -261,4 +263,5 @@ def update_notification_preferences(
     dispatcher = NotificationDispatcher(db)
     updated = dispatcher.update_preferences(profile.id, payload)
     return updated.to_dict()
+
 

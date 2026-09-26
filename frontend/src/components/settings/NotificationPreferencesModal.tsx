@@ -35,12 +35,16 @@ export const NotificationPreferencesModal: React.FC<NotificationPreferencesModal
   const [criticalOverride, setCriticalOverride] = useState(preferences?.quiet_hours.critical_override ?? true);
 
   const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+    setSaveStatus('saving');
+    setErrorMsg(null);
     try {
       await onSave({
         channels: { in_app: inApp, email, sms, whatsapp },
@@ -60,9 +64,14 @@ export const NotificationPreferencesModal: React.FC<NotificationPreferencesModal
           critical_override: criticalOverride,
         },
       });
-      onClose();
-    } catch (err) {
+      setSaveStatus('saved');
+      setTimeout(() => {
+        onClose();
+      }, 500);
+    } catch (err: any) {
       console.error('Error saving notification preferences:', err);
+      setSaveStatus('failed');
+      setErrorMsg('Unable to save notification preferences. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -86,6 +95,15 @@ export const NotificationPreferencesModal: React.FC<NotificationPreferencesModal
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-red-500/15 border border-red-500/30 text-red-200 text-xs font-semibold flex items-center justify-between">
+            <span>{errorMsg}</span>
+            <button onClick={() => setErrorMsg(null)} className="text-red-300 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Notification Channels */}
@@ -227,7 +245,13 @@ export const NotificationPreferencesModal: React.FC<NotificationPreferencesModal
               Cancel
             </Button>
             <Button type="submit" variant="lime" size="sm" disabled={isSaving}>
-              {isSaving ? 'Saving...' : 'Save Preferences'}
+              {saveStatus === 'saving'
+                ? 'Saving...'
+                : saveStatus === 'saved'
+                ? 'Saved'
+                : saveStatus === 'failed'
+                ? 'Save failed'
+                : 'Save Preferences'}
             </Button>
           </div>
         </form>

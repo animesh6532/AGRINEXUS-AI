@@ -454,6 +454,22 @@ class NotificationPreferenceRecord(Base):
                 "end": self.quiet_hours_end,
                 "critical_override": self.critical_override,
             },
+            # Flat key contracts
+            "in_app_enabled": self.channel_in_app,
+            "email_enabled": self.channel_email,
+            "sms_enabled": self.channel_sms,
+            "whatsapp_enabled": self.channel_whatsapp,
+            "critical_risks_enabled": self.cat_critical_risks,
+            "weather_enabled": self.cat_weather,
+            "crop_health_enabled": self.cat_crop_health,
+            "irrigation_enabled": self.cat_irrigation,
+            "market_enabled": self.cat_market,
+            "calendar_enabled": self.cat_calendar,
+            "action_reminders_enabled": self.cat_action_reminders,
+            "quiet_hours_enabled": self.quiet_hours_enabled,
+            "quiet_hours_start": self.quiet_hours_start,
+            "quiet_hours_end": self.quiet_hours_end,
+            "critical_override": self.critical_override,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
