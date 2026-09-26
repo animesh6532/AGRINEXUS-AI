@@ -21,6 +21,8 @@ import {
 import { GlassCard } from '../components/ui/GlassCard';
 import { Button } from '../components/ui/Button';
 import { useAuth } from '../context/AuthContext';
+import { useFarmerProfile } from '../context/FarmerProfileContext';
+import { useGreeting } from '../utils/greeting';
 import { useHealth } from '../context/HealthContext';
 import { useLocationContext } from '../context/LocationContext';
 import { LocationEmptyState } from '../components/location/LocationEmptyState';
@@ -30,6 +32,8 @@ import { CurrentWeatherResponse, MarketPriceRecord, CropCalendarItem } from '../
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  const { farmer } = useFarmerProfile();
+  const { fullGreeting } = useGreeting(farmer, user);
   const { isApiConnected, isModelSystemReady } = useHealth();
   const { location, openPicker } = useLocationContext();
 
@@ -88,7 +92,7 @@ export const Dashboard: React.FC = () => {
             COMMAND CENTER OVERVIEW
           </span>
           <h1 className="text-3xl sm:text-5xl font-black font-editorial tracking-tight text-[#0B1C10] mt-1">
-            Good morning, {user?.name || 'Farmer'}.
+            {fullGreeting}
           </h1>
           <p className="text-xs sm:text-sm text-[#536056] mt-1 font-sans">
             Here is what your field intelligence & active model signals look like today.

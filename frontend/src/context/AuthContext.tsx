@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data && data.user) {
         const profile: UserProfile = {
           id: data.user.id,
-          name: data.user.full_name || data.user.email.split('@')[0],
+          name: data.farmer_profile?.full_name || data.user.full_name || data.user.email.split('@')[0],
           email: data.user.email,
           primaryCrop: 'Rice',
           farmType: 'Commercial Agronomy',

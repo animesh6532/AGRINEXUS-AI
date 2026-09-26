@@ -3,12 +3,16 @@ import { useLocation } from 'react-router-dom';
 import { RefreshCw } from 'lucide-react';
 import { useHealth } from '../../context/HealthContext';
 import { useAuth } from '../../context/AuthContext';
+import { useFarmerProfile } from '../../context/FarmerProfileContext';
+import { getAvatarInitials } from '../../utils/greeting';
 import { LocationBadge } from '../location/LocationBadge';
 
 export const Topbar: React.FC = () => {
   const location = useLocation();
   const { isApiConnected, isModelSystemReady, refreshHealth, isLoading } = useHealth();
   const { user } = useAuth();
+  const { farmer } = useFarmerProfile();
+  const avatarInitials = getAvatarInitials(farmer, user);
 
   const routeTitles: Record<string, { category: string; title: string; subtitle: string }> = {
     '/dashboard': {
@@ -141,8 +145,11 @@ export const Topbar: React.FC = () => {
 
         {/* User Avatar */}
         {user && (
-          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#2F6B3C] text-white flex items-center justify-center font-extrabold text-xs shadow-sm">
-            {user.name.charAt(0).toUpperCase()}
+          <div
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-[#2F6B3C] text-white flex items-center justify-center font-extrabold text-xs shadow-sm"
+            title={farmer?.full_name || user.name || user.email}
+          >
+            {avatarInitials}
           </div>
         )}
       </div>

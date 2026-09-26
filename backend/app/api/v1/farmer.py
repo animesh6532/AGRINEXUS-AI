@@ -47,6 +47,7 @@ def get_farmer_profile(
 
 
 @router.put("/profile", response_model=FarmerProfileResponse)
+@router.patch("/profile", response_model=FarmerProfileResponse)
 def update_farmer_profile(
     payload: FarmerProfileUpdate,
     user_id: str = Depends(get_current_user_id),

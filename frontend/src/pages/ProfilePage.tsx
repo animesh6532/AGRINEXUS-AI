@@ -103,6 +103,8 @@ export const ProfilePage: React.FC = () => {
   const [profileName, setProfileName] = useState(farmer?.full_name || user?.name || 'Farmer');
   const [profilePhone, setProfilePhone] = useState(farmer?.phone || '');
   const [profileLang, setProfileLang] = useState(farmer?.preferred_language || 'en');
+  const [profileTz, setProfileTz] = useState(farmer?.timezone || 'Asia/Kolkata');
+  const [profileUnits, setProfileUnits] = useState(farmer?.preferred_units || 'acre');
   const [savedNotice, setSavedNotice] = useState(false);
 
   useEffect(() => {
@@ -110,6 +112,8 @@ export const ProfilePage: React.FC = () => {
       setProfileName(farmer.full_name);
       setProfilePhone(farmer.phone || '');
       setProfileLang(farmer.preferred_language || 'en');
+      setProfileTz(farmer.timezone || 'Asia/Kolkata');
+      setProfileUnits(farmer.preferred_units || 'acre');
     }
   }, [farmer]);
 
@@ -119,6 +123,8 @@ export const ProfilePage: React.FC = () => {
       full_name: profileName,
       phone: profilePhone,
       preferred_language: profileLang,
+      timezone: profileTz,
+      preferred_units: profileUnits,
     });
     setSavedNotice(true);
     setTimeout(() => setSavedNotice(false), 3000);
@@ -893,51 +899,118 @@ export const ProfilePage: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 9: FARM SETTINGS */}
+      {/* TAB 9: FARM SETTINGS & CANONICAL PROFILE */}
       {activeTab === 'settings' && (
         <div className="space-y-8 max-w-3xl">
           <GlassCard variant="solid" className="p-8 space-y-6 border border-[#E2E7DA]">
             <div className="border-b border-[#E2E7DA] pb-4">
-              <h3 className="text-xl font-extrabold font-editorial text-[#0B1C10]">FARMER PROFILE & PREFERENCES</h3>
-              <p className="text-xs text-[#536056]">Update your account details and default preferences</p>
+              <h3 className="text-xl font-extrabold font-editorial text-[#0B1C10]">FARMER PROFILE & ACCOUNT PREFERENCES</h3>
+              <p className="text-xs text-[#536056]">Canonical authenticated farmer details, timezone, and regional preferences</p>
             </div>
 
             {savedNotice && (
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 text-xs font-bold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Profile updated successfully!</span>
+                <span>Profile updated successfully! Dashboard, greeting, and avatars synchronized.</span>
               </div>
             )}
 
-            <form onSubmit={handleProfileSubmit} className="space-y-4">
-              <Input
-                label="Full Name"
-                value={profileName}
-                onChange={(e) => setProfileName(e.target.value)}
-                placeholder="Enter full name"
-                required
-              />
+            <form onSubmit={handleProfileSubmit} className="space-y-5">
+              {/* Account Email (Read-Only) */}
+              <div>
+                <label className="block text-xs font-bold text-[#0B1C10] uppercase tracking-wider mb-1">
+                  ACCOUNT EMAIL ADDRESS (AUTHENTICATED)
+                </label>
+                <div className="p-3 rounded-xl bg-[#EEF3E8] border border-[#E2E7DA] text-xs font-mono font-bold text-[#2F6B3C] flex items-center justify-between">
+                  <span>{user?.email || farmer?.email || 'authenticated_user@agrinexus.ai'}</span>
+                  <span className="text-[10px] uppercase font-bold text-[#536056] px-2 py-0.5 rounded-full bg-white border border-[#E2E7DA]">
+                    Primary Identity
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#536056] mt-1">
+                  Account identity is tied to your login credentials and authentication session.
+                </p>
+              </div>
 
-              <Input
-                label="Phone Number"
-                value={profilePhone}
-                onChange={(e) => setProfilePhone(e.target.value)}
-                placeholder="+91 9876543210"
-              />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Full Name"
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  placeholder="Enter full name"
+                  required
+                />
 
-              <Select
-                label="Preferred Language"
-                value={profileLang}
-                onChange={(e) => setProfileLang(e.target.value)}
-                options={[
-                  { value: 'en', label: 'English' },
-                  { value: 'bn', label: 'Bengali (বাংলা)' },
-                  { value: 'hi', label: 'Hindi (हिंदी)' },
-                ]}
-              />
+                <Input
+                  label="Phone Number"
+                  value={profilePhone}
+                  onChange={(e) => setProfilePhone(e.target.value)}
+                  placeholder="+91 9876543210"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Select
+                  label="Preferred Language"
+                  value={profileLang}
+                  onChange={(e) => setProfileLang(e.target.value)}
+                  options={[
+                    { value: 'en', label: 'English' },
+                    { value: 'bn', label: 'Bengali (বাংলা)' },
+                    { value: 'hi', label: 'Hindi (हिंदी)' },
+                    { value: 'te', label: 'Telugu (తెలుగు)' },
+                    { value: 'ta', label: 'Tamil (தமிழ்)' },
+                    { value: 'mr', label: 'Marathi (मराठी)' },
+                    { value: 'pa', label: 'Punjabi (ਪੰਜਾਬੀ)' },
+                  ]}
+                />
+
+                <Select
+                  label="Timezone for Greeting & Schedule"
+                  value={profileTz}
+                  onChange={(e) => setProfileTz(e.target.value)}
+                  options={[
+                    { value: 'Asia/Kolkata', label: 'Asia/Kolkata (IST, UTC+5:30)' },
+                    { value: 'UTC', label: 'UTC (Coordinated Universal Time)' },
+                    { value: 'America/New_York', label: 'America/New_York (EST)' },
+                    { value: 'Europe/London', label: 'Europe/London (GMT)' },
+                  ]}
+                />
+
+                <Select
+                  label="Preferred Land Measurement Unit"
+                  value={profileUnits}
+                  onChange={(e) => setProfileUnits(e.target.value)}
+                  options={[
+                    { value: 'acre', label: 'Acres (acre)' },
+                    { value: 'hectare', label: 'Hectares (ha)' },
+                    { value: 'bigha', label: 'Bigha' },
+                    { value: 'm2', label: 'Square Meters (m²)' },
+                  ]}
+                />
+              </div>
+
+              {/* Global Field Location Selector */}
+              <div className="p-4 rounded-2xl bg-[#EEF3E8] border border-[#E2E7DA] space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#0B1C10] flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-[#2F6B3C]" />
+                    PREFERRED GLOBAL LOCATION
+                  </span>
+                  <Button type="button" onClick={openPicker} variant="secondary" size="sm">
+                    Select Location
+                  </Button>
+                </div>
+                <p className="text-xs font-semibold text-[#0B1C10]">
+                  {globalLocation?.displayName || farmer?.location || 'Barasat, North 24 Parganas, West Bengal'}
+                </p>
+                <p className="text-[11px] text-[#536056]">
+                  Used to personalize weather telemetry, mandi market pricing, and pest outbreak risk signals.
+                </p>
+              </div>
 
               <div className="pt-2">
-                <Button type="submit" variant="lime" size="sm" icon={<Save className="w-4 h-4" />}>
+                <Button type="submit" variant="lime" size="md" icon={<Save className="w-4 h-4" />}>
                   Save Profile Settings
                 </Button>
               </div>

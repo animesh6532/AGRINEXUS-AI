@@ -210,6 +210,9 @@ class FarmerProfileBase(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     preferred_language: str = "en"
+    timezone: Optional[str] = "Asia/Kolkata"
+    location: Optional[str] = None
+    preferred_units: Optional[str] = "acre"
 
 
 class FarmerProfileCreate(FarmerProfileBase):
@@ -221,6 +224,9 @@ class FarmerProfileUpdate(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     preferred_language: Optional[str] = None
+    timezone: Optional[str] = None
+    location: Optional[str] = None
+    preferred_units: Optional[str] = None
 
 
 class FarmerProfileResponse(FarmerProfileBase):

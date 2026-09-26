@@ -89,6 +89,9 @@ class FarmerProfile(Base):
     phone = Column(String(30), nullable=True)
     email = Column(String(150), nullable=True)
     preferred_language = Column(String(20), default="en", nullable=False)
+    timezone = Column(String(50), default="Asia/Kolkata", nullable=True)
+    location = Column(String(250), nullable=True)
+    preferred_units = Column(String(30), default="acre", nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -106,6 +109,9 @@ class FarmerProfile(Base):
             "phone": self.phone,
             "email": self.email,
             "preferred_language": self.preferred_language,
+            "timezone": self.timezone or "Asia/Kolkata",
+            "location": self.location,
+            "preferred_units": self.preferred_units or "acre",
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

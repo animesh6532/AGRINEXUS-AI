@@ -54,8 +54,15 @@ class FarmerRepository:
         try:
             profile = self.get_or_create_profile(user_id)
             for key, val in profile_data.items():
-                if hasattr(profile, key):
+                if hasattr(profile, key) and val is not None:
                     setattr(profile, key, val)
+
+            # Sync full_name to User model if updated
+            if "full_name" in profile_data and profile_data["full_name"]:
+                user = self.db.query(models.User).filter(models.User.id == user_id).first()
+                if user:
+                    user.full_name = profile_data["full_name"]
+
             profile.updated_at = datetime.now(timezone.utc)
             self.db.commit()
             self.db.refresh(profile)

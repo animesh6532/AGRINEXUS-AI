@@ -110,6 +110,9 @@ export interface FarmerProfile {
   phone?: string;
   email?: string;
   preferred_language: string;
+  timezone?: string;
+  location?: string;
+  preferred_units?: string;
   farms: FarmRecord[];
   created_at?: string;
   updated_at?: string;

@@ -44,7 +44,7 @@ interface FarmerProfileContextType {
 const FarmerProfileContext = createContext<FarmerProfileContextType | undefined>(undefined);
 
 export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { location } = useLocationContext();
 
   const userId = user?.id || user?.email || 'default_farmer';
@@ -65,13 +65,16 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const data = await api.getFarmerProfile(userId);
       setFarmer(data);
+      if (data && data.full_name) {
+        updateProfile({ name: data.full_name });
+      }
       if (data.farms && data.farms.length > 0) {
         setSelectedFarm((prev) => prev || data.farms[0]);
       }
     } catch (err: any) {
       console.warn('Failed to fetch farmer profile:', err);
     }
-  }, [userId]);
+  }, [userId, updateProfile]);
 
   const fetchDashboard = useCallback(
     async (locationOverride?: { latitude: number; longitude: number; displayName?: string }) => {
@@ -79,20 +82,20 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsRefreshing(true);
       setError(null);
       try {
-        // Only pass lat/lon if locationOverride is explicitly supplied by caller.
-        // Otherwise, allow backend to use the primary farm's saved coordinates.
         const lat = locationOverride?.latitude;
         const lon = locationOverride?.longitude;
         const name = locationOverride?.displayName;
 
         const data = await api.getFarmerDashboard(userId, lat, lon, name);
         if (currentRequestId !== requestIdRef.current) {
-          // Stale response discarded to prevent race condition overwrites
           return;
         }
         setDashboardData(data);
         if (data.farmer) {
           setFarmer(data.farmer);
+          if (data.farmer.full_name) {
+            updateProfile({ name: data.farmer.full_name });
+          }
         }
       } catch (err: any) {
         if (currentRequestId !== requestIdRef.current) return;
@@ -105,7 +108,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     },
-    [userId]
+    [userId, updateProfile]
   );
 
   // Clear state when user identity changes (login, logout, switch)
@@ -124,6 +127,9 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const updated = await api.updateFarmerProfile(data, userId);
       setFarmer(updated);
+      if (updated && updated.full_name) {
+        updateProfile({ name: updated.full_name });
+      }
       await fetchDashboard();
     } catch (err: any) {
       setError(err.message || 'Failed to save farmer profile.');
