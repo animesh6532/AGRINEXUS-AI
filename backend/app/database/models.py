@@ -513,3 +513,70 @@ class FarmingKnowledgeRecord(Base):
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 
+
+class Conversation(Base):
+    """
+    Model representing a persistent AI Farming Assistant conversation session.
+    """
+    __tablename__ = "conversations"
+
+    id = Column(String(50), primary_key=True, index=True)
+    user_id = Column(String(100), nullable=False, index=True)
+    title = Column(String(200), nullable=False, default="New Conversation")
+    active_field_id = Column(Integer, nullable=True)
+    active_crop_id = Column(Integer, nullable=True)
+    page_context = Column(String(100), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    last_message_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "active_field_id": self.active_field_id,
+            "active_crop_id": self.active_crop_id,
+            "page_context": self.page_context,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_message_at": self.last_message_at.isoformat() if self.last_message_at else None,
+            "message_count": len(self.messages) if self.messages else 0,
+        }
+
+
+class Message(Base):
+    """
+    Model representing a single message within a conversation.
+    """
+    __tablename__ = "messages"
+
+    id = Column(String(50), primary_key=True, index=True)
+    conversation_id = Column(String(50), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(20), nullable=False)  # "user", "assistant", "system"
+    content = Column(Text, nullable=False)
+    tool_calls = Column(Text, nullable=True)
+    actions = Column(Text, nullable=True)
+    sources = Column(Text, nullable=True)
+    metadata_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    conversation = relationship("Conversation", back_populates="messages")
+
+    def to_dict(self) -> dict:
+        import json
+        return {
+            "id": self.id,
+            "conversation_id": self.conversation_id,
+            "role": self.role,
+            "content": self.content,
+            "tool_calls": json.loads(self.tool_calls) if self.tool_calls else [],
+            "actions": json.loads(self.actions) if self.actions else [],
+            "sources": json.loads(self.sources) if self.sources else [],
+            "metadata": json.loads(self.metadata_json) if self.metadata_json else {},
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+

@@ -27,6 +27,9 @@ import { HistoryPage } from './pages/HistoryPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { SettingsPage } from './pages/SettingsPage';
 
+import { FarmAICopilotProvider } from './context/FarmAICopilotContext';
+import { FarmAICopilot } from './components/assistant/FarmAICopilot';
+
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuth();
   if (!isAuthenticated) {
@@ -42,41 +45,44 @@ export const App: React.FC = () => {
         <LocationProvider>
           <FarmerProfileProvider>
             <BrowserRouter>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/signup" element={<SignupPage />} />
-                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <FarmAICopilotProvider>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/signup" element={<SignupPage />} />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-                {/* Protected Platform Routes */}
-                <Route
-                  element={
-                    <ProtectedRoute>
-                      <AppShell />
-                    </ProtectedRoute>
-                  }
-                >
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/crop" element={<CropPage />} />
-                  <Route path="/disease" element={<DiseasePage />} />
-                  <Route path="/pest" element={<PestPage />} />
-                  <Route path="/fertilizer" element={<FertilizerPage />} />
-                  <Route path="/irrigation" element={<IrrigationPage />} />
-                  <Route path="/soil" element={<SoilPage />} />
-                  <Route path="/yield" element={<YieldPage />} />
-                  <Route path="/live" element={<LiveCameraPage />} />
-                  <Route path="/weather" element={<WeatherPage />} />
-                  <Route path="/market" element={<MarketPage />} />
-                  <Route path="/crop-calendar" element={<CropCalendarPage />} />
-                  <Route path="/history" element={<HistoryPage />} />
-                  <Route path="/profile" element={<ProfilePage />} />
-                  <Route path="/settings" element={<SettingsPage />} />
-                </Route>
+                  {/* Protected Platform Routes */}
+                  <Route
+                    element={
+                      <ProtectedRoute>
+                        <AppShell />
+                      </ProtectedRoute>
+                    }
+                  >
+                    <Route path="/dashboard" element={<Dashboard />} />
+                    <Route path="/crop" element={<CropPage />} />
+                    <Route path="/disease" element={<DiseasePage />} />
+                    <Route path="/pest" element={<PestPage />} />
+                    <Route path="/fertilizer" element={<FertilizerPage />} />
+                    <Route path="/irrigation" element={<IrrigationPage />} />
+                    <Route path="/soil" element={<SoilPage />} />
+                    <Route path="/yield" element={<YieldPage />} />
+                    <Route path="/live" element={<LiveCameraPage />} />
+                    <Route path="/weather" element={<WeatherPage />} />
+                    <Route path="/market" element={<MarketPage />} />
+                    <Route path="/crop-calendar" element={<CropCalendarPage />} />
+                    <Route path="/history" element={<HistoryPage />} />
+                    <Route path="/profile" element={<ProfilePage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
+                  </Route>
 
-                {/* Catch-all fallback */}
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
+                  {/* Catch-all fallback */}
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+                <FarmAICopilot />
+              </FarmAICopilotProvider>
             </BrowserRouter>
           </FarmerProfileProvider>
         </LocationProvider>

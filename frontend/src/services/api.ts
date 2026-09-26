@@ -471,5 +471,151 @@ export const api = {
     });
     return handleResponse<any>(res);
   },
+
+  // ------------------------------------------------------------------
+  // Farm AI Copilot / Assistant (/api/v1/assistant)
+  // ------------------------------------------------------------------
+  async sendCopilotChat(
+    payload: {
+      message: string;
+      conversation_id?: string;
+      page_context?: any;
+    },
+    userId?: string
+  ): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+
+    const res = await fetch(`${BASE_URL}/api/v1/assistant/chat`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async streamCopilotChat(
+    payload: {
+      message: string;
+      conversation_id?: string;
+      page_context?: any;
+    },
+    onEvent: (event: { event: string; data: any }) => void,
+    userId?: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+
+    const res = await fetch(`${BASE_URL}/api/v1/assistant/chat/stream`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+      signal,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new ApiClientError(errText || 'Failed to connect to assistant stream', res.status);
+    }
+
+    if (!res.body) {
+      throw new Error('Response body is null');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      let currentEvent = 'message_delta';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        if (trimmed.startsWith('event:')) {
+          currentEvent = trimmed.slice(6).trim();
+        } else if (trimmed.startsWith('data:')) {
+          const rawData = trimmed.slice(5).trim();
+          let parsedData: any = rawData;
+          try {
+            parsedData = JSON.parse(rawData);
+          } catch {
+            // Keep string if not JSON
+          }
+          onEvent({ event: currentEvent, data: parsedData });
+        }
+      }
+    }
+  },
+
+  async analyzeCopilotImage(
+    file: File,
+    taskType: 'disease' | 'pest' = 'disease',
+    conversationId?: string,
+    userId?: string
+  ): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('task_type', taskType);
+    if (conversationId) formData.append('conversation_id', conversationId);
+
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+
+    const res = await fetch(`${BASE_URL}/api/v1/assistant/analyze-image`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    return handleResponse<any>(res);
+  },
+
+  async getCopilotConversations(userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/assistant/conversations`, { headers });
+    return handleResponse<any>(res);
+  },
+
+  async getCopilotConversation(conversationId: string, userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/assistant/conversations/${conversationId}`, { headers });
+    return handleResponse<any>(res);
+  },
+
+  async deleteCopilotConversation(conversationId: string, userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/assistant/conversations/${conversationId}`, {
+      method: 'DELETE',
+      headers,
+    });
+    return handleResponse<any>(res);
+  },
+
+  async updateCopilotConversationTitle(
+    conversationId: string,
+    title: string,
+    userId?: string
+  ): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/assistant/conversations/${conversationId}/title`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ title }),
+    });
+    return handleResponse<any>(res);
+  },
 };
 
