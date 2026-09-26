@@ -11,12 +11,10 @@ from sqlalchemy.orm import Session
 
 from app.database.connection import SessionLocal
 from app.database.models import FarmerProfile, Farm, Field, CropPlanting
-from app.services.farmer_service import FarmerRepository, FarmIntelligenceService
+from app.services.farmer_service import FarmIntelligenceService
 from app.services.weather_service import WeatherService
-from app.services.market_service import MarketService
 from app.services.irrigation_intelligence import IrrigationIntelligenceService
 from app.services.model_registry import ModelRegistry
-from app.services.agriculture.smart_crop_recommender import SmartCropRecommender
 
 logger = logging.getLogger(__name__)
 
@@ -153,16 +151,10 @@ class AssistantTools:
     @staticmethod
     def get_weather_current(lat: float, lon: float) -> Dict[str, Any]:
         """Fetch current weather for coordinates."""
-        import asyncio
         try:
+            from app.services.async_bridge import run_async
             ws = WeatherService()
-            try:
-                loop = asyncio.get_running_loop()
-                import nest_asyncio
-                nest_asyncio.apply()
-                w = loop.run_until_complete(ws.get_current_weather(latitude=lat, longitude=lon))
-            except RuntimeError:
-                w = asyncio.run(ws.get_current_weather(latitude=lat, longitude=lon))
+            w = run_async(ws.get_current_weather(latitude=lat, longitude=lon))
             return {"status": "success", "data": w}
         except Exception as e:
             logger.error("Error fetching current weather: %s", e)
@@ -171,16 +163,10 @@ class AssistantTools:
     @staticmethod
     def get_weather_forecast(lat: float, lon: float, days: int = 7) -> Dict[str, Any]:
         """Fetch 7-day weather forecast."""
-        import asyncio
         try:
+            from app.services.async_bridge import run_async
             ws = WeatherService()
-            try:
-                loop = asyncio.get_running_loop()
-                import nest_asyncio
-                nest_asyncio.apply()
-                wf = loop.run_until_complete(ws.get_weather_forecast(latitude=lat, longitude=lon, forecast_days=days))
-            except RuntimeError:
-                wf = asyncio.run(ws.get_weather_forecast(latitude=lat, longitude=lon, forecast_days=days))
+            wf = run_async(ws.get_weather_forecast(latitude=lat, longitude=lon, forecast_days=days))
             return {"status": "success", "data": wf}
         except Exception as e:
             logger.error("Error fetching weather forecast: %s", e)
@@ -234,9 +220,10 @@ class AssistantTools:
         try:
             from app.database import connection
             from app.forecasting.forecast_service import ForecastService
+            from app.services.async_bridge import run_async
             with connection.SessionLocal() as db:
                 fs = ForecastService(db)
-                fc = asyncio.run(fs.generate_forecast(commodity=commodity, horizon_days=horizon, model_type=model))
+                fc = run_async(fs.generate_forecast(commodity=commodity, horizon_days=horizon, model_type=model))
                 return {"status": "success", "commodity": commodity, "horizon": horizon, "model": model}
         except Exception as e:
             logger.error("Error fetching market forecast: %s", e)
@@ -276,12 +263,18 @@ class AssistantTools:
     @staticmethod
     def get_irrigation_intelligence(field_id: Optional[int] = None, lat: Optional[float] = None, lon: Optional[float] = None, user_id: Optional[str] = None) -> Dict[str, Any]:
         """Fetch irrigation intelligence & SWC forecast."""
+        from app.database.connection import SessionLocal
+        session = SessionLocal()
         try:
-            res = IrrigationIntelligenceService.get_irrigation_intelligence(field_id=field_id, lat=lat, lon=lon, user_id=user_id)
+            from app.services.async_bridge import run_async
+            svc = IrrigationIntelligenceService(session)
+            res = run_async(svc.get_intelligence(user_id=user_id or "default_farmer", field_id=field_id, lat=lat, lon=lon))
             return {"status": "success", "data": res}
         except Exception as e:
             logger.error("Error fetching irrigation intelligence: %s", e)
             return {"status": "error", "message": str(e)}
+        finally:
+            session.close()
 
     @staticmethod
     def get_fertilizer_recommendation(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -389,12 +382,18 @@ class AssistantTools:
     @staticmethod
     def get_field_alerts(user_id: str) -> Dict[str, Any]:
         """Fetch active alerts for farmer's fields."""
+        from app.database.connection import SessionLocal
+        session = SessionLocal()
         try:
-            dash = FarmerProfileService.get_dashboard_summary(user_id=user_id)
+            from app.services.async_bridge import run_async
+            svc = FarmIntelligenceService(db=session)
+            dash = run_async(svc.get_dashboard(user_id=user_id))
             alerts = dash.get("alerts", [])
             return {"status": "success", "alerts": alerts}
         except Exception as e:
             return {"status": "error", "message": str(e)}
+        finally:
+            session.close()
 
     @staticmethod
     def get_farm_timeline(user_id: str) -> Dict[str, Any]:
