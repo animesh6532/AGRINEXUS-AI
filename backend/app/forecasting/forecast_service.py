@@ -102,6 +102,15 @@ class ForecastService:
             market=market
         )
 
+        # If location filters returned insufficient data, try widening to commodity level
+        if len(historical_data) < settings.MIN_HISTORICAL_DAYS_REQUIRED:
+            historical_data = self._get_historical_data_for_forecasting(
+                commodity=commodity,
+                state=None,
+                district=None,
+                market=None
+            )
+
         if len(historical_data) < settings.MIN_HISTORICAL_DAYS_REQUIRED:
             raise ValueError(
                 f"Insufficient historical data for forecasting. "
@@ -109,15 +118,13 @@ class ForecastService:
                 f"got {len(historical_data)}."
             )
 
-        # Forecasting needs genuinely distinct historical days. Many records
-        # sharing a single observation date cannot form a usable time series,
-        # so the minimum requirement is enforced on unique observation dates.
         unique_dates = {
             obs["observation_date"]
             if isinstance(obs["observation_date"], date)
             else date.fromisoformat(obs["observation_date"])
             for obs in historical_data
-        }
+        } if historical_data else set()
+
         if len(unique_dates) < settings.MIN_HISTORICAL_DAYS_REQUIRED:
             raise ValueError(
                 "Insufficient historical data for forecasting. "

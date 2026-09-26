@@ -120,7 +120,9 @@ class NotificationDispatcher:
         )
 
         if existing:
-            time_diff = (datetime.utcnow() - existing.created_at).total_seconds()
+            created = existing.created_at
+            now = datetime.now(timezone.utc) if created.tzinfo is not None else datetime.utcnow()
+            time_diff = (now - created).total_seconds()
             if time_diff < 21600:  # 6 hours cooldown
                 logger.info(f"Alert fingerprint {fingerprint} suppressed due to active cooldown ({int(time_diff)}s ago)")
                 return existing
@@ -170,6 +172,7 @@ class NotificationDispatcher:
         return alert_record
 
     def _log_delivery(self, alert_id: str, channel: str, recipient: str, status: str, provider_msg_id: str, error: Optional[str] = None):
+        now_dt = datetime.now(timezone.utc)
         delivery = models.NotificationDeliveryRecord(
             alert_id=alert_id,
             channel=channel,
@@ -177,8 +180,8 @@ class NotificationDispatcher:
             status=status,
             provider_message_id=provider_msg_id,
             failure_reason=error,
-            sent_at=datetime.utcnow(),
-            delivered_at=datetime.utcnow() if status == "DELIVERED" else None,
+            sent_at=now_dt,
+            delivered_at=now_dt if status == "DELIVERED" else None,
         )
         self.db.add(delivery)
         self.db.commit()

@@ -60,7 +60,13 @@ export interface FieldRecord {
   geometry_updated_at?: string;
   soil_type?: string;
   soil_test_available: boolean;
-  soil_data: {
+  ph?: number;
+  nitrogen?: number;
+  phosphorus?: number;
+  potassium?: number;
+  organic_carbon?: number;
+  water_source?: string;
+  soil_data?: {
     ph: SoilValueWithProvenance;
     nitrogen: SoilValueWithProvenance;
     phosphorus: SoilValueWithProvenance;
@@ -110,7 +116,7 @@ export interface FarmerProfile {
 }
 
 export interface RiskItem {
-  id: str;
+  id: string;
   category: string;
   title: string;
   description: string;
@@ -128,7 +134,7 @@ export interface RiskItem {
 }
 
 export interface OpportunityItem {
-  id: str;
+  id: string;
   category: string;
   title: string;
   description: string;
@@ -351,11 +357,16 @@ export interface FarmDashboardResponse {
     opportunities: OpportunityItem[];
     summary?: any;
   };
+  risks?: RiskItem[];
+  opportunities?: OpportunityItem[];
+  actions?: ActionPlanItem[];
+  risk_opportunity?: any;
   action_plan?: {
     actions: ActionPlanItem[];
     total_actions: number;
   };
   alerts: SmartAlertItem[];
+  dispatched_alerts?: SmartAlertItem[];
   plant_observations?: PlantObservationRecord[];
   notification_preferences?: NotificationPreferences;
   timeline: CropTimelineItem[];

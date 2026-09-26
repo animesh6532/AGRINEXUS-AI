@@ -175,39 +175,45 @@ class FarmingAssistantService:
                 for r in records
             }
 
-            sample_file = Path(BACKEND_DIR) / "data" / "knowledge_base" / "sample_knowledge_base.json"
-            if sample_file.exists():
-                with open(sample_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    added_any = False
-                    for item in data:
-                        norm_q = re.sub(r"[^\w\s]", "", item["question"].lower().strip())
-                        if norm_q not in existing_questions:
-                            rec = FarmingKnowledgeRecord(
-                                question=item["question"],
-                                answer=item["answer"],
-                                crop=item.get("crop"),
-                                crop_stage=item.get("crop_stage"),
-                                topic=item.get("topic", "crop_management"),
-                                subtopic=item.get("subtopic"),
-                                keywords=item.get("keywords"),
-                                language=item.get("language", "en"),
-                                region=item.get("region"),
-                                source=item.get("source", "AGRINEXUS Agronomic Knowledge Base"),
-                                source_url=item.get("source_url"),
-                                verified=item.get("verified", True)
-                            )
-                            db.add(rec)
-                            existing_questions[norm_q] = rec
-                            added_any = True
-                        else:
-                            ex_rec = existing_questions[norm_q]
-                            if ex_rec.answer != item["answer"]:
-                                ex_rec.answer = item["answer"]
+            kb_files = [
+                Path(BACKEND_DIR) / "data" / "knowledge_base" / "kisanvaani_agriculture_qa_agrinexus.json",
+                Path(BACKEND_DIR) / "data" / "knowledge_base" / "sample_knowledge_base.json",
+            ]
+            added_any = False
+            for file_path in kb_files:
+                if file_path.exists():
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        for item in data:
+                            norm_q = re.sub(r"[^\w\s]", "", item["question"].lower().strip())
+                            if norm_q not in existing_questions:
+                                rec = FarmingKnowledgeRecord(
+                                    question=item["question"],
+                                    answer=item["answer"],
+                                    crop=item.get("crop"),
+                                    crop_stage=item.get("crop_stage"),
+                                    topic=item.get("topic", "crop_management"),
+                                    subtopic=item.get("subtopic"),
+                                    keywords=item.get("keywords"),
+                                    language=item.get("language", "en"),
+                                    region=item.get("region"),
+                                    source=item.get("source", "AGRINEXUS Agronomic Knowledge Base"),
+                                    source_url=item.get("source_url"),
+                                    verified=item.get("verified", True)
+                                )
+                                db.add(rec)
+                                existing_questions[norm_q] = rec
                                 added_any = True
-                    if added_any:
-                        db.commit()
-                        records = db.query(FarmingKnowledgeRecord).all()
+                            else:
+                                ex_rec = existing_questions[norm_q]
+                                if item.get("verified", True) and ex_rec.answer != item["answer"]:
+                                    ex_rec.answer = item["answer"]
+                                    ex_rec.question = item["question"]
+                                    ex_rec.verified = True
+                                    added_any = True
+            if added_any:
+                db.commit()
+                records = db.query(FarmingKnowledgeRecord).all()
 
             self._record_cache = [r.to_dict() for r in records]
 

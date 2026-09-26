@@ -21,7 +21,7 @@ from ..services.risk_opportunity_service import RiskOpportunityService
 from ..services.smart_alert_service import SmartAlertService
 from ..services.action_plan_service import ActionPlanService
 from ..services.notification_service import NotificationDispatcher
-from ..schemas.decision import FarmContext
+from ..schemas.decision import FarmContext, WeatherContext
 from ..schemas.action_plan import ActionPlanRequest
 
 
@@ -545,25 +545,34 @@ class FarmIntelligenceService:
         # DETERMINISTIC RISK & OPPORTUNITY + SMART ALERT + ACTION PLAN PIPELINE
         # ---------------------------------------------------------------------
         crop_name = active_crops[0].crop_name if active_crops else "Rice"
-        sowing_date_str = active_crops[0].sowing_date.isoformat() if active_crops and active_crops[0].sowing_date else None
+        sowing_date_val = active_crops[0].sowing_date if active_crops else None
         stage_str = active_crops[0].growth_stage if active_crops else "Vegetative"
+
+        wx_context = WeatherContext(
+            latitude=lat,
+            longitude=lon,
+            current_temperature=current_weather.get("temperature") if current_weather else None,
+            current_humidity=current_weather.get("relative_humidity") if current_weather else None,
+            current_precipitation=current_weather.get("precipitation") if current_weather else None,
+            forecast_precipitation_sum=weather_impacts[0].get("rain_forecast_mm") if weather_impacts else None,
+            is_weather_data_available=current_weather is not None,
+        )
 
         farm_context = FarmContext(
             crop=crop_name,
             variety=active_crops[0].variety if active_crops else None,
-            growth_stage=stage_str,
-            sowing_date=sowing_date_str,
+            current_growth_stage=stage_str,
+            sowing_date=sowing_date_val,
             location=location_name,
             latitude=lat,
             longitude=lon,
-            soil_ph=fields[0].ph if fields else None,
-            soil_nitrogen=fields[0].nitrogen if fields else None,
-            soil_phosphorus=fields[0].phosphorus if fields else None,
-            soil_potassium=fields[0].potassium if fields else None,
-            current_temperature=current_weather.get("temperature") if current_weather else None,
-            relative_humidity=current_weather.get("relative_humidity") if current_weather else None,
-            precipitation=current_weather.get("precipitation") if current_weather else None,
-            forecast_rain_sum=weather_impacts[0].get("rain_forecast_mm") if weather_impacts else None,
+            weather_context=wx_context,
+            farmer_context={
+                "soil_ph": fields[0].ph if fields else None,
+                "soil_nitrogen": fields[0].nitrogen if fields else None,
+                "soil_phosphorus": fields[0].phosphorus if fields else None,
+                "soil_potassium": fields[0].potassium if fields else None,
+            },
         )
 
         risk_opp_res = self.risk_opp_service.analyze_farm_context(farm_context)

@@ -265,7 +265,7 @@ export const FieldMapEditor: React.FC<FieldMapEditorProps> = ({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <Badge variant="lime">FIELD MAPPING WORKSPACE</Badge>
+            <Badge variant="success">FIELD MAPPING WORKSPACE</Badge>
             <span className="text-xs text-white/60">GeoSpatial Field Boundary Polygon Engine</span>
           </div>
           <h3 className="text-2xl font-extrabold font-editorial text-white mt-1">

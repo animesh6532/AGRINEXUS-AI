@@ -26,6 +26,8 @@ import {
   FileText,
   X,
   Compass,
+  Save,
+  Check,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GlassCard } from '../components/ui/GlassCard';
@@ -154,7 +156,7 @@ export const ProfilePage: React.FC = () => {
     if (!obsImageFile) return;
     setObsAnalyzing(true);
     try {
-      const result = await api.predictDisease(obsImageFile, 'leaf');
+      const result = await api.predictDisease(obsImageFile, true);
       setObsAiResult(result);
     } catch (err: any) {
       console.error('Disease AI error:', err);
@@ -472,16 +474,22 @@ export const ProfilePage: React.FC = () => {
           </div>
 
           {/* Quick Action Plan Summary */}
-          {dashboardData?.action_plan && (
+          {dashboardData && (
             <PersonalizedActionPlan
-              actionPlan={dashboardData.action_plan}
-              onCompleteAction={completeAction}
+              actions={dashboardData.actions || dashboardData.action_plan?.actions || []}
+              onCompleteAction={async (actionId: string, status: string) => {
+                await completeAction(actionId, status);
+              }}
             />
           )}
 
           {/* Quick Risk & Opportunity Summary */}
-          {dashboardData?.risk_opportunity && (
-            <RiskOpportunityCenter data={dashboardData.risk_opportunity} />
+          {dashboardData && (
+            <RiskOpportunityCenter
+              risks={dashboardData.risks || dashboardData.risk_opportunity?.risks || []}
+              opportunities={dashboardData.opportunities || dashboardData.risk_opportunity?.opportunities || []}
+              impactMatrix={dashboardData.impact_matrix || dashboardData.risk_opportunity?.impact_matrix || []}
+            />
           )}
         </div>
       )}
@@ -839,15 +847,21 @@ export const ProfilePage: React.FC = () => {
       )}
 
       {/* TAB 6: RISKS & OPPORTUNITIES */}
-      {activeTab === 'risks' && dashboardData?.risk_opportunity && (
-        <RiskOpportunityCenter data={dashboardData.risk_opportunity} />
+      {activeTab === 'risks' && dashboardData && (
+        <RiskOpportunityCenter
+          risks={dashboardData.risks || dashboardData.risk_opportunity?.risks || []}
+          opportunities={dashboardData.opportunities || dashboardData.risk_opportunity?.opportunities || []}
+          impactMatrix={dashboardData.impact_matrix || dashboardData.risk_opportunity?.impact_matrix || []}
+        />
       )}
 
       {/* TAB 7: ACTION PLAN */}
-      {activeTab === 'actions' && dashboardData?.action_plan && (
+      {activeTab === 'actions' && dashboardData && (
         <PersonalizedActionPlan
-          actionPlan={dashboardData.action_plan}
-          onCompleteAction={completeAction}
+          actions={dashboardData.actions || dashboardData.action_plan?.actions || []}
+          onCompleteAction={async (actionId: string, status: string) => {
+            await completeAction(actionId, status);
+          }}
         />
       )}
 
@@ -981,10 +995,18 @@ export const ProfilePage: React.FC = () => {
             </div>
 
             <FieldMapEditor
-              initialField={editingField}
+              initialFieldName={editingField?.name || ''}
+              initialAreaValue={editingField?.area_value || editingField?.area_acres || 1.0}
+              initialAreaUnit={editingField?.area_unit || 'acre'}
+              initialLat={editingField?.centroid_lat || globalLocation?.latitude || 22.5726}
+              initialLng={editingField?.centroid_lng || globalLocation?.longitude || 88.3639}
+              initialBoundary={editingField?.boundary_geojson || null}
               farmId={editingField?.farm_id || (farms[0] ? farms[0].id : 1)}
-              onSaveField={async (fieldData) => {
-                await saveField(fieldData);
+              onSave={async (fieldData: any) => {
+                await saveField({
+                  ...fieldData,
+                  ...(editingField?.id ? { id: editingField.id } : {}),
+                });
                 setShowFieldModal(false);
               }}
               onCancel={() => setShowFieldModal(false)}

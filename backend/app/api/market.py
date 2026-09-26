@@ -85,6 +85,10 @@ async def get_current_price(
         market=market
     )
 
+    if not observation and (state or district or market):
+        # Try commodity-level search without location restrictions
+        observation = market_svc.get_latest_price(commodity=commodity)
+
     if not observation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

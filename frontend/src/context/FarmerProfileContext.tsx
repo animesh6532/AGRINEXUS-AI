@@ -32,7 +32,7 @@ interface FarmerProfileContextType {
   deleteFarm: (farmId: number) => Promise<boolean>;
   deleteField: (fieldId: number) => Promise<boolean>;
   deleteCrop: (cropId: number) => Promise<boolean>;
-  completeAction: (actionId: number) => Promise<boolean>;
+  completeAction: (actionId: string | number, status?: string) => Promise<boolean>;
   saveObservation: (data: any) => Promise<any>;
   saveNotificationPreferences: (prefs: any) => Promise<any>;
   selectFarm: (farm: FarmRecord | null) => void;
@@ -238,9 +238,9 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const completeAction = async (actionId: number): Promise<boolean> => {
+  const completeAction = async (actionId: string | number, status: string = 'DONE'): Promise<boolean> => {
     try {
-      await api.completeActionItem(actionId, userId);
+      await api.completeActionItem(String(actionId), status, userId);
       await fetchDashboard();
       return true;
     } catch (err: any) {
