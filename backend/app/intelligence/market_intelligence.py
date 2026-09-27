@@ -13,6 +13,7 @@ from ..core.logging import logger
 from ..database import connection, models, repository
 from ..forecasting.forecast_service import ForecastResult
 from ..services.market_service import MarketService
+from ..services.market_commodity_canonicalizer import canonicalize_commodity
 
 
 class MarketIntelligence:
@@ -47,6 +48,7 @@ class MarketIntelligence:
         Returns:
             Dictionary containing trend analysis signals
         """
+        commodity = canonicalize_commodity(commodity)
         end_date = date.today()
         start_date = end_date - timedelta(days=lookback_days)
 
@@ -217,7 +219,8 @@ class MarketIntelligence:
         state: Optional[str] = None,
         district: Optional[str] = None,
         market: Optional[str] = None,
-        forecast_horizon: int = 7
+        forecast_horizon: int = 7,
+        model_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Get comprehensive market signals combining trend analysis and forecast outlook.
@@ -232,6 +235,7 @@ class MarketIntelligence:
         Returns:
             Dictionary containing combined market signals
         """
+        commodity = canonicalize_commodity(commodity)
         logger.info(
             f"Generating market signals for {commodity} "
             f"(horizon: {forecast_horizon} days)"
@@ -265,7 +269,7 @@ class MarketIntelligence:
                 state=state,
                 district=district,
                 market=market,
-                model_type="ets"  # Default to ETS for intelligence layer
+                model_type=model_type or "ets",
             )
         except ValueError as e:
             # Expected condition: not enough legitimate historical data.
@@ -278,11 +282,17 @@ class MarketIntelligence:
             forecast_result = None
 
         # Analyze forecast outlook and build a response-ready forecast analysis
+        requested_model_label = {
+            "naive": "Naive",
+            "moving_average": "MovingAverage_7",
+            "ets": "ETS_add_none_no",
+            "arima": "ARIMA_111_none",
+        }.get((model_type or "ets"), "ETS_add_none_no")
         if forecast_result:
             outlook = self.analyze_forecast_outlook(forecast_result)
             forecast_points = [
                 {
-                    "date": point.date,
+                    "date": point.date.isoformat() if hasattr(point.date, "isoformat") else str(point.date),
                     "predicted_price": point.predicted_price,
                     "confidence_lower": point.confidence_lower,
                     "confidence_upper": point.confidence_upper,
@@ -299,7 +309,9 @@ class MarketIntelligence:
                 "risk_level": "unknown",
             }
             forecast_points = []
-            forecast_model = "ets"
+            # Report the requested model (not a fabricated ETS result) so the
+            # frontend can show which model had insufficient data.
+            forecast_model = requested_model_label
             forecast_metrics = {"mae": 0.0, "rmse": 0.0, "mape": 0.0}
 
         # Map non-standard outlook trends to a response-valid trend value
@@ -407,7 +419,9 @@ class MarketIntelligence:
                 "confidence": "medium"
             })
 
-        # Signal 2: Trend reversal signal
+        # Signal 2: Trend reversal / stabilization signals.
+        # "insufficient_data" is a data-availability state, not a forecast
+        # direction, so it must never be rendered as a reversal target.
         elif recent_trend != "stable" and forecast_trend == "stable":
             # Trend expected to stabilize
             signals.append({
@@ -418,7 +432,10 @@ class MarketIntelligence:
                 "confidence": "medium"
             })
 
-        elif recent_trend != forecast_trend and forecast_trend != "stable":
+        elif (
+            recent_trend != forecast_trend
+            and forecast_trend not in ("stable", "insufficient_data")
+        ):
             # Trend expected to reverse
             signals.append({
                 "type": "trend_reversal",
@@ -427,6 +444,15 @@ class MarketIntelligence:
                 "strength": "high",
                 "description": f"Trend expected to reverse from {recent_trend} to {forecast_trend}",
                 "confidence": "medium"
+            })
+
+        elif forecast_trend == "insufficient_data":
+            signals.append({
+                "type": "insufficient_forecast_data",
+                "strength": "medium",
+                "description": "Insufficient historical market data to generate a reliable forecast",
+                "confidence": "high",
+                "recommendation": "Collect more daily mandi observations before relying on a forecast for this selection.",
             })
 
         # Signal 3: Significant price movement expected
@@ -473,5 +499,14 @@ class MarketIntelligence:
                 "description": "Market appears stable with no strong signals detected",
                 "confidence": "low"
             })
+
+        # Every actionable signal must carry a user-facing recommendation;
+        # the frontend renders this field unconditionally.
+        for signal in signals:
+            signal.setdefault(
+                "recommendation",
+                signal.get("description", "Monitor mandi arrivals before taking action."),
+            )
+            signal.setdefault("signal_strength", 0.5 if signal.get("strength") == "high" else 0.3)
 
         return signals

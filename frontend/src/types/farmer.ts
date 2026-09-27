@@ -147,6 +147,8 @@ export interface MarketWatchItem {
   change_30d_pct?: number;
   period: string;
   market_location?: string;
+  observation_date?: string;
+  available?: boolean;
 }
 
 export interface CropTimelineItem {
@@ -170,6 +172,7 @@ export interface FarmAlertItem {
   field_name?: string;
   timestamp: string;
   actionable: boolean;
+  recommended_action?: string;
 }
 
 export interface ImpactMatrixRow {

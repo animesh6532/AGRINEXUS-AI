@@ -13,6 +13,7 @@ import pandas as pd
 from ..core.config import settings
 from ..core.logging import logger
 from ..database import connection, models, repository
+from ..services.market_commodity_canonicalizer import canonicalize_commodity
 from .model import (
     BaseForecastModel,
     ForecastPoint,
@@ -73,11 +74,13 @@ class ForecastService:
         if horizon_days is None:
             horizon_days = settings.DEFAULT_FORECAST_HORIZON_DAYS
 
+        commodity = canonicalize_commodity(commodity)
         forecast_date = date.today()
         logger.info(
             f"Generating {horizon_days}-day forecast for {commodity} "
             f"using {model_type} model"
         )
+
 
         # Check for cached forecast if requested
         if use_cache:
@@ -162,6 +165,7 @@ class ForecastService:
             commodity=commodity,
             market=market,
             state=state,
+            district=district,
             forecast_date=forecast_date,
             horizon_days=horizon_days,
             model_name=model.name,
@@ -202,13 +206,7 @@ class ForecastService:
         Returns:
             List of observation dictionaries sorted by date
         """
-        # Get more data than minimum required to allow for train/test splitting
-        limit = max(
-            settings.MIN_HISTORICAL_DAYS_REQUIRED * 2,
-            100  # Ensure we get reasonable amount of data
-        )
-
-        # Get observations as model objects and convert to dictionaries
+        # Get observations as model objects across all available dates
         observation_models = self.market_repo.get_observations_for_commodity(
             commodity=commodity,
             start_date=None,  # Get all available data
@@ -216,7 +214,7 @@ class ForecastService:
             state=state,
             district=district,
             market=market,
-            limit=limit
+            limit=None
         )
         observations = [obs.to_dict() for obs in observation_models]
 
@@ -435,29 +433,20 @@ class ForecastService:
         # In a production system, you might want a longer cache TTL
         cutoff_date = forecast_date  # Only today's forecasts
 
-        # Get recent forecasts
-        recent_forecasts = self.forecast_repo.get_forecasts_for_commodity(
+        # Look for matching forecast series. The cache key distinguishes
+        # commodity/state/district/market/model/horizon/forecast_date so a
+        # cached ETS result is never returned for a Moving Average request.
+        expected_model_name = self._get_model_name(model_type)
+        return self._db_forecast_series_to_result(
             commodity=commodity,
-            start_date=cutoff_date,
-            end_date=forecast_date,
-            limit=10
+            state=state,
+            district=district,
+            market=market,
+            horizon_days=horizon_days,
+            model_name=expected_model_name,
+            forecast_date=forecast_date,
         )
 
-        # Look for matching forecast
-        for forecast in recent_forecasts:
-            if (
-                forecast.commodity == commodity and
-                forecast.state == state and
-                forecast.district == district and
-                forecast.market == market and
-                forecast.horizon_days == horizon_days and
-                forecast.model_name == self._get_model_name(model_type) and
-                forecast.forecast_date == forecast_date
-            ):
-                # Convert database model to ForecastResult
-                return self._db_forecast_to_result(forecast)
-
-        return None
 
     def _get_model_name(self, model_type: str) -> str:
         """Get the display name for a model type."""
@@ -485,7 +474,7 @@ class ForecastService:
             forecast_data = {
                 "commodity": result.commodity,
                 "state": result.state,
-                "district": result.district,
+                "district": getattr(result, "district", None),
                 "market": result.market,
                 "forecast_date": result.forecast_date,
                 "target_date": target_date,
@@ -505,6 +494,77 @@ class ForecastService:
             except Exception as e:
                 logger.error(f"Error storing forecast for {target_date}: {e}")
                 # Continue with other forecast days
+
+    def _db_forecast_series_to_result(
+        self,
+        commodity: str,
+        horizon_days: int,
+        model_name: str,
+        forecast_date: date,
+        state: Optional[str] = None,
+        district: Optional[str] = None,
+        market: Optional[str] = None,
+    ) -> Optional[ForecastResult]:
+        """Rebuild a cached horizon series from per-day forecast rows."""
+        query = self.db.query(models.ForecastResult).filter(
+            models.ForecastResult.commodity == commodity,
+            models.ForecastResult.forecast_date == forecast_date,
+            models.ForecastResult.model_name == model_name,
+        )
+        if state is None:
+            query = query.filter(models.ForecastResult.state.is_(None))
+        else:
+            query = query.filter(models.ForecastResult.state == state)
+        if district is None:
+            query = query.filter(models.ForecastResult.district.is_(None))
+        else:
+            query = query.filter(models.ForecastResult.district == district)
+        if market is None:
+            query = query.filter(models.ForecastResult.market.is_(None))
+        else:
+            query = query.filter(models.ForecastResult.market == market)
+
+        rows = query.order_by(models.ForecastResult.target_date.asc()).all()
+        if not rows:
+            return None
+
+        # Only accept a complete cached series; otherwise regenerate.
+        if len(rows) < horizon_days:
+            return None
+
+        # Verify that all target dates match the expected consecutive sequence
+        expected_dates = [forecast_date + timedelta(days=i + 1) for i in range(horizon_days)]
+        actual_dates = [r.target_date for r in rows[:horizon_days]]
+        if actual_dates != expected_dates:
+            return None
+
+        rows = rows[:horizon_days]
+
+
+        forecast_points = [
+            ForecastPoint(
+                date=row.target_date,
+                predicted_price=row.predicted_modal_price or 0.0,
+            )
+            for row in rows
+        ]
+        first = rows[0]
+        return ForecastResult(
+            commodity=first.commodity,
+            market=first.market,
+            state=first.state,
+            district=first.district,
+            forecast_date=first.forecast_date,
+            horizon_days=horizon_days,
+            model_name=first.model_name,
+            forecast=forecast_points,
+            metrics={
+                "mae": first.mae or 0.0,
+                "rmse": first.rmse or 0.0,
+                "mape": first.mape or 0.0,
+            },
+            trend=self._calculate_trend([p.predicted_price for p in forecast_points]),
+        )
 
     def _db_forecast_to_result(
         self,
@@ -533,6 +593,7 @@ class ForecastService:
             commodity=db_forecast.commodity,
             market=db_forecast.market,
             state=db_forecast.state,
+            district=db_forecast.district,
             forecast_date=db_forecast.forecast_date,
             horizon_days=db_forecast.horizon_days,
             model_name=db_forecast.model_name,

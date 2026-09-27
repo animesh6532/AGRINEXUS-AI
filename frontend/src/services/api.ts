@@ -22,7 +22,10 @@ import type {
   MarketPriceRecord,
   MarketForecastResponse,
   MarketSignalsResponse,
+  MarketCommoditiesResponse,
   CropCalendarItem,
+  CropCatalogEntry,
+  CropCatalogResponse,
   CropScheduleResponse,
   SmartCropRequest,
   SmartCropResponse,
@@ -295,6 +298,13 @@ export const api = {
   // ------------------------------------------------------------------
   // Market Intelligence (/api/market)
   // ------------------------------------------------------------------
+  async getMarketCommodities(state?: string): Promise<MarketCommoditiesResponse> {
+    let url = `${BASE_URL}/api/market/commodities`;
+    if (state) url += `?state=${encodeURIComponent(state)}`;
+    const res = await fetch(url);
+    return handleResponse<MarketCommoditiesResponse>(res);
+  },
+
   async getMarketCurrent(commodity: string, state?: string): Promise<MarketPriceRecord> {
     let url = `${BASE_URL}/api/market/current?commodity=${encodeURIComponent(commodity)}`;
     if (state) url += `&state=${encodeURIComponent(state)}`;
@@ -302,20 +312,29 @@ export const api = {
     return handleResponse<MarketPriceRecord>(res);
   },
 
-  async getMarketHistory(commodity: string): Promise<MarketPriceRecord[]> {
-    const url = `${BASE_URL}/api/market/history?commodity=${encodeURIComponent(commodity)}`;
+  async getMarketHistory(commodity: string, state?: string): Promise<MarketPriceRecord[]> {
+    let url = `${BASE_URL}/api/market/history?commodity=${encodeURIComponent(commodity)}`;
+    if (state) url += `&state=${encodeURIComponent(state)}`;
     const res = await fetch(url);
     return handleResponse<MarketPriceRecord[]>(res);
   },
 
-  async getMarketForecast(commodity: string, horizon: number = 7, model: string = 'ets'): Promise<MarketForecastResponse> {
-    const url = `${BASE_URL}/api/market/forecast?commodity=${encodeURIComponent(commodity)}&horizon=${horizon}&model=${model}`;
+  async getMarketForecast(
+    commodity: string,
+    horizon: number = 7,
+    model: string = 'ets',
+    state?: string,
+  ): Promise<MarketForecastResponse> {
+    let url = `${BASE_URL}/api/market/forecast?commodity=${encodeURIComponent(commodity)}&horizon=${horizon}&model=${model}`;
+    if (state) url += `&state=${encodeURIComponent(state)}`;
     const res = await fetch(url);
     return handleResponse<MarketForecastResponse>(res);
   },
 
-  async getMarketSignals(commodity: string): Promise<MarketSignalsResponse> {
-    const url = `${BASE_URL}/api/market/signals?commodity=${encodeURIComponent(commodity)}`;
+  async getMarketSignals(commodity: string, state?: string, model: string = 'ets'): Promise<MarketSignalsResponse> {
+    let url = `${BASE_URL}/api/market/signals?commodity=${encodeURIComponent(commodity)}`;
+    if (state) url += `&state=${encodeURIComponent(state)}`;
+    if (model) url += `&model=${encodeURIComponent(model)}`;
     const res = await fetch(url);
     return handleResponse<MarketSignalsResponse>(res);
   },
@@ -323,9 +342,9 @@ export const api = {
   // ------------------------------------------------------------------
   // Crop Calendar (/api/crop-calendar)
   // ------------------------------------------------------------------
-  async getCropCalendarCatalogue(): Promise<CropCalendarItem[]> {
+  async getCropCalendarCatalogue(): Promise<CropCatalogResponse> {
     const res = await fetch(`${BASE_URL}/api/crop-calendar`);
-    return handleResponse<CropCalendarItem[]>(res);
+    return handleResponse<CropCatalogResponse>(res);
   },
 
   async getCropSchedule(crop: string, sowingDate: string, season?: string): Promise<CropScheduleResponse> {
@@ -468,6 +487,46 @@ export const api = {
     const res = await fetch(`${BASE_URL}/api/v1/farmer/crops/${cropId}`, {
       method: 'DELETE',
       headers,
+    });
+    return handleResponse<any>(res);
+  },
+
+  async createObservation(payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/observations`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async completeActionItem(actionId: string, status: string = 'DONE', userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/actions/${actionId}/complete`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ status }),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async getNotificationPreferences(userId?: string): Promise<any> {
+    const headers: Record<string, string> = {};
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/notifications/preferences`, { headers });
+    return handleResponse<any>(res);
+  },
+
+  async updateNotificationPreferences(payload: any, userId?: string): Promise<any> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (userId) headers['X-User-ID'] = userId;
+    const res = await fetch(`${BASE_URL}/api/v1/farmer/notifications/preferences`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(payload),
     });
     return handleResponse<any>(res);
   },

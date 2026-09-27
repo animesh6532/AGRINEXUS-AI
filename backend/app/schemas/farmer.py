@@ -293,10 +293,12 @@ class MarketWatchItem(BaseModel):
     crop_name: str
     commodity: str
     current_price: Optional[float] = None
-    trend: str  # "Increasing", "Decreasing", "Stable", "Unknown"
+    trend: str  # "Increasing", "Decreasing", "Stable", "Unavailable"
     change_30d_pct: Optional[float] = None
     period: str = "Last 30 days"
     market_location: Optional[str] = None
+    observation_date: Optional[str] = None
+    available: bool = True
 
 
 class CropTimelineItem(BaseModel):
@@ -320,6 +322,7 @@ class FarmAlertItem(BaseModel):
     field_name: Optional[str] = None
     timestamp: str
     actionable: bool = True
+    recommended_action: Optional[str] = None
 
 
 class ImpactMatrixRow(BaseModel):

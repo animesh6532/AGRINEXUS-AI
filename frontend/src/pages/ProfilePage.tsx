@@ -23,6 +23,12 @@ import {
   ChevronRight,
   Database,
   ArrowRight,
+  Bot,
+  Sparkles,
+  MessageSquare,
+  HelpCircle,
+  FlaskConical,
+  Stethoscope,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { AgriculturalPageHero } from '../components/design/AgriculturalPageHero';
@@ -35,11 +41,13 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { useAuth } from '../context/AuthContext';
 import { useLocationContext } from '../context/LocationContext';
 import { useFarmerProfile } from '../context/FarmerProfileContext';
+import { useFarmAICopilot } from '../context/FarmAICopilotContext';
 import { LocationMapPreview } from '../components/location/LocationMapPreview';
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { openAssistant, sendMessage } = useFarmAICopilot();
   const { location: globalLocation, openPicker } = useLocationContext();
   const {
     farmer,
@@ -113,6 +121,11 @@ export const ProfilePage: React.FC = () => {
         },
       },
     });
+  };
+
+  const handleAskCopilot = (prompt: string) => {
+    openAssistant();
+    sendMessage(prompt);
   };
 
   const farmerName = farmer?.full_name || user?.name || 'Farmer';
@@ -231,52 +244,154 @@ export const ProfilePage: React.FC = () => {
             </div>
           ) : (
             <>
-              {/* TODAY'S FARM STATUS - Compact Editorial Summary Cards */}
+              {/* TODAY'S FARM STATUS - Compact Interactive Command Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-sky-500">
+                <GlassCard
+                  variant="solid"
+                  onClick={() => navigate('/weather')}
+                  className="p-5 space-y-2 border-l-4 border-l-sky-500 hover:border-sky-400 hover:shadow-lg transition-all cursor-pointer group"
+                  title="Open Weather Intelligence"
+                >
                   <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                     <span className="flex items-center gap-1.5"><CloudSun className="w-4 h-4 text-sky-500" /> WEATHER</span>
                     <Badge variant="info">LIVE</Badge>
                   </div>
                   <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
-                    {dashboardData?.today_status.weather_summary || '31°C • Rain 12mm'}
+                    {dashboardData?.today_status.weather_summary || 'Weather telemetry unavailable'}
                   </p>
-                  <p className="text-[11px] text-[#536056]">Open-Meteo telemetry</p>
+                  <p className="text-[11px] text-[#536056] group-hover:text-sky-700 flex items-center justify-between font-medium">
+                    <span>Open-Meteo live telemetry</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-sky-600 transition-transform group-hover:translate-x-1" />
+                  </p>
                 </GlassCard>
 
-                <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-emerald-500">
+                <GlassCard
+                  variant="solid"
+                  onClick={() => navigate('/soil')}
+                  className="p-5 space-y-2 border-l-4 border-l-emerald-500 hover:border-emerald-400 hover:shadow-lg transition-all cursor-pointer group"
+                  title="Open Soil Analysis"
+                >
                   <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                     <span className="flex items-center gap-1.5"><Database className="w-4 h-4 text-emerald-500" /> SOIL STATUS</span>
-                    <Badge variant="success">TESTED</Badge>
+                    <Badge variant={dashboardData?.data_quality.soil_availability === 'Measured' ? 'success' : 'neutral'}>
+                      {dashboardData?.data_quality.soil_availability === 'Measured' ? 'MEASURED' : 'LAB REQ'}
+                    </Badge>
                   </div>
                   <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
-                    {dashboardData?.today_status.soil_summary || 'pH 6.5 • N 90 kg/ha'}
+                    {dashboardData?.today_status.soil_summary || 'Soil data unavailable'}
                   </p>
-                  <p className="text-[11px] text-[#536056]">Field soil telemetry</p>
+                  <p className="text-[11px] text-[#536056] group-hover:text-emerald-700 flex items-center justify-between font-medium">
+                    <span>Soil analysis & telemetry</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-emerald-600 transition-transform group-hover:translate-x-1" />
+                  </p>
                 </GlassCard>
 
-                <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-blue-500">
+                <GlassCard
+                  variant="solid"
+                  onClick={() => navigate('/irrigation')}
+                  className="p-5 space-y-2 border-l-4 border-l-blue-500 hover:border-blue-400 hover:shadow-lg transition-all cursor-pointer group"
+                  title="Open Irrigation Predictor"
+                >
                   <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                     <span className="flex items-center gap-1.5"><Droplets className="w-4 h-4 text-blue-500" /> WATER STATUS</span>
-                    <Badge variant="warning">MONITOR</Badge>
+                    <Badge variant={activeCrops.length > 0 ? 'warning' : 'neutral'}>
+                      {activeCrops.length > 0 ? 'SCHEDULE' : 'NO CROP'}
+                    </Badge>
                   </div>
                   <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
-                    {dashboardData?.today_status.water_summary || '2 Active Crop Field(s)'}
+                    {dashboardData?.today_status.water_summary || 'No active crops registered'}
                   </p>
-                  <p className="text-[11px] text-[#536056]">Irrigation schedule</p>
+                  <p className="text-[11px] text-[#536056] group-hover:text-blue-700 flex items-center justify-between font-medium">
+                    <span>Irrigation schedule</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-blue-600 transition-transform group-hover:translate-x-1" />
+                  </p>
                 </GlassCard>
 
-                <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-amber-500">
+                <GlassCard
+                  variant="solid"
+                  onClick={() => navigate('/market')}
+                  className="p-5 space-y-2 border-l-4 border-l-amber-500 hover:border-amber-400 hover:shadow-lg transition-all cursor-pointer group"
+                  title="Open Market Intelligence"
+                >
                   <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                     <span className="flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-amber-500" /> MARKET WATCH</span>
-                    <Badge variant="primary">RISING</Badge>
+                    <Badge variant="primary">AGMARKNET</Badge>
                   </div>
                   <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
-                    {dashboardData?.today_status.market_summary || 'Tracking Active Crops'}
+                    {dashboardData?.today_status.market_summary || 'No active crop market data'}
                   </p>
-                  <p className="text-[11px] text-[#536056]">AGMARKNET live prices</p>
+                  <p className="text-[11px] text-[#536056] group-hover:text-amber-700 flex items-center justify-between font-medium">
+                    <span>AGMARKNET live prices</span>
+                    <ArrowRight className="w-3.5 h-3.5 text-amber-600 transition-transform group-hover:translate-x-1" />
+                  </p>
                 </GlassCard>
               </div>
+
+              {/* FARM AI COPILOT INTERACTIVE ASSISTANT COMMAND BANNER */}
+              <GlassCard
+                variant="solid"
+                className="p-6 bg-gradient-to-br from-[#0B1C10] via-[#112316] to-[#0B1C10] border border-[#D4E768]/30 shadow-xl text-white space-y-4"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-[#D4E768] text-[#0B1C10] flex items-center justify-center font-bold shadow-md">
+                      <Bot className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-base font-extrabold font-editorial text-white">AGRINEXUS FARM AI COPILOT</h3>
+                        <Badge variant="primary" className="bg-[#D4E768]/20 text-[#D4E768] border border-[#D4E768]/30 text-[10px]">
+                          READY
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-white/70">
+                        Ask agronomic questions connected to your farm profile, field telemetry, pest warnings, and crop markets.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => openAssistant()}
+                    variant="lime"
+                    size="sm"
+                    icon={<MessageSquare className="w-4 h-4" />}
+                  >
+                    Open Farm AI Copilot
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold text-white/60 uppercase tracking-wider">Quick Inquiries:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      {
+                        label: 'What should I do today?',
+                        prompt: 'What should I do today on my farm based on current weather, soil, and active crops?',
+                      },
+                      {
+                        label: 'Why did I receive this alert?',
+                        prompt: 'Why did I receive these farm alerts and what immediate actions should I take?',
+                      },
+                      {
+                        label: "What's the market situation?",
+                        prompt: 'What is the current mandi market situation and price outlook for my active crops?',
+                      },
+                      {
+                        label: 'What is crop rotation?',
+                        prompt: 'What is crop rotation, and how can I practice it effectively on my fields?',
+                      },
+                    ].map((chip, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleAskCopilot(chip.prompt)}
+                        className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-[#D4E768] hover:text-[#0B1C10] text-white/90 text-xs font-semibold transition-all border border-white/15 flex items-center gap-1.5 group"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-[#D4E768] group-hover:text-[#0B1C10]" />
+                        <span>{chip.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </GlassCard>
 
               {/* YOUR ACTIVE CROPS CARDS */}
               <div className="space-y-4">
@@ -321,24 +436,51 @@ export const ProfilePage: React.FC = () => {
                             </Badge>
                           </div>
 
-                          {/* Quick Crop Metrics Grid */}
+                          {/* Quick Crop Metrics Grid with Direct Navigation */}
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-[#EEF3E8]/60 p-3 rounded-2xl border border-[#E2E7DA]">
-                            <div>
-                              <span className="text-[#536056] block text-[10px]">WEATHER</span>
+                            <button
+                              onClick={() => navigate('/weather', { state: { crop: card.crop_name } })}
+                              className="text-left hover:bg-white/80 p-1.5 rounded-xl transition-colors group"
+                              title="Open Weather Intelligence"
+                            >
+                              <span className="text-[#536056] block text-[10px] group-hover:text-sky-700 flex items-center justify-between">
+                                WEATHER <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100" />
+                              </span>
                               <strong className="text-[#0B1C10]">{card.weather_status}</strong>
-                            </div>
-                            <div>
-                              <span className="text-[#536056] block text-[10px]">WATER</span>
+                            </button>
+
+                            <button
+                              onClick={() => navigate('/irrigation')}
+                              className="text-left hover:bg-white/80 p-1.5 rounded-xl transition-colors group"
+                              title="Open Irrigation Predictor"
+                            >
+                              <span className="text-[#536056] block text-[10px] group-hover:text-blue-700 flex items-center justify-between">
+                                WATER <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100" />
+                              </span>
                               <strong className="text-[#0B1C10]">{card.water_status}</strong>
-                            </div>
-                            <div>
-                              <span className="text-[#536056] block text-[10px]">PEST RISK</span>
+                            </button>
+
+                            <button
+                              onClick={() => navigate('/pest', { state: { crop: card.crop_name } })}
+                              className="text-left hover:bg-white/80 p-1.5 rounded-xl transition-colors group"
+                              title="Open Pest Intelligence"
+                            >
+                              <span className="text-[#536056] block text-[10px] group-hover:text-amber-700 flex items-center justify-between">
+                                PEST RISK <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100" />
+                              </span>
                               <strong className="text-[#0B1C10]">{card.pest_status}</strong>
-                            </div>
-                            <div>
-                              <span className="text-[#536056] block text-[10px]">MARKET</span>
+                            </button>
+
+                            <button
+                              onClick={() => navigate('/market', { state: { commodity: card.crop_name } })}
+                              className="text-left hover:bg-white/80 p-1.5 rounded-xl transition-colors group"
+                              title="Open Market Intelligence"
+                            >
+                              <span className="text-[#536056] block text-[10px] group-hover:text-emerald-700 flex items-center justify-between">
+                                MARKET <ArrowRight className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100" />
+                              </span>
                               <strong className="text-emerald-700 font-bold">{card.market_trend}</strong>
-                            </div>
+                            </button>
                           </div>
 
                           <div className="flex flex-wrap items-center justify-between text-xs pt-1 text-[#536056] border-t border-[#E2E7DA]">
@@ -356,6 +498,15 @@ export const ProfilePage: React.FC = () => {
                               icon={<Sprout className="w-3.5 h-3.5 text-[#2F6B3C]" />}
                             >
                               Recommend Crop for Field
+                            </Button>
+                            <Button
+                              onClick={() => navigate('/crop-calendar')}
+                              variant="secondary"
+                              size="sm"
+                              className="flex-1"
+                              icon={<Calendar className="w-3.5 h-3.5 text-[#2F6B3C]" />}
+                            >
+                              Crop Calendar
                             </Button>
                           </div>
                         </GlassCard>
@@ -388,9 +539,17 @@ export const ProfilePage: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Weather Impact per Crop */}
                 <GlassCard variant="solid" className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-3">
-                    <CloudSun className="w-5 h-5 text-[#2F6B3C]" />
-                    <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FARM WEATHER IMPACT</h3>
+                  <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+                    <div className="flex items-center gap-2">
+                      <CloudSun className="w-5 h-5 text-[#2F6B3C]" />
+                      <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FARM WEATHER IMPACT</h3>
+                    </div>
+                    <button
+                      onClick={() => navigate('/weather')}
+                      className="text-xs font-bold text-[#2F6B3C] hover:underline flex items-center gap-1"
+                    >
+                      Weather Intelligence <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                   {dashboardData?.weather_impacts && dashboardData.weather_impacts.length > 0 ? (
@@ -414,19 +573,39 @@ export const ProfilePage: React.FC = () => {
                               <strong>Recommended Action:</strong> {item.action}
                             </p>
                           </div>
+                          <div className="pt-2 border-t border-[#E2E7DA]/60">
+                            <button
+                              onClick={() => navigate('/weather')}
+                              className="text-xs text-[#2F6B3C] font-bold hover:underline flex items-center gap-1"
+                            >
+                              Open 7-Day Forecast & Soil Climate <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[#536056] italic">No weather impact data available.</p>
+                    <p className="text-xs text-[#536056] italic">
+                      {activeCrops.length === 0
+                        ? 'No active crop registered. Register a crop to view field-specific weather impact.'
+                        : 'No weather intelligence available.'}
+                    </p>
                   )}
                 </GlassCard>
 
                 {/* Soil Intelligence */}
                 <GlassCard variant="solid" className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-3">
-                    <Database className="w-5 h-5 text-[#2F6B3C]" />
-                    <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FARM SOIL INTELLIGENCE</h3>
+                  <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Database className="w-5 h-5 text-[#2F6B3C]" />
+                      <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FARM SOIL INTELLIGENCE</h3>
+                    </div>
+                    <button
+                      onClick={() => navigate('/soil')}
+                      className="text-xs font-bold text-[#2F6B3C] hover:underline flex items-center gap-1"
+                    >
+                      Soil Analysis <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                   {dashboardData?.soil_impacts && dashboardData.soil_impacts.length > 0 ? (
@@ -458,11 +637,27 @@ export const ProfilePage: React.FC = () => {
                           </div>
 
                           <p className="text-[#536056] italic">{item.impact_text}</p>
+                          <div className="pt-2 border-t border-[#E2E7DA]/60 flex items-center justify-between">
+                            <button
+                              onClick={() => navigate('/soil')}
+                              className="text-xs text-[#2F6B3C] font-bold hover:underline flex items-center gap-1"
+                            >
+                              Analyze Field Soil <ArrowRight className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => setActiveTab('soil')}
+                              className="text-xs text-[#536056] hover:underline"
+                            >
+                              Record Lab Measurements
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[#536056] italic">No soil intelligence records available.</p>
+                    <p className="text-xs text-[#536056] italic">
+                      Soil lab measurements unavailable. Soil test recommended for precise nutrient intelligence.
+                    </p>
                   )}
                 </GlassCard>
               </div>
@@ -471,9 +666,17 @@ export const ProfilePage: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Irrigation Center */}
                 <GlassCard variant="solid" className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-3">
-                    <Droplets className="w-5 h-5 text-[#2F6B3C]" />
-                    <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">IRRIGATION CENTER</h3>
+                  <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Droplets className="w-5 h-5 text-[#2F6B3C]" />
+                      <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">IRRIGATION CENTER</h3>
+                    </div>
+                    <button
+                      onClick={() => navigate('/irrigation')}
+                      className="text-xs font-bold text-[#2F6B3C] hover:underline flex items-center gap-1"
+                    >
+                      Irrigation Predictor <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                   {dashboardData?.irrigation_items && dashboardData.irrigation_items.length > 0 ? (
@@ -490,19 +693,39 @@ export const ProfilePage: React.FC = () => {
                           <p className="text-[11px] text-[#536056] bg-white/60 p-2 rounded-xl border border-[#E2E7DA]">
                             ℹ️ <em>{item.model_note}</em>
                           </p>
+                          <div className="pt-2 border-t border-[#E2E7DA]/60">
+                            <button
+                              onClick={() => navigate('/irrigation')}
+                              className="text-xs text-[#2F6B3C] font-bold hover:underline flex items-center gap-1"
+                            >
+                              Predict Irrigation Schedule <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[#536056] italic">No irrigation records available.</p>
+                    <p className="text-xs text-[#536056] italic">
+                      {activeCrops.length === 0
+                        ? 'No active crop registered for irrigation scheduling.'
+                        : 'No irrigation records available.'}
+                    </p>
                   )}
                 </GlassCard>
 
                 {/* Fertilizer Plan */}
                 <GlassCard variant="solid" className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-3">
-                    <Sprout className="w-5 h-5 text-[#2F6B3C]" />
-                    <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FERTILIZER INTELLIGENCE</h3>
+                  <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+                    <div className="flex items-center gap-2">
+                      <FlaskConical className="w-5 h-5 text-[#2F6B3C]" />
+                      <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FERTILIZER INTELLIGENCE</h3>
+                    </div>
+                    <button
+                      onClick={() => navigate('/fertilizer')}
+                      className="text-xs font-bold text-[#2F6B3C] hover:underline flex items-center gap-1"
+                    >
+                      Fertilizer Advisor <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                   {dashboardData?.fertilizer_items && dashboardData.fertilizer_items.length > 0 ? (
@@ -522,11 +745,23 @@ export const ProfilePage: React.FC = () => {
                           <p className="text-[11px] text-[#536056] bg-white/60 p-2 rounded-xl border border-[#E2E7DA]">
                             ⚠️ <em>{item.model_scope_note}</em>
                           </p>
+                          <div className="pt-2 border-t border-[#E2E7DA]/60">
+                            <button
+                              onClick={() => navigate('/fertilizer')}
+                              className="text-xs text-[#2F6B3C] font-bold hover:underline flex items-center gap-1"
+                            >
+                              Open Fertilizer Advisor <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[#536056] italic">No fertilizer records available.</p>
+                    <p className="text-xs text-[#536056] italic">
+                      {activeCrops.length === 0
+                        ? 'No active crop registered.'
+                        : 'No fertilizer records available.'}
+                    </p>
                   )}
                 </GlassCard>
               </div>
@@ -535,9 +770,25 @@ export const ProfilePage: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Pest & Disease Watch */}
                 <GlassCard variant="solid" className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-3">
-                    <Bug className="w-5 h-5 text-[#2F6B3C]" />
-                    <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">PEST & DISEASE WATCH</h3>
+                  <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Bug className="w-5 h-5 text-[#2F6B3C]" />
+                      <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">PEST & DISEASE WATCH</h3>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => navigate('/pest')}
+                        className="text-xs font-bold text-[#2F6B3C] hover:underline flex items-center gap-1"
+                      >
+                        Pest Intelligence <ArrowRight className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={() => navigate('/disease')}
+                        className="text-xs font-bold text-sky-700 hover:underline flex items-center gap-1"
+                      >
+                        Plant Diagnostics <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
 
                   {dashboardData?.pest_items && dashboardData.pest_items.length > 0 ? (
@@ -561,19 +812,45 @@ export const ProfilePage: React.FC = () => {
                           <p className="text-[11px] text-[#536056] bg-white/60 p-2 rounded-xl border border-[#E2E7DA]">
                             💡 <em>{item.model_scope_note}</em>
                           </p>
+                          <div className="pt-2 border-t border-[#E2E7DA]/60 flex items-center justify-between">
+                            <button
+                              onClick={() => navigate('/pest', { state: { crop: item.crop_name } })}
+                              className="text-xs text-[#2F6B3C] font-bold hover:underline flex items-center gap-1"
+                            >
+                              Outbreak Risk Modeling <ArrowRight className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => navigate('/disease')}
+                              className="text-xs text-sky-700 font-bold hover:underline flex items-center gap-1"
+                            >
+                              Scan Plant Leaf Image <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[#536056] italic">No pest watch records available.</p>
+                    <p className="text-xs text-[#536056] italic">
+                      {activeCrops.length === 0
+                        ? 'No active crop registered.'
+                        : 'No pest watch records available.'}
+                    </p>
                   )}
                 </GlassCard>
 
                 {/* Market Watch for Active Crops */}
                 <GlassCard variant="solid" className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-3">
-                    <TrendingUp className="w-5 h-5 text-[#2F6B3C]" />
-                    <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">ACTIVE CROPS MARKET WATCH</h3>
+                  <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-[#2F6B3C]" />
+                      <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">ACTIVE CROPS MARKET WATCH</h3>
+                    </div>
+                    <button
+                      onClick={() => navigate('/market')}
+                      className="text-xs font-bold text-[#2F6B3C] hover:underline flex items-center gap-1"
+                    >
+                      Market Intelligence <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                   {dashboardData?.market_watch && dashboardData.market_watch.length > 0 ? (
@@ -582,23 +859,54 @@ export const ProfilePage: React.FC = () => {
                         <div key={idx} className="p-4 rounded-2xl bg-[#EEF3E8]/80 border border-[#E2E7DA] space-y-2 text-xs">
                           <div className="flex items-center justify-between font-bold text-[#0B1C10]">
                             <span className="font-editorial text-sm">{item.crop_name}</span>
-                            <Badge variant="primary">{item.trend}</Badge>
+                            <Badge variant={item.available && item.current_price ? 'primary' : 'neutral'}>
+                              {item.available && item.current_price ? item.trend : 'No Local Mandi Data'}
+                            </Badge>
                           </div>
-                          <div className="flex justify-between items-center text-xs">
-                            <span className="text-[#536056]">Market Price:</span>
-                            <span className="font-extrabold text-[#0B1C10] font-mono text-sm">
-                              {item.current_price ? `₹${item.current_price} / quintal` : 'AGMARKNET Syncing...'}
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-[11px] text-[#536056]">
-                            <span>30-Day Trend: {item.change_30d_pct ? `+${item.change_30d_pct}%` : 'Stable'}</span>
-                            <span>Location: {item.market_location}</span>
-                          </div>
+
+                          {item.available && item.current_price ? (
+                            <>
+                              <div className="flex justify-between items-center text-xs">
+                                <span className="text-[#536056]">Market Price:</span>
+                                <span className="font-extrabold text-[#0B1C10] font-mono text-sm">
+                                  ₹{item.current_price} / quintal
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center text-[11px] text-[#536056]">
+                                <span>30-Day Trend: {item.change_30d_pct ? `${item.change_30d_pct > 0 ? '+' : ''}${item.change_30d_pct}%` : 'Stable'}</span>
+                                <span>Location: {item.market_location || 'Regional Market'}</span>
+                              </div>
+                              <div className="pt-2 border-t border-[#E2E7DA]/60">
+                                <button
+                                  onClick={() => navigate('/market', { state: { commodity: item.commodity || item.crop_name } })}
+                                  className="text-xs text-[#2F6B3C] font-bold hover:underline flex items-center gap-1"
+                                >
+                                  Explore {item.crop_name} Mandi Trends <ArrowRight className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-xs text-amber-900 font-medium">
+                                No {item.crop_name} market data available for the selected region.
+                              </p>
+                              <button
+                                onClick={() => navigate('/market')}
+                                className="text-xs text-[#2F6B3C] font-semibold hover:underline flex items-center gap-1"
+                              >
+                                Search State Mandis <ArrowRight className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[#536056] italic">No market data available for active crops.</p>
+                    <p className="text-xs text-[#536056] italic">
+                      {activeCrops.length === 0
+                        ? 'No active crop registered. Register a crop to monitor mandi market prices.'
+                        : 'No market data available for active crops.'}
+                    </p>
                   )}
                 </GlassCard>
               </div>
@@ -607,18 +915,30 @@ export const ProfilePage: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Farm Timeline */}
                 <GlassCard variant="solid" className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-3">
-                    <Calendar className="w-5 h-5 text-[#2F6B3C]" />
-                    <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FARM TIMELINE</h3>
+                  <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-[#2F6B3C]" />
+                      <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FARM TIMELINE</h3>
+                    </div>
+                    <button
+                      onClick={() => navigate('/crop-calendar')}
+                      className="text-xs font-bold text-[#2F6B3C] hover:underline flex items-center gap-1"
+                    >
+                      Crop Calendar <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
                   {dashboardData?.timeline && dashboardData.timeline.length > 0 ? (
                     <div className="space-y-3 relative before:absolute before:left-3 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#E2E7DA]">
                       {dashboardData.timeline.map((item, idx) => (
-                        <div key={idx} className="pl-8 relative space-y-1 text-xs">
-                          <div className="absolute left-1.5 top-1 w-3 h-3 rounded-full bg-[#2F6B3C] border-2 border-white" />
+                        <div
+                          key={idx}
+                          onClick={() => navigate('/crop-calendar')}
+                          className="pl-8 relative space-y-1 text-xs cursor-pointer group hover:bg-[#EEF3E8]/40 p-2 rounded-xl transition-colors"
+                        >
+                          <div className="absolute left-1.5 top-2.5 w-3 h-3 rounded-full bg-[#2F6B3C] border-2 border-white group-hover:scale-125 transition-transform" />
                           <div className="flex items-center justify-between">
-                            <span className="font-bold text-[#0B1C10]">{item.event_title}</span>
+                            <span className="font-bold text-[#0B1C10] group-hover:text-[#2F6B3C] transition-colors">{item.event_title}</span>
                             <span className="text-[11px] font-mono text-[#536056]">{item.date_label}</span>
                           </div>
                           <p className="text-[#536056]">
@@ -628,26 +948,58 @@ export const ProfilePage: React.FC = () => {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-xs text-[#536056] italic">No timeline events recorded.</p>
+                    <p className="text-xs text-[#536056] italic">
+                      {activeCrops.length === 0
+                        ? 'No active crop schedule recorded. Register a crop cultivation to generate a personalized timeline.'
+                        : 'No timeline events recorded.'}
+                    </p>
                   )}
                 </GlassCard>
 
-                {/* Farm Alerts */}
+                {/* Farm Alerts Center */}
                 <GlassCard variant="solid" className="p-6 space-y-4">
-                  <div className="flex items-center gap-2 border-b border-[#E2E7DA] pb-3">
-                    <ShieldAlert className="w-5 h-5 text-amber-600" />
-                    <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FARM ALERTS CENTER</h3>
+                  <div className="flex items-center justify-between border-b border-[#E2E7DA] pb-3">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-5 h-5 text-amber-600" />
+                      <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">FARM ALERTS CENTER</h3>
+                    </div>
+                    <button
+                      onClick={() => handleAskCopilot('Review all current farm alerts and explain what immediate agronomic steps I should take.')}
+                      className="text-xs font-bold text-amber-700 hover:underline flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> Ask Copilot About Alerts
+                    </button>
                   </div>
 
                   {dashboardData?.alerts && dashboardData.alerts.length > 0 ? (
                     <div className="space-y-3">
                       {dashboardData.alerts.map((alert) => (
-                        <div key={alert.id} className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
+                        <div key={alert.id} className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-2">
                           <div className="flex items-center justify-between font-bold text-amber-950">
                             <span>{alert.title}</span>
                             <Badge variant={alert.priority === 'High' ? 'danger' : 'warning'}>{alert.priority}</Badge>
                           </div>
                           <p className="text-amber-900/90">{alert.description}</p>
+                          <div className="pt-2 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2">
+                            <button
+                              onClick={() => handleAskCopilot(`Why did I receive this alert: "${alert.title}" - ${alert.description}? What should I do?`)}
+                              className="text-[11px] font-bold text-[#2F6B3C] hover:underline flex items-center gap-1"
+                            >
+                              <Bot className="w-3 h-3" /> Ask Copilot: Why this alert? <ArrowRight className="w-2.5 h-2.5" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (alert.category === 'Pest') navigate('/pest');
+                                else if (alert.category === 'Weather') navigate('/weather');
+                                else if (alert.category === 'Soil') navigate('/soil');
+                                else if (alert.category === 'Irrigation') navigate('/irrigation');
+                                else navigate('/crop');
+                              }}
+                              className="text-[11px] font-semibold text-amber-800 hover:underline"
+                            >
+                              Open {alert.category} Intelligence →
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -663,7 +1015,9 @@ export const ProfilePage: React.FC = () => {
               <GlassCard variant="solid" className="p-6 space-y-4 overflow-x-auto">
                 <div className="border-b border-[#E2E7DA] pb-3">
                   <h3 className="text-base font-extrabold font-editorial text-[#0B1C10]">CROP IMPACT MATRIX</h3>
-                  <p className="text-xs text-[#536056]">Integrated multi-dimensional decision-support prioritization</p>
+                  <p className="text-xs text-[#536056]">
+                    Integrated multi-dimensional decision-support prioritization matrix across weather, soil, water, pest, and market signals.
+                  </p>
                 </div>
 
                 {dashboardData?.impact_matrix && dashboardData.impact_matrix.length > 0 ? (
@@ -679,6 +1033,7 @@ export const ProfilePage: React.FC = () => {
                         <th className="py-2.5 px-3">Pest</th>
                         <th className="py-2.5 px-3">Market</th>
                         <th className="py-2.5 px-3">Attention</th>
+                        <th className="py-2.5 px-3">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E2E7DA]">
@@ -696,6 +1051,26 @@ export const ProfilePage: React.FC = () => {
                             <Badge variant={row.attention_level === 'High' ? 'danger' : row.attention_level === 'Medium' ? 'warning' : 'success'}>
                               {row.attention_level}
                             </Badge>
+                          </td>
+                          <td className="py-3 px-3">
+                            <button
+                              onClick={() => {
+                                if (row.pest === 'High' || row.pest === 'Moderate') {
+                                  navigate('/pest', { state: { crop: row.crop_name } });
+                                } else if (row.weather === 'Warning') {
+                                  navigate('/weather');
+                                } else if (row.water === 'MONITOR') {
+                                  navigate('/irrigation');
+                                } else if (row.soil === 'Data Partial') {
+                                  navigate('/soil');
+                                } else {
+                                  navigate('/crop', { state: { crop: row.crop_name } });
+                                }
+                              }}
+                              className="text-xs text-[#2F6B3C] font-bold hover:underline flex items-center gap-1"
+                            >
+                              Focus Module <ArrowRight className="w-3 h-3" />
+                            </button>
                           </td>
                         </tr>
                       ))}

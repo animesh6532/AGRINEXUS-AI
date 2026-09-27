@@ -17,13 +17,13 @@ When adapters are not used, the caller supplies a FarmContext directly.
 
 from typing import Any, Dict, List, Optional
 
-from app.intelligence.decision_engine import (
+from ..intelligence.decision_engine import (
     ENGINE_VERSION,
     KNOWN_ML_MODELS,
     RULESET_VERSION,
     evaluate_farm_context,
 )
-from app.schemas.decision import (
+from ..schemas.decision import (
     CropCalendarContext,
     DecisionResponse,
     FarmContext,

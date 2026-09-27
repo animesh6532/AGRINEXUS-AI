@@ -18,6 +18,10 @@ from ..intelligence import market_intelligence
 from ..schemas import market as schemas
 from ..services import market_service
 from ..forecasting import forecast_service
+from ..services.market_commodity_canonicalizer import (
+    canonicalize_commodity,
+    get_supported_commodities_catalogue,
+)
 
 # Create router
 router = APIRouter(
@@ -55,6 +59,27 @@ def get_market_intelligence_service(
 
 
 @router.get(
+    "/commodities",
+    response_model=schemas.MarketCommoditiesResponse,
+    summary="Get supported commodity catalogue with regional availability",
+    description="Retrieve the supported agricultural commodity catalogue reflecting real market observations and regional availability."
+)
+async def get_market_commodities(
+    state: Optional[str] = Query(None, description="State filter to check local availability"),
+    db: Session = Depends(get_db_session)
+):
+    """
+    Get supported commodities and their availability.
+    """
+    catalogue = get_supported_commodities_catalogue(db, state=state)
+    return schemas.MarketCommoditiesResponse(
+        state=state,
+        total=len(catalogue),
+        commodities=[schemas.CommodityCatalogueItem(**item) for item in catalogue]
+    )
+
+
+@router.get(
     "/current",
     response_model=schemas.MarketObservationResponse,
     summary="Get latest market price for a commodity",
@@ -78,8 +103,9 @@ async def get_current_price(
         f"state={state}, district={district}, market={market}"
     )
 
+    canonical_commodity = canonicalize_commodity(commodity)
     observation = market_svc.get_latest_price(
-        commodity=commodity,
+        commodity=canonical_commodity,
         state=state,
         district=district,
         market=market
@@ -123,8 +149,9 @@ async def get_historical_prices(
         f"start_date={start_date}, end_date={end_date}, limit={limit}"
     )
 
+    canonical_commodity = canonicalize_commodity(commodity)
     observations = market_svc.get_historical_prices(
-        commodity=commodity,
+        commodity=canonical_commodity,
         start_date=start_date,
         end_date=end_date,
         state=state,
@@ -172,9 +199,10 @@ async def get_market_forecast(
     try:
         # Default to ETS model if none specified
         model_type = model or "ets"
+        canonical_commodity = canonicalize_commodity(commodity)
 
         forecast_result = await forecast_svc.generate_forecast(
-            commodity=commodity,
+            commodity=canonical_commodity,
             horizon_days=horizon,
             state=state,
             district=district,
@@ -186,7 +214,7 @@ async def get_market_forecast(
         # Get current price for the response
         market_svc = market_service.MarketService(forecast_svc.db)
         current_obs = market_svc.get_latest_price(
-            commodity=commodity,
+            commodity=canonical_commodity,
             state=state,
             district=district,
             market=market
@@ -199,6 +227,7 @@ async def get_market_forecast(
             commodity=forecast_result.commodity,
             market=forecast_result.market,
             state=forecast_result.state,
+            district=forecast_result.district,
             current_price=current_price,
             forecast_horizon_days=forecast_result.horizon_days,
             forecast=[
@@ -258,8 +287,9 @@ async def get_market_trend(
     )
 
     try:
+        canonical_commodity = canonicalize_commodity(commodity)
         trend_analysis = intel_svc.analyze_market_trend(
-            commodity=commodity,
+            commodity=canonical_commodity,
             state=state,
             district=district,
             market=market,
@@ -269,14 +299,14 @@ async def get_market_trend(
         # Get latest price for completeness
         market_svc = market_service.MarketService(intel_svc.db)
         latest_price_data = market_svc.get_latest_price(
-            commodity=commodity,
+            commodity=canonical_commodity,
             state=state,
             district=district,
             market=market
         )
 
         response = schemas.MarketTrendResponse(
-            commodity=commodity,
+            commodity=canonical_commodity,
             market=market,
             state=state,
             trend=trend_analysis["trend"],
@@ -312,6 +342,12 @@ async def get_market_signals(
     district: Optional[str] = Query(None, description="District name filter"),
     market: Optional[str] = Query(None, description="Market name filter"),
     forecast_horizon: int = Query(7, description="Forecast horizon in days", ge=1, le=30, example=7),
+    model: Optional[str] = Query(
+        None,
+        description="Forecasting model to use for signal generation",
+        regex="^(naive|moving_average|ets|arima)$",
+        example="ets"
+    ),
     intel_svc: market_intelligence.MarketIntelligence = Depends(get_market_intelligence_service)
 ):
     """
@@ -323,16 +359,18 @@ async def get_market_signals(
     logger.info(
         f"Generating market signals for commodity={commodity}, "
         f"state={state}, district={district}, market={market}, "
-        f"forecast_horizon={forecast_horizon}"
+        f"forecast_horizon={forecast_horizon}, model={model}"
     )
 
     try:
+        canonical_commodity = canonicalize_commodity(commodity)
         signals_data = await intel_svc.get_market_signals(
-            commodity=commodity,
+            commodity=canonical_commodity,
             state=state,
             district=district,
             market=market,
-            forecast_horizon=forecast_horizon
+            forecast_horizon=forecast_horizon,
+            model_type=model,
         )
 
         # Convert to response format
@@ -400,8 +438,9 @@ async def refresh_market_data(
     try:
         # This would be run asynchronously in a real application
         # For now, we'll run it synchronously but return 202 Accepted
+        canonical_commodity = canonicalize_commodity(commodity) if commodity else None
         stored_count = await market_svc.fetch_and_store_latest_data(
-            commodity=commodity,
+            commodity=canonical_commodity,
             state=state,
             market=market,
             limit=limit
