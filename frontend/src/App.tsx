@@ -5,6 +5,7 @@ import { HealthProvider } from './context/HealthContext';
 import { LocationProvider } from './context/LocationContext';
 import { FarmerProfileProvider } from './context/FarmerProfileContext';
 import { AppShell } from './components/layout/AppShell';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 
 import { LandingPage } from './pages/LandingPage';
 import { LoginPage } from './pages/LoginPage';
@@ -57,7 +58,9 @@ export const App: React.FC = () => {
                   <Route
                     element={
                       <ProtectedRoute>
-                        <AppShell />
+                        <ErrorBoundary fallbackTitle="AgriNexus Platform Workspace Error" fallbackMessage="A temporary error occurred in the workspace. You can refresh or return to Dashboard.">
+                          <AppShell />
+                        </ErrorBoundary>
                       </ProtectedRoute>
                     }
                   >

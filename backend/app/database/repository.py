@@ -105,12 +105,12 @@ class MarketObservationRepository:
         if variety is not None:
             query = query.filter(models.MarketObservation.variety == variety)
         else:
-            query = query.filter(models.MarketObservation.variety == None)
+            query = query.filter(models.MarketObservation.variety.is_(None))
 
         if grade is not None:
             query = query.filter(models.MarketObservation.grade == grade)
         else:
-            query = query.filter(models.MarketObservation.grade == None)
+            query = query.filter(models.MarketObservation.grade.is_(None))
 
         return query.first()
 
@@ -256,6 +256,50 @@ class MarketObservationRepository:
         return query.scalar()
 
 
+    def list_distinct_commodities(
+        self,
+        state: Optional[str] = None,
+        district: Optional[str] = None,
+        market: Optional[str] = None,
+        limit: Optional[int] = None
+    ) -> List[Tuple[str, int, Optional[date]]]:
+        """
+        List the commodities that actually have stored observations.
+
+        Args:
+            state: State name (optional)
+            district: District name (optional)
+            market: Market name (optional)
+            limit: Maximum number of commodities to return
+
+        Returns:
+            List of (commodity, observation_count, latest_observation_date)
+            tuples, most recently observed commodity first.
+        """
+        latest_date = func.max(models.MarketObservation.observation_date)
+
+        query = self.db.query(
+            models.MarketObservation.commodity,
+            func.count(models.MarketObservation.id),
+            latest_date
+        )
+
+        if state:
+            query = query.filter(models.MarketObservation.state == state)
+        if district:
+            query = query.filter(models.MarketObservation.district == district)
+        if market:
+            query = query.filter(models.MarketObservation.market == market)
+
+        query = query.group_by(models.MarketObservation.commodity)
+        query = query.order_by(desc(latest_date), models.MarketObservation.commodity)
+
+        if limit:
+            query = query.limit(limit)
+
+        return query.all()
+
+
 class ForecastResultRepository:
     """Repository for forecast result data operations."""
 
@@ -330,15 +374,23 @@ class ForecastResultRepository:
         commodity: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        state: Optional[str] = None,
+        district: Optional[str] = None,
+        market: Optional[str] = None,
+        model_name: Optional[str] = None,
         limit: int = 100
     ) -> List[models.ForecastResult]:
         """
-        Get forecast results for a commodity.
+        Get forecast results for a commodity with exact filtering.
 
         Args:
             commodity: Commodity name
             start_date: Start date for filtering (inclusive)
             end_date: End date for filtering (inclusive)
+            state: State name filter (optional)
+            district: District name filter (optional)
+            market: Market name filter (optional)
+            model_name: Model name filter (optional)
             limit: Maximum number of records to return
 
         Returns:
@@ -352,10 +404,18 @@ class ForecastResultRepository:
             query = query.filter(models.ForecastResult.forecast_date >= start_date)
         if end_date:
             query = query.filter(models.ForecastResult.forecast_date <= end_date)
+        if state is not None:
+            query = query.filter(models.ForecastResult.state == state)
+        if district is not None:
+            query = query.filter(models.ForecastResult.district == district)
+        if market is not None:
+            query = query.filter(models.ForecastResult.market == market)
+        if model_name is not None:
+            query = query.filter(models.ForecastResult.model_name == model_name)
 
         query = query.order_by(desc(models.ForecastResult.created_at))
 
         if limit:
             query = query.limit(limit)
 
-        return query.all()
+        return query.all()

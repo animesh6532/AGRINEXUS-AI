@@ -327,6 +327,7 @@ export interface MarketPriceRecord {
   variety: string;
   grade: string;
   arrival_date: string;
+  observation_date?: string;
   min_price: number;
   max_price: number;
   modal_price: number;
@@ -334,33 +335,73 @@ export interface MarketPriceRecord {
 
 export interface MarketForecastItem {
   date: string;
-  predicted_modal_price: number;
+  predicted_price: number;
+  predicted_modal_price?: number;
+  confidence_lower?: number;
+  confidence_upper?: number;
   lower_ci?: number;
   upper_ci?: number;
 }
 
 export interface MarketForecastResponse {
   commodity: string;
-  model_used: string;
+  market?: string | null;
+  state?: string | null;
+  current_price: number;
+  model: string;
+  // Aliases kept for backward compatibility with older UI code.
+  model_used?: string;
   forecast_horizon_days: number;
-  forecasts: MarketForecastItem[];
-  last_historical_date: string;
+  forecast: MarketForecastItem[];
+  forecasts?: MarketForecastItem[];
+  trend: string;
+  metrics: Record<string, number>;
+  last_historical_date?: string;
 }
 
 export interface ActionableSignalItem {
   type: string;
-  severity: string;
+  severity?: string;
+  direction?: string;
+  strength?: string;
   description: string;
-  signal_strength: number;
+  signal_strength?: number;
   recommendation: string;
+  confidence?: string;
 }
 
 export interface MarketSignalsResponse {
   commodity: string;
-  as_of_date: string;
-  trend_signal: Record<string, any>;
-  forecast_signal: Record<string, any>;
+  market?: string | null;
+  state?: string | null;
+  district?: string | null;
+  timestamp: string;
+  // New backend shape (nested analysis objects).
+  latest_price?: MarketPriceRecord | null;
+  trend_analysis?: Record<string, any>;
+  forecast_analysis?: MarketForecastResponse | Record<string, any>;
+  forecast_horizon_days?: number;
+  // Legacy flat shape retained for backward compatibility.
+  as_of_date?: string;
+  trend_signal?: Record<string, any>;
+  forecast_signal?: Record<string, any>;
   actionable_signals: ActionableSignalItem[];
+}
+
+export interface CommodityCatalogueItem {
+  canonical_name: string;
+  display_name: string;
+  category: string;
+  is_available: boolean;
+  observation_count: number;
+  total_nationwide: number;
+  latest_date?: string | null;
+}
+
+export interface MarketCommoditiesResponse {
+  state?: string | null;
+  total: number;
+  commodities: CommodityCatalogueItem[];
 }
 
 // ------------------------------------------------------------------
@@ -384,6 +425,24 @@ export interface CropCalendarItem {
   growth_stages: GrowthStage[];
 }
 
+export interface CropCatalogEntry {
+  crop: string;
+  aliases: string[];
+  seasons: string[];
+  crop_duration_days: Record<string, number>;
+}
+
+export interface CropCatalogResponse {
+  crops: CropCatalogEntry[];
+  total: number;
+  region_scope: string;
+  data_source: string;
+  is_reference_data: boolean;
+  external_provider_configured: boolean;
+  note?: string | null;
+  data_timestamp: string;
+}
+
 export interface CropScheduleResponse {
   crop: string;
   season: string;
@@ -391,15 +450,19 @@ export interface CropScheduleResponse {
   as_of_date: string;
   crop_duration_days: number;
   scheduled_growth_stages: GrowthStage[];
-  current_stage: string;
-  current_stage_progress_percent: number;
-  next_stage: string;
-  harvest_window: { start_date: string; end_date: string };
+  current_stage: string | null;
+  current_stage_progress_percent: number | null;
+  next_stage: string | null;
+  harvest_window: { start_date: string; end_date: string } | null;
+  days_to_harvest_estimate?: number | null;
   upcoming_activities: { stage: string; activities: string[] }[];
-  sowing_window_compliant: boolean;
+  sowing_window_compliant: boolean | null;
   warnings: string[];
   data_source: string;
   is_reference_data: boolean;
+  reference_note?: string | null;
+  fallback_used?: boolean;
+  fallback_reason?: string | null;
 }
 
 // ------------------------------------------------------------------

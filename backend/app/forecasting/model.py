@@ -50,6 +50,7 @@ class ForecastResult:
     forecast: List[ForecastPoint]
     metrics: Dict[str, float]
     trend: str  # "increasing", "decreasing", "stable"
+    district: Optional[str] = None
 
 
 class BaseForecastModel(ABC):

@@ -111,7 +111,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     [userId, updateProfile]
   );
 
-  // Clear state when user identity changes (login, logout, switch)
+  // Clear state when user identity changes (login, logout, switch) or location changes
   useEffect(() => {
     setFarmer(null);
     setDashboardData(null);
@@ -119,8 +119,16 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedField(null);
     setSelectedCrop(null);
     setIsLoading(true);
-    fetchDashboard();
-  }, [userId]);
+    if (location) {
+      fetchDashboard({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        displayName: location.displayName,
+      });
+    } else {
+      fetchDashboard();
+    }
+  }, [userId, location?.latitude, location?.longitude, location?.displayName, fetchDashboard]);
 
   const saveProfile = async (data: Partial<FarmerProfile>) => {
     setIsRefreshing(true);
@@ -130,7 +138,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       if (updated && updated.full_name) {
         updateProfile({ name: updated.full_name });
       }
-      await fetchDashboard();
+      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
     } catch (err: any) {
       setError(err.message || 'Failed to save farmer profile.');
       throw err;
@@ -149,7 +157,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         result = await api.createFarm(data, userId);
       }
       setSelectedFarm(result);
-      await fetchDashboard();
+      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return result;
     } catch (err: any) {
       setError(err.message || 'Failed to save farm.');
@@ -169,7 +177,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         result = await api.createField(data, userId);
       }
       setSelectedField(result);
-      await fetchDashboard();
+      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return result;
     } catch (err: any) {
       setError(err.message || 'Failed to save field.');
@@ -189,7 +197,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         result = await api.createCrop(data, userId);
       }
       setSelectedCrop(result);
-      await fetchDashboard();
+      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return result;
     } catch (err: any) {
       setError(err.message || 'Failed to save crop planting.');
@@ -204,7 +212,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await api.deleteFarm(farmId, userId);
       if (selectedFarm?.id === farmId) setSelectedFarm(null);
-      await fetchDashboard();
+      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return true;
     } catch (err: any) {
       setError(err.message || 'Failed to delete farm.');
@@ -219,7 +227,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await api.deleteField(fieldId, userId);
       if (selectedField?.id === fieldId) setSelectedField(null);
-      await fetchDashboard();
+      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return true;
     } catch (err: any) {
       setError(err.message || 'Failed to delete field.');
@@ -234,7 +242,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await api.deleteCrop(cropId, userId);
       if (selectedCrop?.id === cropId) setSelectedCrop(null);
-      await fetchDashboard();
+      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return true;
     } catch (err: any) {
       setError(err.message || 'Failed to delete crop planting.');
@@ -312,7 +320,8 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         selectFarm: setSelectedFarm,
         selectField: setSelectedField,
         selectCrop: setSelectedCrop,
-        refreshIntelligence: () => fetchDashboard(),
+        refreshIntelligence: () =>
+          fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined),
       }}
     >
       {children}

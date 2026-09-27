@@ -1075,13 +1075,31 @@ class CropCalendarService:
             CropNotFoundError: When the crop is not in the reference dataset
         """
         if self.is_external_provider_configured:
-            # With an external provider active, availability is validated
-            # by the provider; local validation is skipped deliberately.
+            # When an external provider is configured, check if the crop is
+            # known in the bundled reference dataset. If so, provide its seasons
+            # and sowing windows so that season inference matches sowing windows
+            # accurately and reference fallback works properly if the provider misses this crop.
+            canonical = None
+            entry = None
+            try:
+                canonical, entry = self._resolve_crop_entry(crop)
+            except (CropNotFoundError, ValueError):
+                pass
+
             return {
-                "crop": self._normalize_crop_name(crop),
+                "crop": canonical or self._normalize_crop_name(crop),
                 "external_provider_active": True,
-                "seasons_available": None,
-                "sowing_windows": None,
+                "seasons_available": (
+                    list(entry["seasons"].keys()) if entry else None
+                ),
+                "sowing_windows": (
+                    {
+                        s: cal.get("sowing_window")
+                        for s, cal in entry["seasons"].items()
+                    }
+                    if entry
+                    else None
+                ),
                 "region_scope": "external_provider",
             }
 
@@ -1120,12 +1138,20 @@ class CropCalendarService:
         if season is not None:
             resolved_season = self._normalize_season(season)
             if resolved_season not in entry["seasons"]:
-                raise ValueError(
-                    f"Crop '{canonical}' does not have a "
-                    f"'{resolved_season}' calendar. Available seasons: "
-                    f"{', '.join(entry['seasons'].keys())}"
-                )
-            season_source = "provided"
+                # When falling back from an external provider that doesn't have
+                # season splits, if the crop has only one season or an available
+                # season, fall back to the crop's canonical season.
+                if fallback_reason and len(entry["seasons"]) == 1:
+                    resolved_season = next(iter(entry["seasons"]))
+                    season_source = "default"
+                else:
+                    raise ValueError(
+                        f"Crop '{canonical}' does not have a "
+                        f"'{resolved_season}' calendar. Available seasons: "
+                        f"{', '.join(entry['seasons'].keys())}"
+                    )
+            else:
+                season_source = "provided"
         else:
             resolved_season = next(iter(entry["seasons"]))
             season_source = "default"

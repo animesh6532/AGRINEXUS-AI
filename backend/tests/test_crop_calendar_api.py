@@ -666,3 +666,81 @@ class TestWeatherAndMarketStillWork:
         # 404 (no data) proves the endpoint and DB path are operational
         assert response.status_code == 404
         assert "detail" in response.json()
+
+
+class TestUnsupportedCropAndSeasonalConstraintRegression:
+    """Regression tests verifying unsupported crop handling and agronomic constraints."""
+
+    @pytest.mark.parametrize("crop", ["potato", "tomato", "apple", "mango", "onion"])
+    def test_unsupported_crop_returns_404_not_found(self, crop):
+        response = test_client.get(f"/api/crop-calendar/{crop}")
+        assert response.status_code == 404
+        detail = response.json()["detail"]
+        assert f"Unsupported crop '{crop}'" in detail
+
+    @pytest.mark.parametrize("crop", ["potato", "tomato", "apple"])
+    def test_unsupported_crop_schedule_returns_404_not_found(self, crop):
+        response = test_client.get(
+            f"/api/crop-calendar/{crop}/schedule",
+            params={"sowing_date": "2026-06-15"},
+        )
+        assert response.status_code == 404
+        detail = response.json()["detail"]
+        assert f"Unsupported crop '{crop}'" in detail
+
+    def test_cotton_valid_kharif_schedule_succeeds(self):
+        response = test_client.get(
+            "/api/crop-calendar/cotton/schedule",
+            params={"sowing_date": "2026-05-25", "as_of_date": "2026-06-01"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["crop"] == "cotton"
+        assert data["season"] == "kharif"
+        assert data["sowing_window_compliant"] is True
+        assert len(data["scheduled_growth_stages"]) == 5
+        assert data["harvest_window"]["start_date"] is not None
+
+    def test_cotton_out_of_season_constraint_preserved(self):
+        # Sowing Cotton on 2027-04-05 is in April (Zaid). Cotton only supports Kharif.
+        # Agronomic validation must produce 400 Bad Request.
+        response = test_client.get(
+            "/api/crop-calendar/cotton/schedule",
+            params={"sowing_date": "2027-04-05"},
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "cotton" in detail.lower()
+        assert "zaid" in detail.lower() or "season" in detail.lower()
+
+    def test_wheat_out_of_season_constraint_preserved(self):
+        # Sowing Wheat on 2026-06-15 is in June (Kharif). Wheat only supports Rabi.
+        response = test_client.get(
+            "/api/crop-calendar/wheat/schedule",
+            params={"sowing_date": "2026-06-15"},
+        )
+        assert response.status_code == 400
+        detail = response.json()["detail"]
+        assert "wheat" in detail.lower()
+        assert "kharif" in detail.lower()
+
+    @pytest.mark.parametrize(
+        ("crop", "sowing_date"),
+        [
+            ("rice", "2026-06-15"),
+            ("wheat", "2026-11-20"),
+            ("maize", "2026-06-25"),
+            ("cotton", "2026-05-20"),
+        ],
+    )
+    def test_all_supported_reference_crops_succeed_with_valid_dates(self, crop, sowing_date):
+        response = test_client.get(
+            f"/api/crop-calendar/{crop}/schedule",
+            params={"sowing_date": sowing_date},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["crop"] == crop
+        assert len(data["scheduled_growth_stages"]) > 0
+        assert data["harvest_window"] is not None
+
