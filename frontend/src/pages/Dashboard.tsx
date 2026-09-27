@@ -76,7 +76,7 @@ export const Dashboard: React.FC = () => {
     { label: 'Recommend Crop', path: '/crop', icon: <Sprout className="w-5 h-5 text-[#2F6B3C]" /> },
     { label: 'Scan Leaf Disease', path: '/disease', icon: <Stethoscope className="w-5 h-5 text-[#2F6B3C]" /> },
     { label: 'Check Pest Risk', path: '/pest', icon: <Bug className="w-5 h-5 text-amber-700" /> },
-    { label: 'Fertilizer Advisor', path: '/fertilizer', icon: <FlaskConical className="w-5 h-5 text-purple-700" /> },
+    { label: 'Fertilizer Recommendation', path: '/fertilizer', icon: <FlaskConical className="w-5 h-5 text-[#2F6B3C]" /> },
     { label: 'Predict Irrigation', path: '/irrigation', icon: <Droplets className="w-5 h-5 text-sky-700" /> },
     { label: 'Analyze Soil SOC', path: '/soil', icon: <Mountain className="w-5 h-5 text-emerald-800" /> },
     { label: 'Forecast Yield', path: '/yield', icon: <TrendingUp className="w-5 h-5 text-indigo-700" /> },

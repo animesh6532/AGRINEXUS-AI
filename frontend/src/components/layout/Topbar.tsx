@@ -38,7 +38,7 @@ export const Topbar: React.FC = () => {
     '/fertilizer': {
       category: 'FIELD INTELLIGENCE',
       title: 'Fertilizer Recommendation',
-      subtitle: 'Target nutrient product formulation based on soil deficit analysis',
+      subtitle: 'Get a fertilizer recommendation based on soil nutrients, crop, and environmental conditions.',
     },
     '/irrigation': {
       category: 'FIELD INTELLIGENCE',

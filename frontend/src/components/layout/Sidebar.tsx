@@ -66,7 +66,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
         { path: '/crop', label: 'Crop Recommendation', shortLabel: 'Crop', icon: <Sprout className="w-4 h-4 shrink-0" /> },
         { path: '/disease', label: 'Plant Health Diagnostics', shortLabel: 'Disease', icon: <Stethoscope className="w-4 h-4 shrink-0" /> },
         { path: '/pest', label: 'Pest Intelligence', shortLabel: 'Pest', icon: <Bug className="w-4 h-4 shrink-0" /> },
-        { path: '/fertilizer', label: 'Fertilizer Advisor', shortLabel: 'Fertilizer', icon: <FlaskConical className="w-4 h-4 shrink-0" /> },
+        { path: '/fertilizer', label: 'Fertilizer Recommendation', shortLabel: 'Fertilizer', icon: <FlaskConical className="w-4 h-4 shrink-0" /> },
         { path: '/irrigation', label: 'Irrigation Predictor', shortLabel: 'Irrigation', icon: <Droplets className="w-4 h-4 shrink-0" /> },
         { path: '/soil', label: 'Soil Analysis', shortLabel: 'Soil', icon: <Mountain className="w-4 h-4 shrink-0" /> },
         { path: '/yield', label: 'Yield Forecasting', shortLabel: 'Yield', icon: <TrendingUp className="w-4 h-4 shrink-0" /> },

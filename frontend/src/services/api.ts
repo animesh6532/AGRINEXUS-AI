@@ -175,6 +175,44 @@ export const api = {
     return handleResponse<FertilizerRecommendResponse>(res);
   },
 
+  async resolveFertilizerImage(fertilizerName: string): Promise<any> {
+    const res = await fetch(`${BASE_URL}/api/v1/fertilizer/resolve-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fertilizer_name: fertilizerName }),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async findNearbyShops(latitude: number, longitude: number, radiusKm: number = 25.0, sortBy: string = 'nearest'): Promise<any> {
+    const res = await fetch(`${BASE_URL}/api/v1/fertilizer/nearby-shops`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude, longitude, radius_km: radiusKm, sort_by: sortBy }),
+    });
+    return handleResponse<any>(res);
+  },
+
+  async ocrSoilReport(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${BASE_URL}/api/v1/fertilizer/ocr-soil-report`, {
+      method: 'POST',
+      body: formData,
+    });
+    return handleResponse<any>(res);
+  },
+
+  async soilVisualScan(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${BASE_URL}/api/v1/fertilizer/soil-visual-scan`, {
+      method: 'POST',
+      body: formData,
+    });
+    return handleResponse<any>(res);
+  },
+
   async predictIrrigation(payload: IrrigationPredictionRequest): Promise<IrrigationPredictionResponse> {
     const res = await fetch(`${BASE_URL}/api/v1/irrigation/predict`, {
       method: 'POST',
