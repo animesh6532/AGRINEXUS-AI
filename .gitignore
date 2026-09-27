@@ -77,3 +77,5 @@ backend/.pytest_cache/
 Assests/Video/
 Assests/Images/
 Assests/CSV/
+# Generated image resolver cache
+backend/data/image_cache.db
