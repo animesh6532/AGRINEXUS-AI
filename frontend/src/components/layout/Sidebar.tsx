@@ -23,6 +23,8 @@ import {
   PanelLeft,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useFarmerProfile } from '../../context/FarmerProfileContext';
+import { getAvatarInitials } from '../../utils/greeting';
 import { useHealth } from '../../context/HealthContext';
 import { LocationBadge } from '../location/LocationBadge';
 
@@ -33,7 +35,10 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
   const { logout, user } = useAuth();
+  const { farmer } = useFarmerProfile();
   const { isModelSystemReady } = useHealth();
+  const avatarInitials = getAvatarInitials(farmer, user);
+  const displayName = farmer?.full_name || user?.name || 'Farmer';
 
   // Keyboard shortcut Ctrl+B / Cmd+B to toggle sidebar
   useEffect(() => {
@@ -214,12 +219,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onToggle }) => {
       <div className="pt-3 border-t border-white/10 space-y-2 mt-3">
         {user && (
           <div className={`flex items-center gap-3 px-1 py-1 ${collapsed ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 rounded-full bg-[#D4E768] text-[#0B1C10] flex items-center justify-center font-extrabold text-xs shrink-0 shadow-sm">
-              {user.name.charAt(0).toUpperCase()}
+            <div
+              className="w-8 h-8 rounded-full bg-[#D4E768] text-[#0B1C10] flex items-center justify-center font-extrabold text-xs shrink-0 shadow-sm"
+              title={displayName}
+            >
+              {avatarInitials}
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-[#FAFBF7] truncate">{user.name}</p>
+                <p className="text-xs font-semibold text-[#FAFBF7] truncate">{displayName}</p>
                 <p className="text-[10px] text-white/50 truncate">{user.email}</p>
               </div>
             )}

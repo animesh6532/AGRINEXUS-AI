@@ -32,6 +32,9 @@ interface FarmerProfileContextType {
   deleteFarm: (farmId: number) => Promise<boolean>;
   deleteField: (fieldId: number) => Promise<boolean>;
   deleteCrop: (cropId: number) => Promise<boolean>;
+  completeAction: (actionId: string | number, status?: string) => Promise<boolean>;
+  saveObservation: (data: any) => Promise<any>;
+  saveNotificationPreferences: (prefs: any) => Promise<any>;
   selectFarm: (farm: FarmRecord | null) => void;
   selectField: (field: FieldRecord | null) => void;
   selectCrop: (crop: CropPlanting | null) => void;
@@ -41,10 +44,10 @@ interface FarmerProfileContextType {
 const FarmerProfileContext = createContext<FarmerProfileContextType | undefined>(undefined);
 
 export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const { location } = useLocationContext();
 
-  const userId = user?.email || 'default_farmer';
+  const userId = user?.id || user?.email || 'default_farmer';
 
   const [farmer, setFarmer] = useState<FarmerProfile | null>(null);
   const [dashboardData, setDashboardData] = useState<FarmDashboardResponse | null>(null);
@@ -62,13 +65,16 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const data = await api.getFarmerProfile(userId);
       setFarmer(data);
+      if (data && data.full_name) {
+        updateProfile({ name: data.full_name });
+      }
       if (data.farms && data.farms.length > 0) {
         setSelectedFarm((prev) => prev || data.farms[0]);
       }
     } catch (err: any) {
       console.warn('Failed to fetch farmer profile:', err);
     }
-  }, [userId]);
+  }, [userId, updateProfile]);
 
   const fetchDashboard = useCallback(
     async (locationOverride?: { latitude: number; longitude: number; displayName?: string }) => {
@@ -76,20 +82,20 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsRefreshing(true);
       setError(null);
       try {
-        // Only pass lat/lon if locationOverride is explicitly supplied by caller.
-        // Otherwise, allow backend to use the primary farm's saved coordinates.
         const lat = locationOverride?.latitude;
         const lon = locationOverride?.longitude;
         const name = locationOverride?.displayName;
 
         const data = await api.getFarmerDashboard(userId, lat, lon, name);
         if (currentRequestId !== requestIdRef.current) {
-          // Stale response discarded to prevent race condition overwrites
           return;
         }
         setDashboardData(data);
         if (data.farmer) {
           setFarmer(data.farmer);
+          if (data.farmer.full_name) {
+            updateProfile({ name: data.farmer.full_name });
+          }
         }
       } catch (err: any) {
         if (currentRequestId !== requestIdRef.current) return;
@@ -102,7 +108,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     },
-    [userId]
+    [userId, updateProfile]
   );
 
   // Clear state when user identity changes (login, logout, switch) or location changes
@@ -129,6 +135,9 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const updated = await api.updateFarmerProfile(data, userId);
       setFarmer(updated);
+      if (updated && updated.full_name) {
+        updateProfile({ name: updated.full_name });
+      }
       await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
     } catch (err: any) {
       setError(err.message || 'Failed to save farmer profile.');
@@ -243,6 +252,39 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const completeAction = async (actionId: string | number, status: string = 'DONE'): Promise<boolean> => {
+    try {
+      await api.completeActionItem(String(actionId), status, userId);
+      await fetchDashboard();
+      return true;
+    } catch (err: any) {
+      console.error('Failed to complete action item:', err);
+      return false;
+    }
+  };
+
+  const saveObservation = async (data: any): Promise<any> => {
+    try {
+      const res = await api.createObservation(data, userId);
+      await fetchDashboard();
+      return res;
+    } catch (err: any) {
+      console.error('Failed to save plant observation:', err);
+      throw err;
+    }
+  };
+
+  const saveNotificationPreferences = async (prefs: any): Promise<any> => {
+    try {
+      const res = await api.updateNotificationPreferences(prefs, userId);
+      await fetchDashboard();
+      return res;
+    } catch (err: any) {
+      console.error('Failed to save notification preferences:', err);
+      throw err;
+    }
+  };
+
   const farms = farmer?.farms || [];
   const fields: FieldRecord[] = farms.flatMap((f) => f.fields || []);
   const activeCrops: CropPlanting[] = fields
@@ -272,6 +314,9 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         deleteFarm,
         deleteField,
         deleteCrop,
+        completeAction,
+        saveObservation,
+        saveNotificationPreferences,
         selectFarm: setSelectedFarm,
         selectField: setSelectedField,
         selectCrop: setSelectedCrop,

@@ -16,10 +16,13 @@ from .live import router as live_router
 from .images import router as images_router
 from .farmer import router as farmer_router
 from .assistant import router as assistant_router
+from .auth import router as auth_router
+from ..market import router as market_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 
 # Include sub-routers
+api_v1_router.include_router(auth_router)
 api_v1_router.include_router(health_router)
 api_v1_router.include_router(crop_router)
 api_v1_router.include_router(images_router)
@@ -32,6 +35,8 @@ api_v1_router.include_router(yield_router)
 api_v1_router.include_router(live_router)
 api_v1_router.include_router(farmer_router)
 api_v1_router.include_router(assistant_router)
+api_v1_router.include_router(market_router)
+
 
 
 
