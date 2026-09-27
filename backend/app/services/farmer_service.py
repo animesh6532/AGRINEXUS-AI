@@ -624,11 +624,17 @@ class FarmIntelligenceService:
         today_temp = f"{current_weather.get('temperature', '--')}°C" if current_weather else "N/A"
         today_rain = f"{current_weather.get('precipitation', 0)} mm" if current_weather else "0 mm"
 
+        weather_status_str = f"{today_temp} • Rain {today_rain}" if current_weather else "Weather telemetry unavailable"
+        soil_status_str = "Soil lab data recorded" if any(f.soil_test_available for f in fields) else "Soil test recommended"
+        water_status_str = f"Monitoring {len(active_crops)} active crop field(s)" if active_crops else "No active crops registered"
+        avail_markets = [m for m in market_watch if m.get("available")]
+        market_status_str = f"Tracking {len(avail_markets)} crop market(s)" if avail_markets else ("No market data for current crop" if active_crops else "No active crops registered")
+
         today_status = {
-            "weather_summary": f"{today_temp} • Rain {today_rain}" if current_weather else "Weather unavailable",
-            "soil_summary": "Soil data measured/estimated" if any(f.soil_test_available for f in fields) else "Soil test recommended",
-            "water_summary": f"Monitoring {len(active_crops)} active crop field(s)",
-            "market_summary": f"Tracking {len(market_watch)} active crop market(s)",
+            "weather_summary": weather_status_str,
+            "soil_summary": soil_status_str,
+            "water_summary": water_status_str,
+            "market_summary": market_status_str,
             "action_items_count": len(action_plan_res.actions),
             "critical_risks_count": len([r for r in risk_opp_res.risks if r.severity.value == "critical" or r.severity.value == "high"]),
         }
@@ -876,17 +882,43 @@ class FarmIntelligenceService:
             )
 
             if not is_western_maharashtra:
-                scope_note = "Model-based fertilizer prediction is outside the validated regional scope (trained on Western Maharashtra dataset)."
+                scope_note = "Commercial formulation model is trained on Western Maharashtra dataset."
                 rec = None
-                reason = f"Regional agronomic recommendation for {crop.crop_name}: Maintain organic manure and split Nitrogen application."
+                reason = f"Field is outside the Western Maharashtra regional model dataset. Access Fertilizer Advisor for localized nutrient planning."
             elif not has_complete_npk:
                 scope_note = "Model recommendation requires complete N, P, K lab measurements."
                 rec = None
                 reason = "Phosphorus or Potassium measurement is missing; complete soil test to run ML model."
             else:
                 scope_note = "Western Maharashtra ML model validated."
-                rec = "Urea: 50 kg/acre, SSP: 100 kg/acre, MOP: 25 kg/acre"
-                reason = "Generated from measured NPK soil lab values."
+                rec = None
+                reason = "Evaluating ML formulation model..."
+                try:
+                    from .model_registry import ModelRegistry
+                    registry = ModelRegistry()
+                    if registry.models_meta.get("fertilizer") and registry.models_meta["fertilizer"].status == "READY":
+                        f_input = {
+                            "Nitrogen": float(field.nitrogen or 50.0),
+                            "Phosphorus": float(field.phosphorus or 50.0),
+                            "Potassium": float(field.potassium or 50.0),
+                            "pH": float(field.ph or 6.5),
+                            "Rainfall": 800.0,
+                            "Temperature": 26.0,
+                            "District_Name": "Pune",
+                            "Soil_color": "Black",
+                            "Crop": crop.crop_name,
+                            "Link": "https://example.com",
+                        }
+                        pred = registry.predict_fertilizer(f_input)
+                        formulation = pred.get("predicted_formulation", "")
+                        conf = pred.get("confidence")
+                        conf_str = f" ({round(conf * 100)}% confidence)" if conf else ""
+                        rec = f"Recommended Formulation: {formulation}{conf_str}"
+                        reason = f"Derived from measured field soil NPK levels ({field.nitrogen} N, {field.phosphorus} P, {field.potassium} K)."
+                except Exception as ml_err:
+                    logger.debug(f"Fertilizer ML prediction error: {ml_err}")
+                    rec = None
+                    reason = "Run Fertilizer Advisor for detailed formulation analysis."
 
             items.append({
                 "crop_name": crop.crop_name,
@@ -958,24 +990,64 @@ class FarmIntelligenceService:
                 continue
             seen_crops.add(cname)
 
-            # Query backend market service for this crop
+            # Query backend market service for this crop with alias lookup
+            candidates = [cname]
+            if cname.lower() in ("rice", "paddy", "dhan"):
+                candidates = ["Paddy(Common)", "Rice", "Paddy(Basmati)"]
+            elif cname.lower() == "corn":
+                candidates = ["Maize", "Sweet Corn", "Baby Corn"]
+            elif cname.lower() == "wheat":
+                candidates = ["Wheat"]
+            elif cname.lower() == "potato":
+                candidates = ["Potato"]
+            elif cname.lower() == "tomato":
+                candidates = ["Tomato"]
+            elif cname.lower() == "cotton":
+                candidates = ["Cotton"]
+            elif cname.lower() == "sugarcane":
+                candidates = ["Gur(Jaggery)", "Sugarcane"]
+
             latest_obs = None
-            try:
-                latest_obs = self.market_service.get_latest_market_data(commodity=cname)
-            except Exception:
-                pass
+            matched_commodity = cname
+            for cand in candidates:
+                try:
+                    latest_obs = self.market_service.get_latest_price(commodity=cand)
+                    if latest_obs and latest_obs.get("modal_price"):
+                        matched_commodity = cand
+                        break
+                except Exception as e:
+                    logger.debug(f"Market price query error for {cand}: {e}")
+
+            trend_data: Dict[str, Any] = {}
+            if latest_obs:
+                try:
+                    trend_data = self.market_intel.analyze_market_trend(commodity=matched_commodity)
+                except Exception as e:
+                    logger.debug(f"Market trend query error for {matched_commodity}: {e}")
 
             price = latest_obs.get("modal_price") if latest_obs else None
-            mkt_name = latest_obs.get("market") if latest_obs else location_name
+            mkt_name = latest_obs.get("market") if latest_obs else None
+            state_name = latest_obs.get("state") if latest_obs else None
+            loc_label = f"{mkt_name}, {state_name}" if mkt_name and state_name else (mkt_name or location_name)
+
+            pct_change = trend_data.get("recent_change_percent")
+            if pct_change is not None and abs(pct_change) > 0.01:
+                trend_label = "Increasing" if pct_change > 0 else "Decreasing"
+                pct_val = round(pct_change, 1)
+            else:
+                trend_label = "Stable"
+                pct_val = None
 
             items.append({
                 "crop_name": cname,
-                "commodity": cname,
+                "commodity": matched_commodity,
                 "current_price": price,
-                "trend": "Increasing" if price and price > 2000 else "Stable",
-                "change_30d_pct": 4.8 if price else None,
-                "period": "Last 30 days",
-                "market_location": mkt_name,
+                "trend": trend_label if price else "Unavailable",
+                "change_30d_pct": pct_val,
+                "period": "Last 30 days" if price else "N/A",
+                "market_location": loc_label if price else None,
+                "available": price is not None,
+                "observation_date": str(latest_obs.get("observation_date")) if latest_obs and latest_obs.get("observation_date") else None,
             })
 
         return items
@@ -984,44 +1056,81 @@ class FarmIntelligenceService:
         self, crops: List[models.CropPlanting], fields: List[models.Field], forecast_wx: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         items: List[Dict[str, Any]] = []
+        if not crops:
+            return []
+
         today_str = date.today().isoformat()
         tomorrow_str = (date.today() + timedelta(days=1)).isoformat()
         next_week_str = (date.today() + timedelta(days=7)).isoformat()
 
+        # 1. Daily Telemetry Event
         items.append({
             "date_label": today_str,
-            "crop_name": crops[0].crop_name if crops else "Farm",
-            "field_name": "All Fields",
-            "event_title": "Daily Weather Telemetry Monitoring",
-            "reason": "Open-Meteo real-time telemetry sync",
+            "crop_name": crops[0].crop_name,
+            "field_name": fields[0].field_name if fields else "Active Field",
+            "event_title": "Daily Weather & Field Telemetry Sync",
+            "reason": "Real-time atmospheric and telemetry sync from Open-Meteo",
             "priority": "Info",
             "source": "Weather Service",
             "evidence_status": "Fresh telemetry",
         })
 
-        if crops:
+        for crop in crops:
+            field = self._get_field_for_crop(crop, fields)
+            fname = field.field_name if field else "Field"
+
+            # Sowing milestone if recorded
+            if crop.sowing_date:
+                items.append({
+                    "date_label": crop.sowing_date.isoformat(),
+                    "crop_name": crop.crop_name,
+                    "field_name": fname,
+                    "event_title": f"{crop.crop_name} Sowing Event",
+                    "reason": f"Field establishment ({crop.variety or 'Standard'} variety, stage: {crop.growth_stage})",
+                    "priority": "Moderate",
+                    "source": "Farmer Record",
+                    "evidence_status": "Farmer verified",
+                })
+
+            # Upcoming irrigation milestone
             items.append({
                 "date_label": tomorrow_str,
-                "crop_name": crops[0].crop_name,
-                "field_name": fields[0].field_name if fields else "Field A",
-                "event_title": "Irrigation Schedule Review",
-                "reason": "Vegetative stage water maintenance",
+                "crop_name": crop.crop_name,
+                "field_name": fname,
+                "event_title": f"Irrigation Schedule Review for {crop.crop_name}",
+                "reason": f"{crop.growth_stage or 'Active'} stage moisture check",
                 "priority": "Moderate",
-                "source": "Agronomic Planning Engine",
-                "evidence_status": "Model estimate",
+                "source": "Irrigation Predictor",
+                "evidence_status": "Field condition",
             })
 
+            # Pest scouting milestone
             items.append({
                 "date_label": next_week_str,
-                "crop_name": crops[0].crop_name,
-                "field_name": fields[0].field_name if fields else "Field A",
-                "event_title": "Pest & Leaf Scouting",
-                "reason": f"High humidity during {crops[0].growth_stage or 'growth'} stage",
+                "crop_name": crop.crop_name,
+                "field_name": fname,
+                "event_title": f"Pest & Leaf Scouting for {crop.crop_name}",
+                "reason": f"Active growth stage scouting in {fname}",
                 "priority": "High",
-                "source": "Pest Watch Engine",
-                "evidence_status": "Environmental signal",
+                "source": "Pest Intelligence",
+                "evidence_status": "Scheduled task",
             })
 
+            # Expected harvest milestone if scheduled
+            if crop.expected_harvest_date:
+                items.append({
+                    "date_label": crop.expected_harvest_date.isoformat(),
+                    "crop_name": crop.crop_name,
+                    "field_name": fname,
+                    "event_title": f"Projected Harvest Window for {crop.crop_name}",
+                    "reason": "Crop maturity and market readiness target",
+                    "priority": "High",
+                    "source": "Crop Calendar Schedule",
+                    "evidence_status": "Projected date",
+                })
+
+        # Sort timeline chronologically by date
+        items.sort(key=lambda x: x["date_label"])
         return items
 
     def _build_alerts(
@@ -1038,47 +1147,66 @@ class FarmIntelligenceService:
         idx = 1
 
         for p in pest_items:
-            if p["risk_level"] in ("High", "Moderate"):
+            if p.get("risk_level") in ("High", "Moderate"):
                 alerts.append({
-                    "id": f"alt-{idx}",
+                    "id": f"alt-pest-{idx}",
                     "priority": "High" if p["risk_level"] == "High" else "Moderate",
                     "category": "Pest",
                     "title": f"Elevated Pest Risk for {p['crop_name']}",
-                    "description": f"Weather conditions ({', '.join(p['weather_drivers'])}) favor pest pressure in {p['field_name']}.",
+                    "description": f"Weather conditions ({', '.join(p.get('weather_drivers', []))}) favor pest pressure in {p['field_name']}.",
                     "crop_name": p["crop_name"],
                     "field_name": p["field_name"],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "actionable": True,
+                    "recommended_action": p.get("action", "Inspect lower leaves and field margins for early pest signs."),
                 })
                 idx += 1
 
         for w in wx_impacts:
-            if w["status"] == "Warning":
+            if w.get("status") == "Warning":
                 alerts.append({
-                    "id": f"alt-{idx}",
+                    "id": f"alt-wx-{idx}",
                     "priority": "High",
                     "category": "Weather",
                     "title": f"Weather Alert for {w['crop_name']}",
-                    "description": w["impact"],
+                    "description": w.get("impact", "Adverse weather conditions forecast."),
                     "crop_name": w["crop_name"],
                     "field_name": w["field_name"],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "actionable": True,
+                    "recommended_action": w.get("action", "Check drainage and inspect field conditions."),
                 })
                 idx += 1
 
         for s in soil_impacts:
-            if "partially available" in s["impact_text"].lower() or "unavailable" in s["impact_text"].lower():
+            if "partially available" in s.get("impact_text", "").lower() or "unavailable" in s.get("impact_text", "").lower():
                 alerts.append({
-                    "id": f"alt-{idx}",
+                    "id": f"alt-soil-{idx}",
                     "priority": "Info",
                     "category": "Soil",
-                    "title": f"Incomplete Soil Data for {s['field_name']}",
+                    "title": f"Soil Lab Test Recommended for {s['field_name']}",
                     "description": s["impact_text"],
                     "crop_name": s["crop_name"],
                     "field_name": s["field_name"],
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     "actionable": True,
+                    "recommended_action": "Record measured soil NPK and pH lab test values in the Soil Lab Data tab.",
+                })
+                idx += 1
+
+        for ir in irrigation_items:
+            if ir.get("status") == "MONITOR":
+                alerts.append({
+                    "id": f"alt-irr-{idx}",
+                    "priority": "Moderate",
+                    "category": "Irrigation",
+                    "title": f"Irrigation Check for {ir['crop_name']}",
+                    "description": f"Field {ir['field_name']} moisture requires monitoring. Next window: {ir.get('next_window')}.",
+                    "crop_name": ir["crop_name"],
+                    "field_name": ir["field_name"],
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "actionable": True,
+                    "recommended_action": "Verify field moisture level and check irrigation channel availability.",
                 })
                 idx += 1
 

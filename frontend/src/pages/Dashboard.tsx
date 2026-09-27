@@ -28,7 +28,7 @@ import { useLocationContext } from '../context/LocationContext';
 import { LocationEmptyState } from '../components/location/LocationEmptyState';
 import { LocationBadge } from '../components/location/LocationBadge';
 import { api } from '../services/api';
-import { CurrentWeatherResponse, MarketPriceRecord, CropCalendarItem } from '../types/api';
+import { CurrentWeatherResponse, MarketPriceRecord, CropCatalogEntry } from '../types/api';
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -39,7 +39,7 @@ export const Dashboard: React.FC = () => {
 
   const [weather, setWeather] = useState<CurrentWeatherResponse | null>(null);
   const [market, setMarket] = useState<MarketPriceRecord | null>(null);
-  const [catalogue, setCatalogue] = useState<CropCalendarItem[]>([]);
+  const [catalogue, setCatalogue] = useState<CropCatalogEntry[]>([]);
   const [isRefreshingWeather, setIsRefreshingWeather] = useState<boolean>(false);
 
   useEffect(() => {
@@ -54,7 +54,14 @@ export const Dashboard: React.FC = () => {
         }
 
         const results = await Promise.allSettled(promises);
-        if (results[0].status === 'fulfilled') setCatalogue(results[0].value);
+        if (results[0].status === 'fulfilled') {
+          const val = results[0].value;
+          if (Array.isArray(val)) {
+            setCatalogue(val);
+          } else if (val && Array.isArray(val.crops)) {
+            setCatalogue(val.crops);
+          }
+        }
 
         if (location) {
           if (results[1] && results[1].status === 'fulfilled') setWeather(results[1].value);
@@ -352,7 +359,7 @@ export const Dashboard: React.FC = () => {
                 >
                   <span className="font-bold text-[#0B1C10] capitalize">{c.crop}</span>
                   <span className="px-2 py-0.5 rounded-full bg-[#EEF3E8] text-[#2F6B3C] text-[10px] font-bold uppercase">
-                    {c.primary_season}
+                    {c.seasons?.[0] || 'Reference'}
                   </span>
                 </div>
               ))}

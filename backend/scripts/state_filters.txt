@@ -1,0 +1,29 @@
+# State names exactly as stored in the data.gov.in AGMARKNET resource.
+# Pass this file to collect_market_data.py with:
+#   python backend/scripts/collect_market_data.py --state-file backend/scripts/state_filters.txt
+# One fetch per state gives every state its own paging window, so no state
+# (West Bengal in particular) is starved by the API's record ordering.
+West Bengal
+Bihar
+Jharkhand
+Odisha
+Assam
+Tripura
+Uttar Pradesh
+Madhya Pradesh
+Maharashtra
+Karnataka
+Tamil Nadu
+Telangana
+Andhra Pradesh
+Kerala
+Gujarat
+Rajasthan
+Punjab
+Haryana
+Uttarakhand
+Himachal Pradesh
+Puducherry
+Chandigarh
+Delhi
+Chhattisgarh

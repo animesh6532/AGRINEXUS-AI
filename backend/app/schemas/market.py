@@ -59,6 +59,7 @@ class MarketForecastResponse(BaseModel):
     commodity: str = Field(..., example="Paddy(Common)")
     market: Optional[str] = Field(None, example="Maddipadu APMC")
     state: Optional[str] = Field(None, example="Andhra Pradesh")
+    district: Optional[str] = Field(None, example="Prakasam")
     current_price: float = Field(..., ge=0, example=2800.0)
     forecast_horizon_days: int = Field(..., gt=0, example=7)
     forecast: List[ForecastPointResponse]
@@ -202,3 +203,21 @@ class MarketTrendRequest(BaseModel):
     district: Optional[str] = Field(None, example="Prakasam")
     market: Optional[str] = Field(None, example="Maddipadu APMC")
     lookback_days: int = Field(default=30, ge=7, le=90, example=30)
+
+
+class CommodityCatalogueItem(BaseModel):
+    """Schema for an item in the supported commodity catalogue."""
+    canonical_name: str = Field(..., example="Paddy(Common)")
+    display_name: str = Field(..., example="Paddy (Common)")
+    category: str = Field(default="Other", example="Cereals")
+    is_available: bool = Field(..., description="Whether observations exist for the specified location", example=True)
+    observation_count: int = Field(..., description="Number of observations in the specified location", example=7)
+    total_nationwide: int = Field(..., description="Total observations nationwide", example=968)
+    latest_date: Optional[dt_date] = Field(None, description="Most recent observation date", example="2026-09-18")
+
+
+class MarketCommoditiesResponse(BaseModel):
+    """Schema for commodity catalogue response."""
+    state: Optional[str] = Field(None, description="Selected state filter if applied", example="West Bengal")
+    total: int = Field(..., description="Total items in catalogue", example=12)
+    commodities: List[CommodityCatalogueItem]
