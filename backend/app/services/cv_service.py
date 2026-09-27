@@ -84,6 +84,47 @@ class CVService:
         return report
 
     @staticmethod
+    def inspect_soil_visual(image_bytes: bytes) -> Dict[str, Any]:
+        """
+        Analyze visual characteristics of soil photo (color, texture, moisture appearance).
+        Explicitly labeled as Visual Observation (not laboratory N/P/K result).
+        """
+        quality_report = CVService.inspect_image_bytes(image_bytes)
+
+        nparr = np.frombuffer(image_bytes, np.uint8)
+        img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+
+        mean_hue = float(np.mean(hsv[:, :, 0]))
+        mean_sat = float(np.mean(hsv[:, :, 1]))
+        mean_val = float(np.mean(hsv[:, :, 2]))
+
+        # Visual color tone classification
+        if mean_val < 70:
+            visual_color = "Dark Soil (high organic appearance / moist)"
+        elif mean_sat < 50:
+            visual_color = "Medium Brown / Light Soil"
+        elif mean_hue < 20 or mean_hue > 160:
+            visual_color = "Reddish Soil (iron-oxide tint)"
+        else:
+            visual_color = "Brown / Medium Alluvial Soil"
+
+        # Texture variance estimate
+        gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        std_dev = float(np.std(gray))
+        texture = "Granular / Rough Surface" if std_dev > 45 else "Smooth / Fine Surface"
+
+        return {
+            "observation_type": "Visual observation",
+            "quality_report": quality_report,
+            "visual_color": visual_color,
+            "visual_texture": texture,
+            "brightness_level": round(mean_val, 1),
+            "notice": "Nutrient deficiency cannot be reliably determined from this image alone. Enter laboratory soil-test values for ML fertilizer recommendation.",
+            "recommendation": "Use laboratory soil-test results for precise N, P, K values."
+        }
+
+    @staticmethod
     def preprocess_for_pytorch(image_bytes: bytes) -> Tuple[torch.Tensor, Image.Image]:
         """
         Convert raw image bytes to PIL Image and PyTorch Normalized Tensor (1, 3, 224, 224).

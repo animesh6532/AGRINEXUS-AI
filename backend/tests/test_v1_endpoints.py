@@ -72,6 +72,55 @@ def test_fertilizer_recommendation_endpoint(client):
     assert "Western Maharashtra" in data["scope_warning"]
 
 
+def test_fertilizer_resolve_image_endpoint(client):
+    """Test POST /api/v1/fertilizer/resolve-image."""
+    response = client.post("/api/v1/fertilizer/resolve-image", json={"fertilizer_name": "Urea"})
+    assert response.status_code == 200
+    data = response.json()
+    assert "image_url" in data
+    assert "provider" in data
+
+
+def test_fertilizer_nearby_shops_endpoint(client):
+    """Test POST /api/v1/fertilizer/nearby-shops."""
+    payload = {"latitude": 18.5204, "longitude": 73.8567, "radius_km": 25.0}
+    response = client.post("/api/v1/fertilizer/nearby-shops", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "shops" in data
+    assert len(data["shops"]) > 0
+
+
+def test_fertilizer_ocr_soil_report_endpoint(client):
+    """Test POST /api/v1/fertilizer/ocr-soil-report."""
+    img = Image.new("RGB", (300, 200), color=(255, 255, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    buf.seek(0)
+    files = {"file": ("report.jpg", buf, "image/jpeg")}
+    response = client.post("/api/v1/fertilizer/ocr-soil-report", files=files)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert "extracted_values" in data
+
+
+def test_fertilizer_soil_visual_scan_endpoint(client):
+    """Test POST /api/v1/fertilizer/soil-visual-scan."""
+    img = Image.new("RGB", (200, 200), color=(100, 70, 50))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    buf.seek(0)
+    files = {"file": ("soil.jpg", buf, "image/jpeg")}
+    response = client.post("/api/v1/fertilizer/soil-visual-scan", files=files)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["observation_type"] == "Visual observation"
+    assert "notice" in data
+
+
+
 def test_irrigation_prediction_endpoint(client):
     """Test POST /api/v1/irrigation/predict."""
     payload = {

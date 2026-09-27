@@ -302,13 +302,13 @@ class ModelRegistry:
             if hasattr(pipe, "set_output"):
                 try:
                     pipe.set_output(transform="pandas")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Could not set_output transform='pandas': {e}")
 
             sample_df = pd.DataFrame([{
-                "Nitrogen": 20.0, "Phosphorus": 20.0, "Potassium": 20.0,
-                "pH": 6.5, "Rainfall": 800.0, "Temperature": 26.0,
-                "District_Name": "Pune", "Soil_color": "Black", "Crop": "Sugarcane",
+                "Nitrogen": 37.0, "Phosphorus": 20.0, "Potassium": 20.0,
+                "pH": 6.5, "Rainfall": 120.0, "Temperature": 26.0,
+                "District_Name": "Pune", "Soil_color": "Black", "Crop": "Rice",
                 "Link": "https://example.com"
             }])[feats]
 
@@ -329,16 +329,30 @@ class ModelRegistry:
         feats = self.fertilizer_artifact["feature_cols"]
         classes = self.fertilizer_artifact["classes"]
 
-        df = pd.DataFrame([input_dict])[feats]
+        full_input = dict(input_dict)
+        if "Link" not in full_input or not full_input["Link"]:
+            full_input["Link"] = "https://example.com"
+
+        df = pd.DataFrame([full_input])[feats]
+
+        if hasattr(pipe, "set_output"):
+            try:
+                pipe.set_output(transform="pandas")
+            except Exception:
+                pass
+
         pred_val = pipe.predict(df)[0]
-        pred_label = str(pred_val)
+        if isinstance(pred_val, (int, np.integer)):
+            pred_label = str(classes[int(pred_val)])
+        else:
+            pred_label = str(pred_val)
 
         probs_list = []
         top_conf = None
         if hasattr(pipe, "predict_proba"):
             try:
                 probs = pipe.predict_proba(df)[0]
-                top_idx = np.argmax(probs)
+                top_idx = int(np.argmax(probs))
                 top_conf = float(probs[top_idx])
 
                 top_k_idx = np.argsort(probs)[::-1][:3]
@@ -346,13 +360,21 @@ class ModelRegistry:
                     {"formulation": str(classes[i]), "probability": round(float(probs[i]), 4)}
                     for i in top_k_idx if i < len(classes)
                 ]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"predict_proba warning for fertilizer model: {e}")
 
         return {
+            "success": True,
+            "model": "fertilizer_recommendation",
             "predicted_formulation": pred_label,
             "confidence": round(top_conf, 4) if top_conf is not None else None,
-            "top_k_predictions": probs_list
+            "top_k_predictions": probs_list,
+            "scope_warning": "ML recommendation trained on Western Maharashtra soil/crop data.",
+            "metadata": {
+                "dataset": "Western Maharashtra Crop and Fertilizer Dataset",
+                "total_records": 4513,
+                "target_classes": 19
+            }
         }
 
     # ------------------------------------------------------------------
