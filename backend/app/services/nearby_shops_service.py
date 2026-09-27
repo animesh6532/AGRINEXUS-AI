@@ -1,13 +1,13 @@
 """
 Nearby Fertilizer & Agro-Input Shops Service.
-Uses Google Places API (New) or fallback spatial search (Overpass/OpenStreetMap)
-to locate nearby agricultural fertilizer suppliers, dealers, and input stores around user coordinates.
+Uses Google Places API (New) (searchNearby + searchText fallback)
+to locate nearby agricultural fertilizer suppliers, dealers, and input stores around user GPS coordinates.
 """
 
 import os
 import math
 import requests
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from ..core.config import settings
 from ..core.logging import logger
 
@@ -25,97 +25,63 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return round(R * c, 2)
 
 
-# Curated structured backup dealers for Western Maharashtra & regional fallback
-FALLBACK_DEALERS: List[Dict[str, Any]] = [
-    {
-        "shop_id": "shop_pune_01",
-        "name": "Kisan Krishi Seva Kendra",
-        "address": "Market Yard, Gultekadi, Pune, Maharashtra 411037",
-        "latitude": 18.4965,
-        "longitude": 73.8645,
-        "phone": "+91 20 2426 1234",
-        "website": "https://krishisevapune.com",
-        "rating": 4.6,
-        "review_count": 128,
-        "opening_status": "OPEN NOW",
-        "categories": ["Fertilizer Supplier", "Agrochemical Dealer", "Seed Store"],
-        "google_maps_uri": "https://maps.google.com/?q=Kisan+Krishi+Seva+Kendra+Pune"
-    },
-    {
-        "shop_id": "shop_pune_02",
-        "name": "Maharashtra Agro Fertilizer Depot",
-        "address": "Hadapsar Main Road, Pune, Maharashtra 411028",
-        "latitude": 18.5089,
-        "longitude": 73.9260,
-        "phone": "+91 20 2687 5678",
-        "website": "https://maharashtraagrodepot.in",
-        "rating": 4.5,
-        "review_count": 94,
-        "opening_status": "OPEN NOW",
-        "categories": ["Fertilizer Supplier", "Organic Inputs", "Soil Testing Agent"],
-        "google_maps_uri": "https://maps.google.com/?q=Maharashtra+Agro+Fertilizer+Depot+Hadapsar"
-    },
-    {
-        "shop_id": "shop_kolhapur_01",
-        "name": "Shree Chhatrapati Agro Mall",
-        "address": "Shiroli MIDC, Kolhapur, Maharashtra 416122",
-        "latitude": 16.7450,
-        "longitude": 74.2700,
-        "phone": "+91 231 265 4321",
-        "website": "https://agromallkolhapur.org",
-        "rating": 4.7,
-        "review_count": 210,
-        "opening_status": "OPEN NOW",
-        "categories": ["Agricultural Input Superstore", "Fertilizer Dealer"],
-        "google_maps_uri": "https://maps.google.com/?q=Shree+Chhatrapati+Agro+Mall+Kolhapur"
-    },
-    {
-        "shop_id": "shop_sangli_01",
-        "name": "Sangli District Farmers Fertilizer Co-op",
-        "address": "Station Road, Sangli, Maharashtra 416416",
-        "latitude": 16.8524,
-        "longitude": 74.5815,
-        "phone": "+91 233 232 9876",
-        "website": "https://sanglifarmerscoop.org",
-        "rating": 4.4,
-        "review_count": 82,
-        "opening_status": "OPEN NOW",
-        "categories": ["Cooperative Fertilizer Outlet", "IFFCO Dealer"],
-        "google_maps_uri": "https://maps.google.com/?q=Sangli+District+Farmers+Fertilizer+Coop"
-    },
-    {
-        "shop_id": "shop_satara_01",
-        "name": "Satara Agro-Inputs & Bio-Fertilizers",
-        "address": "Powai Naka, Satara, Maharashtra 415001",
-        "latitude": 17.6805,
-        "longitude": 74.0183,
-        "phone": "+91 2162 234 567",
-        "website": None,
-        "rating": 4.3,
-        "review_count": 65,
-        "opening_status": "OPEN NOW",
-        "categories": ["Bio-Fertilizers", "Micronutrients", "Farm Tools"],
-        "google_maps_uri": "https://maps.google.com/?q=Satara+Agro+Inputs+Bio+Fertilizers"
-    },
-    {
-        "shop_id": "shop_solapur_01",
-        "name": "Solapur Krishi Vikas Kendra",
-        "address": "Old Poona Naka, Solapur, Maharashtra 413001",
-        "latitude": 17.6599,
-        "longitude": 75.9064,
-        "phone": "+91 217 272 1122",
-        "website": "https://solapurkrishivikas.com",
-        "rating": 4.6,
-        "review_count": 142,
-        "opening_status": "OPEN NOW",
-        "categories": ["Fertilizer Dealer", "Pesticide Distributor"],
-        "google_maps_uri": "https://maps.google.com/?q=Solapur+Krishi+Vikas+Kendra"
-    }
-]
+# Keywords indicating agricultural/fertilizer relevance
+AGRI_KEYWORDS = {
+    "fertilizer", "fertiliser", "agro", "agri", "agricultural", "agriculture",
+    "farm", "farming", "seed", "seeds", "pesticide", "pesticides", "crop", "crops",
+    "krishi", "nursery", "chemical", "chemicals", "khad", "beej", "rasayan",
+    "kendra", "bipani", "cooperative", "co-op", "traders", "enterprise", "inputs", "supplies"
+}
+
+# Irrelevant place types to filter out unless name explicitly contains agri keywords
+EXCLUDED_TYPES = {
+    "clothing_store", "shoe_store", "restaurant", "hair_care", "bakery",
+    "pharmacy", "atm", "bank", "lodging", "school", "hospital", "bar",
+    "cafe", "beauty_salon", "dentist", "doctor", "gas_station", "gym"
+}
+
+
+def is_relevant_supplier(place: Dict[str, Any], query_used: Optional[str] = None) -> bool:
+    """
+    Evaluate whether a Google Place candidate is relevant for fertilizer/agro-input search.
+    Non-restrictive: Accepts stores, wholesalers, establishments if name or types match agricultural terms,
+    or if returned via targeted text search.
+    """
+    # If returned via targeted Text Search like 'fertilizer shop', it's already targeted
+    if query_used and any(kw in query_used.lower() for kw in ["fertilizer", "agro", "agricultural"]):
+        return True
+
+    name = (place.get("displayName", {}).get("text") or "").lower()
+    primary_type = (place.get("primaryType") or "").lower()
+    types = [t.lower() for t in place.get("types", [])]
+
+    has_agri_name = any(kw in name for kw in AGRI_KEYWORDS)
+
+    # Reject explicit non-agri types if name has no agri keywords
+    if any(ex in primary_type or any(ex in t for t in types) for ex in EXCLUDED_TYPES):
+        if not has_agri_name:
+            return False
+
+    # Check if name, primary type, or any type contains agricultural keywords
+    if has_agri_name:
+        return True
+
+    if any(kw in primary_type for kw in AGRI_KEYWORDS):
+        return True
+
+    if any(kw in t for t in types for kw in AGRI_KEYWORDS):
+        return True
+
+    # General stores, wholesalers, or establishments are accepted as potential suppliers
+    generic_types = {"store", "wholesaler", "farm", "point_of_interest", "establishment"}
+    if primary_type in generic_types or any(t in generic_types for t in types):
+        return True
+
+    return False
 
 
 class NearbyShopsService:
-    """Service to search nearby fertilizer suppliers, dealers, and input stores."""
+    """Service to search nearby fertilizer suppliers, dealers, and input stores around user coordinates."""
 
     @classmethod
     def find_nearby_shops(
@@ -124,103 +90,255 @@ class NearbyShopsService:
         longitude: float,
         radius_km: float = 25.0,
         sort_by: str = "nearest"
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
-        Find nearby fertilizer shops using Google Places API (New)
-        or fallback spatial dealer catalogue.
+        Find nearby fertilizer suppliers using Google Places API (New).
+        Uses exact user lat/lon and progressive radius search (5km -> 10km -> 20km -> 30km).
+        Fallback to Google Places Text Search if Nearby Search yields insufficient results.
         """
-        shops = []
+        if not (-90.0 <= latitude <= 90.0) or not (-180.0 <= longitude <= 180.0):
+            raise ValueError("Invalid latitude or longitude coordinates.")
 
-        # 1. Google Places API (New) if key present
-        maps_key = getattr(settings, "GOOGLE_MAPS_API_KEY", None) or os.getenv("GOOGLE_MAPS_API_KEY")
-        if maps_key:
-            try:
-                g_shops = cls._query_google_places_new(latitude, longitude, radius_km, maps_key)
-                if g_shops:
-                    shops = g_shops
-            except Exception as e:
-                logger.warning(f"Google Places API query warning: {e}")
+        api_key = (
+            getattr(settings, "GOOGLE_MAPS_API_KEY", None)
+            or getattr(settings, "GOOGLE_PLACES_API_KEY", None)
+            or os.getenv("GOOGLE_MAPS_API_KEY")
+            or os.getenv("GOOGLE_PLACES_API_KEY")
+        )
 
-        # 2. Fallback to Overpass/OpenStreetMap or curated backup dealers
-        if not shops:
-            shops = cls._query_fallback_dealers(latitude, longitude, radius_km)
+        error_diagnostic = None
+        if not api_key:
+            error_diagnostic = "Google Places API key is unconfigured on backend."
+            logger.warning("[FertilizerShopSearch] Google Places API Key is not set in backend settings or environment.")
+            return {
+                "location": {"latitude": latitude, "longitude": longitude},
+                "search_radius_km": radius_km,
+                "count": 0,
+                "providers": [],
+                "shops": [],
+                "total_found": 0,
+                "radius_km": radius_km,
+                "radius_km_searched": radius_km,
+                "message": "Google Places API key is unconfigured on backend server.",
+                "error_diagnostic": error_diagnostic
+            }
 
-        # Calculate exact distance for all shops
-        for shop in shops:
-            shop["distance"] = haversine_distance(latitude, longitude, shop["latitude"], shop["longitude"])
+        # Progressive radius sequence (up to max supported 30 km)
+        max_radius = min(max(radius_km, 5.0), 30.0)
+        radii = [5.0, 10.0, 20.0, 30.0]
+        search_steps = [r for r in radii if r <= max_radius]
+        if not search_steps or search_steps[-1] < max_radius:
+            search_steps.append(max_radius)
+
+        collected_places: Dict[str, Dict[str, Any]] = {}
+        actual_radius_used = search_steps[0]
+
+        for r_km in search_steps:
+            actual_radius_used = r_km
+            logger.info(f"[FertilizerShopSearch] Step: searching lat={latitude:.4f}, lon={longitude:.4f}, radius={r_km}km")
+
+            # 1. Nearby Search (New)
+            nearby_results, nearby_err = cls._query_google_places_nearby(latitude, longitude, r_km, api_key)
+            if nearby_err and not error_diagnostic:
+                error_diagnostic = nearby_err
+
+            for p in nearby_results:
+                p_id = p.get("id")
+                if p_id and p_id not in collected_places:
+                    collected_places[p_id] = p
+
+            # 2. Text Search Fallback if under 3 results
+            if len(collected_places) < 3:
+                text_queries = [
+                    "fertilizer shop",
+                    "fertilizer supplier",
+                    "agro input store",
+                    "agricultural supplies"
+                ]
+                for query in text_queries:
+                    if len(collected_places) >= 10:
+                        break
+                    text_results, text_err = cls._query_google_places_text_search(latitude, longitude, r_km, query, api_key)
+                    if text_err and not error_diagnostic:
+                        error_diagnostic = text_err
+                    for p in text_results:
+                        p_id = p.get("id")
+                        if p_id and p_id not in collected_places:
+                            collected_places[p_id] = p
+
+            logger.info(f"[FertilizerShopSearch] Radius {r_km}km total unique providers found so far: {len(collected_places)}")
+
+            if len(collected_places) >= 3 or r_km == search_steps[-1]:
+                break
+
+        # Process providers
+        providers: List[Dict[str, Any]] = []
+        for p_id, p in collected_places.items():
+            loc = p.get("location", {})
+            p_lat = loc.get("latitude", latitude)
+            p_lon = loc.get("longitude", longitude)
+            dist_km = haversine_distance(latitude, longitude, p_lat, p_lon)
+
+            disp_name = p.get("displayName", {}).get("text") or "Agricultural Supplier"
+            primary_type = p.get("primaryTypeDisplayName", {}).get("text") or p.get("primaryType") or "Fertilizer Supplier"
+            opening_hours = p.get("regularOpeningHours", {})
+            open_now = opening_hours.get("openNow") if "openNow" in opening_hours else None
+
+            provider_item = {
+                "place_id": p_id,
+                "name": disp_name,
+                "category": primary_type,
+                "address": p.get("formattedAddress", "Local Address"),
+                "latitude": p_lat,
+                "longitude": p_lon,
+                "distance_km": dist_km,
+                "rating": float(p["rating"]) if p.get("rating") is not None else None,
+                "review_count": int(p["userRatingCount"]) if p.get("userRatingCount") is not None else None,
+                "open_now": open_now,
+                "phone": p.get("nationalPhoneNumber"),
+                "website": p.get("websiteUri"),
+                "google_maps_uri": p.get("googleMapsUri") or f"https://www.google.com/maps/search/?api=1&query={p_lat},{p_lon}&query_place_id={p_id}",
+                "types": p.get("types", [])
+            }
+            providers.append(provider_item)
 
         # Sorting
         if sort_by == "highest_rated":
-            shops.sort(key=lambda s: s.get("rating") or 0.0, reverse=True)
+            providers.sort(key=lambda item: (item["rating"] if item["rating"] is not None else -1.0, -item["distance_km"]), reverse=True)
         elif sort_by == "open_now":
-            shops.sort(key=lambda s: (0 if "OPEN" in (s.get("opening_status") or "").upper() else 1, s["distance"]))
+            providers.sort(key=lambda item: (0 if item["open_now"] is True else (1 if item["open_now"] is False else 2), item["distance_km"]))
         else:  # nearest
-            shops.sort(key=lambda s: s["distance"])
+            providers.sort(key=lambda item: item["distance_km"])
 
-        return shops
+        # Create shop objects for backward compatibility
+        shops = []
+        for p in providers:
+            open_status = "OPEN NOW" if p["open_now"] is True else ("CLOSED NOW" if p["open_now"] is False else "Hours unavailable")
+            shops.append({
+                "shop_id": p["place_id"],
+                "name": p["name"],
+                "address": p["address"],
+                "latitude": p["latitude"],
+                "longitude": p["longitude"],
+                "distance": p["distance_km"],
+                "phone": p["phone"],
+                "website": p["website"],
+                "rating": p["rating"] if p["rating"] is not None else 4.5,
+                "review_count": p["review_count"] if p["review_count"] is not None else 0,
+                "opening_status": open_status,
+                "categories": p["types"] or [p["category"]],
+                "google_maps_uri": p["google_maps_uri"]
+            })
+
+        msg = None
+        if len(providers) > 0 and actual_radius_used > 5.0:
+            msg = f"Expanded search to {int(actual_radius_used)} km because fewer nearby suppliers were found within 5 km."
+        elif len(providers) > 0:
+            msg = f"Showing suppliers within {int(actual_radius_used)} km."
+        elif len(providers) == 0:
+            msg = f"No fertilizer suppliers were found within {int(actual_radius_used)} km."
+
+        return {
+            "location": {"latitude": latitude, "longitude": longitude},
+            "search_radius_km": actual_radius_used,
+            "count": len(providers),
+            "providers": providers,
+            "shops": shops,
+            "total_found": len(providers),
+            "radius_km": radius_km,
+            "radius_km_searched": actual_radius_used,
+            "message": msg,
+            "error_diagnostic": error_diagnostic
+        }
 
     @classmethod
-    def _query_google_places_new(
+    def _query_google_places_nearby(
         cls, lat: float, lon: float, radius_km: float, api_key: str
-    ) -> List[Dict[str, Any]]:
-        """Call Google Places API (New) Places Nearby Search using FieldMask header."""
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        """Call Google Places API (New) searchNearby."""
         url = "https://places.googleapis.com/v1/places:searchNearby"
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": api_key,
-            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.nationalPhoneNumber,places.websiteUri,places.rating,places.userRatingCount,places.regularOpeningHours,places.googleMapsUri,places.primaryTypeDisplayName"
+            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.rating,places.userRatingCount,places.regularOpeningHours,places.nationalPhoneNumber,places.websiteUri,places.googleMapsUri,places.primaryTypeDisplayName"
         }
         payload = {
-            "includedTypes": ["store", "point_of_interest"],
-            "maxResultCount": 10,
+            "includedTypes": ["store", "wholesaler", "farm", "establishment", "point_of_interest"],
+            "maxResultCount": 20,
             "locationRestriction": {
                 "circle": {
                     "center": {"latitude": lat, "longitude": lon},
                     "radius": radius_km * 1000.0
                 }
-            },
-            "textQuery": "fertilizer shop supplier agricultural input"
+            }
         }
 
-        res = requests.post(url, json=payload, headers=headers, timeout=4.0)
-        if res.status_code == 200:
-            data = res.json()
-            results = []
-            for p in data.get("places", []):
-                loc = p.get("location", {})
-                name_dict = p.get("displayName", {})
-                open_hours = p.get("regularOpeningHours", {})
-                is_open = open_hours.get("openNow", True)
+        try:
+            logger.info(f"[FertilizerShopSearch] Google searchNearby request: lat={lat:.4f}, lon={lon:.4f}, radius={radius_km}km")
+            res = requests.post(url, json=payload, headers=headers, timeout=5.0)
+            logger.info(f"[FertilizerShopSearch] Google searchNearby HTTP status={res.status_code}")
 
-                results.append({
-                    "shop_id": p.get("id", ""),
-                    "name": name_dict.get("text", "Agro Dealer"),
-                    "address": p.get("formattedAddress", "Local Address"),
-                    "latitude": loc.get("latitude", lat),
-                    "longitude": loc.get("longitude", lon),
-                    "phone": p.get("nationalPhoneNumber", "Not provided"),
-                    "website": p.get("websiteUri"),
-                    "rating": float(p.get("rating", 4.5)),
-                    "review_count": int(p.get("userRatingCount", 24)),
-                    "opening_status": "OPEN NOW" if is_open else "CLOSED NOW",
-                    "categories": ["Fertilizer Supplier", "Agro Input Dealer"],
-                    "google_maps_uri": p.get("googleMapsUri") or f"https://maps.google.com/?q={loc.get('latitude')},{loc.get('longitude')}"
-                })
-            return results
-        return []
+            if res.status_code == 200:
+                data = res.json()
+                raw_places = data.get("places", [])
+                logger.info(f"[FertilizerShopSearch] Google searchNearby raw count={len(raw_places)}")
+
+                filtered = []
+                for p in raw_places:
+                    if is_relevant_supplier(p):
+                        filtered.append(p)
+                logger.info(f"[FertilizerShopSearch] Google searchNearby filtered count={len(filtered)}")
+                return filtered, None
+            else:
+                err_text = res.text[:300]
+                logger.warning(f"[FertilizerShopSearch] Google searchNearby error HTTP {res.status_code}: {err_text}")
+                return [], f"Google Places API Nearby HTTP {res.status_code}: {err_text}"
+        except Exception as e:
+            logger.warning(f"[FertilizerShopSearch] Google searchNearby exception: {e}")
+            return [], f"Google Places API connection exception: {str(e)}"
 
     @classmethod
-    def _query_fallback_dealers(cls, lat: float, lon: float, radius_km: float) -> List[Dict[str, Any]]:
-        """Return fallback dealers with updated distance offsets relative to user location."""
-        dealers = []
-        for d in FALLBACK_DEALERS:
-            d_copy = dict(d)
-            # Offset fallback dealers to simulate local nearby options if user is far from Pune
-            dist = haversine_distance(lat, lon, d["latitude"], d["longitude"])
-            if dist > 500.0:
-                # Synthesize realistic local dealer offsets near user's GPS coordinates
-                d_copy["latitude"] = round(lat + (hash(d["name"]) % 50 - 25) * 0.002, 4)
-                d_copy["longitude"] = round(lon + (hash(d["name"]) % 40 - 20) * 0.002, 4)
-                d_copy["google_maps_uri"] = f"https://maps.google.com/?q={d_copy['latitude']},{d_copy['longitude']}"
-            dealers.append(d_copy)
-        return dealers
+    def _query_google_places_text_search(
+        cls, lat: float, lon: float, radius_km: float, query: str, api_key: str
+    ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        """Call Google Places API (New) searchText."""
+        url = "https://places.googleapis.com/v1/places:searchText"
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": api_key,
+            "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.primaryType,places.types,places.rating,places.userRatingCount,places.regularOpeningHours,places.nationalPhoneNumber,places.websiteUri,places.googleMapsUri,places.primaryTypeDisplayName"
+        }
+        payload = {
+            "textQuery": query,
+            "maxResultCount": 20,
+            "locationRestriction": {
+                "circle": {
+                    "center": {"latitude": lat, "longitude": lon},
+                    "radius": radius_km * 1000.0
+                }
+            }
+        }
+
+        try:
+            logger.info(f"[FertilizerShopSearch] Google searchText query='{query}' request: lat={lat:.4f}, lon={lon:.4f}, radius={radius_km}km")
+            res = requests.post(url, json=payload, headers=headers, timeout=5.0)
+            logger.info(f"[FertilizerShopSearch] Google searchText query='{query}' HTTP status={res.status_code}")
+
+            if res.status_code == 200:
+                data = res.json()
+                raw_places = data.get("places", [])
+                logger.info(f"[FertilizerShopSearch] Google searchText query='{query}' raw count={len(raw_places)}")
+
+                filtered = []
+                for p in raw_places:
+                    if is_relevant_supplier(p, query_used=query):
+                        filtered.append(p)
+                logger.info(f"[FertilizerShopSearch] Google searchText query='{query}' filtered count={len(filtered)}")
+                return filtered, None
+            else:
+                err_text = res.text[:300]
+                logger.warning(f"[FertilizerShopSearch] Google searchText query='{query}' error HTTP {res.status_code}: {err_text}")
+                return [], f"Google Places API Text HTTP {res.status_code}: {err_text}"
+        except Exception as e:
+            logger.warning(f"[FertilizerShopSearch] Google searchText exception: {e}")
+            return [], f"Google Places API Text connection exception: {str(e)}"

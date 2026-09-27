@@ -7,6 +7,10 @@ import type {
   FertilizerRecommendRequest,
   FertilizerRecommendResponse,
   FertilizerImageResponse,
+  NearbyShopsResponse,
+  SoilContextResponse,
+  OCRSoilReportResponse,
+  SoilVisualScanResponse,
   IrrigationPredictionRequest,
   IrrigationPredictionResponse,
   VisualPestPredictResponse,
@@ -188,34 +192,44 @@ export const api = {
     return handleResponse<FertilizerImageResponse>(res);
   },
 
-  async findNearbyShops(latitude: number, longitude: number, radiusKm: number = 25.0, sortBy: string = 'nearest'): Promise<any> {
+  async getSoilContext(latitude: number, longitude: number): Promise<SoilContextResponse> {
+    const res = await fetch(`${BASE_URL}/api/v1/fertilizer/soil-context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ latitude, longitude }),
+    });
+    return handleResponse<SoilContextResponse>(res);
+  },
+
+  async findNearbyShops(latitude: number, longitude: number, radiusKm: number = 25.0, sortBy: string = 'nearest'): Promise<NearbyShopsResponse> {
     const res = await fetch(`${BASE_URL}/api/v1/fertilizer/nearby-shops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ latitude, longitude, radius_km: radiusKm, sort_by: sortBy }),
     });
-    return handleResponse<any>(res);
+    return handleResponse<NearbyShopsResponse>(res);
   },
 
-  async ocrSoilReport(file: File): Promise<any> {
+  async ocrSoilReport(file: File): Promise<OCRSoilReportResponse> {
     const formData = new FormData();
     formData.append('file', file);
     const res = await fetch(`${BASE_URL}/api/v1/fertilizer/ocr-soil-report`, {
       method: 'POST',
       body: formData,
     });
-    return handleResponse<any>(res);
+    return handleResponse<OCRSoilReportResponse>(res);
   },
 
-  async soilVisualScan(file: File): Promise<any> {
+  async soilVisualScan(file: File): Promise<SoilVisualScanResponse> {
     const formData = new FormData();
     formData.append('file', file);
     const res = await fetch(`${BASE_URL}/api/v1/fertilizer/soil-visual-scan`, {
       method: 'POST',
       body: formData,
     });
-    return handleResponse<any>(res);
+    return handleResponse<SoilVisualScanResponse>(res);
   },
+
 
   async predictIrrigation(payload: IrrigationPredictionRequest): Promise<IrrigationPredictionResponse> {
     const res = await fetch(`${BASE_URL}/api/v1/irrigation/predict`, {

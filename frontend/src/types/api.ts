@@ -105,6 +105,104 @@ export interface FertilizerImageResponse {
   match_score?: number | null;
 }
 
+export interface NearbyShopsRequest {
+  latitude: number;
+  longitude: number;
+  radius_km?: number;
+  sort_by?: "nearest" | "highest_rated" | "open_now";
+}
+
+export interface ShopProviderItem {
+  place_id: string;
+  name: string;
+  category: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  distance_km: number;
+  rating: number | null;
+  review_count: number | null;
+  open_now: boolean | null;
+  phone?: string | null;
+  website?: string | null;
+  google_maps_uri?: string | null;
+  types: string[];
+}
+
+export interface ShopItem {
+  shop_id: string;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  distance: number;
+  phone?: string | null;
+  website?: string | null;
+  rating: number;
+  review_count: number;
+  opening_status: string;
+  categories: string[];
+  google_maps_uri?: string | null;
+}
+
+export interface NearbyShopsResponse {
+  success: boolean;
+  location?: { latitude: number; longitude: number } | null;
+  search_radius_km?: number;
+  count?: number;
+  providers?: ShopProviderItem[];
+  total_found?: number;
+  radius_km?: number;
+  radius_km_searched?: number;
+  message?: string | null;
+  shops: ShopItem[];
+  error_diagnostic?: string | null;
+}
+
+export interface SoilContextData {
+  ph?: number | null;
+  total_nitrogen_g_kg?: number | null;
+  organic_carbon_g_kg?: number | null;
+  clay_percent?: number | null;
+  sand_percent?: number | null;
+  silt_percent?: number | null;
+  soil_texture: string;
+  depth_layer: string;
+  provenance: string;
+  disclaimer: string;
+}
+
+export interface SoilContextResponse {
+  success: boolean;
+  status: "available" | "unavailable";
+  source: string;
+  data?: SoilContextData | null;
+  error_message?: string | null;
+}
+
+export interface OCRSoilReportResponse {
+  success: boolean;
+  scanner_type: string;
+  status: string;
+  quality: ImageQualityReport | Record<string, any>;
+  extracted_values: Record<string, number>;
+  confidence: number;
+  requires_verification: boolean;
+  raw_text_snippet?: string | null;
+}
+
+export interface SoilVisualScanResponse {
+  success: boolean;
+  observation_type: string;
+  quality_report: ImageQualityReport | Record<string, any>;
+  visual_color: string;
+  visual_texture: string;
+  brightness_level: number;
+  notice: string;
+  recommendation: string;
+}
+
+
 // ------------------------------------------------------------------
 // 4. IRRIGATION PREDICTION
 // ------------------------------------------------------------------

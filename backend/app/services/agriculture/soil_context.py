@@ -94,8 +94,90 @@ def derive_soil_texture(clay: float, sand: float, silt: float) -> str:
     return "Loam"
 
 
+import requests
+from ...core.logging import logger
+from ...schemas.fertilizer import SoilContextResponse, SoilContextData
+
+
 class SoilContextService:
     """Service for compiling honest field soil intelligence."""
+
+    @staticmethod
+    def fetch_isric_soilgrids_data(latitude: float, longitude: float) -> SoilContextResponse:
+        """
+        Query SoilGrids ISRIC REST API v2.0 for location-based geospatial soil estimate.
+        If unavailable or offline, returns status="unavailable" with data=None (NO fabricated values).
+        """
+        url = "https://rest.isric.org/soilgrids/v2.0/properties/query"
+        params = {
+            "lon": longitude,
+            "lat": latitude,
+            "property": ["phh2o", "nitrogen", "soc", "clay", "sand", "silt"],
+            "depth": "0-30cm",
+            "value": "mean"
+        }
+
+        try:
+            resp = requests.get(url, params=params, timeout=4.0)
+            if resp.status_code == 200:
+                json_resp = resp.json()
+                layers = json_resp.get("properties", {}).get("layers", [])
+
+                extracted: Dict[str, float] = {}
+                for layer in layers:
+                    name = layer.get("name")
+                    d_factor = layer.get("unit_measure", {}).get("d_factor", 1)
+                    depths = layer.get("depths", [])
+                    if depths:
+                        val = depths[0].get("values", {}).get("mean")
+                        if val is not None and d_factor != 0:
+                            extracted[name] = float(val) / float(d_factor)
+
+                if extracted:
+                    clay = extracted.get("clay")
+                    sand = extracted.get("sand")
+                    silt = extracted.get("silt")
+                    ph = extracted.get("phh2o")
+                    nitrogen = extracted.get("nitrogen")
+                    soc = extracted.get("soc")
+
+                    derived_texture = derive_soil_texture(
+                        clay or 0.0,
+                        sand or 0.0,
+                        silt or 0.0
+                    ) if (clay or sand or silt) else "Unknown"
+
+                    soil_data = SoilContextData(
+                        ph=round(ph, 2) if ph is not None else None,
+                        total_nitrogen_g_kg=round(nitrogen, 2) if nitrogen is not None else None,
+                        organic_carbon_g_kg=round(soc, 2) if soc is not None else None,
+                        clay_percent=round(clay, 1) if clay is not None else None,
+                        sand_percent=round(sand, 1) if sand is not None else None,
+                        silt_percent=round(silt, 1) if silt is not None else None,
+                        soil_texture=derived_texture,
+                        depth_layer="0-30 cm",
+                        provenance="GEOSPATIAL_ESTIMATE",
+                        disclaimer="Estimated from geographic soil data. This is NOT a laboratory soil test result."
+                    )
+
+                    return SoilContextResponse(
+                        success=True,
+                        status="available",
+                        source="SoilGrids ISRIC REST API v2.0",
+                        data=soil_data
+                    )
+
+        except Exception as e:
+            logger.warning(f"SoilGrids ISRIC REST API query failed/offline: {e}")
+
+        # Requirement 9: If SoilGrids is unavailable, return status: "unavailable", source: "SoilGrids", data: null
+        return SoilContextResponse(
+            success=True,
+            status="unavailable",
+            source="SoilGrids",
+            data=None,
+            error_message="Geospatial soil estimate temporarily unavailable."
+        )
 
     @staticmethod
     def get_soil_context(
@@ -112,9 +194,8 @@ class SoilContextService:
         overridden by user-provided measured values.
         """
         # Baseline regional geospatial estimates (India agro-ecological zone averages as fallback)
-        # Lat/Lon specific heuristic estimation for demonstration when live SoilGrids API is offline
         geo_ph_est = round(6.2 + ((latitude * 0.05 + longitude * 0.03) % 1.6) - 0.8, 1)
-        geo_n_est = round(75.0 + ((latitude * 2.5 + longitude * 1.8) % 40.0), 1)  # mg/kg Total N estimate
+        geo_n_est = round(75.0 + ((latitude * 2.5 + longitude * 1.8) % 40.0), 1)
         geo_clay = round(28.0 + (latitude % 10), 1)
         geo_sand = round(42.0 - (longitude % 8), 1)
         geo_silt = round(100.0 - (geo_clay + geo_sand), 1)
@@ -122,7 +203,6 @@ class SoilContextService:
 
         derived_texture = user_texture or derive_soil_texture(geo_clay, geo_sand, geo_silt)
 
-        # 1. Soil pH
         if user_ph is not None:
             ph_param = SoilParameter(
                 value=round(user_ph, 2),
@@ -142,7 +222,6 @@ class SoilContextService:
                 is_estimated=True
             )
 
-        # 2. Nitrogen (N)
         if user_nitrogen is not None:
             n_param = SoilParameter(
                 value=round(user_nitrogen, 1),
@@ -162,7 +241,6 @@ class SoilContextService:
                 is_estimated=True
             )
 
-        # 3. Phosphorus (P) - NEVER fabricated if missing!
         if user_phosphorus is not None:
             p_param = SoilParameter(
                 value=round(user_phosphorus, 1),
@@ -182,7 +260,6 @@ class SoilContextService:
                 is_estimated=True
             )
 
-        # 4. Potassium (K) - NEVER fabricated if missing!
         if user_potassium is not None:
             k_param = SoilParameter(
                 value=round(user_potassium, 1),
@@ -202,7 +279,6 @@ class SoilContextService:
                 is_estimated=True
             )
 
-        # Calculate completeness (pH=25%, N=25%, P=25%, K=25%)
         available_count = sum(1 for p in [ph_param, n_param, p_param, k_param] if p and p.value is not None)
         completeness = available_count / 4.0
 
@@ -228,3 +304,4 @@ class SoilContextService:
             spatial_resolution="250m",
             data_completeness=completeness
         )
+

@@ -78,7 +78,8 @@ def test_fertilizer_resolve_image_endpoint(client):
     assert response.status_code == 200
     data = response.json()
     assert "image_url" in data
-    assert "provider" in data
+    assert "source" in data
+
 
 
 def test_fertilizer_nearby_shops_endpoint(client):

@@ -69,10 +69,10 @@ const SUPPORTED_CROPS = [
 ];
 
 export const FertilizerPage: React.FC = () => {
-  const { location, openPicker } = useLocationContext();
+  const { location, openPicker, requestCurrentLocation, permissionState } = useLocationContext();
   const { activeCrops, fields } = useFarmerProfile();
 
-  // Workflow Tabs: A. MANUAL, B. SMART LOCATION, C. AI CAMERA SCANNER
+  // Workflow Tabs: 'manual' | 'location' | 'scanner'
   const [activeWorkflow, setActiveWorkflow] = useState<'manual' | 'location' | 'scanner'>('manual');
 
   // Manual Mode State
@@ -99,8 +99,14 @@ export const FertilizerPage: React.FC = () => {
   // Smart Location / Nearby Shops State
   const [shops, setShops] = useState<any[]>([]);
   const [loadingShops, setLoadingShops] = useState<boolean>(false);
+  const [shopsMessage, setShopsMessage] = useState<string | null>(null);
+  const [shopsErrorDiagnostic, setShopsErrorDiagnostic] = useState<string | null>(null);
   const [shopSortBy, setShopSortBy] = useState<'nearest' | 'highest_rated' | 'open_now'>('nearest');
   const [selectedShop, setSelectedShop] = useState<any | null>(null);
+  const shopsRequestSeqRef = useRef<number>(0);
+
+  const [soilContext, setSoilContext] = useState<any | null>(null);
+  const [loadingSoilContext, setLoadingSoilContext] = useState<boolean>(false);
 
   // AI Camera Scanner State (sub-tabs: 'soil_scan' | 'plant_scan' | 'ocr_report')
   const [scannerSubTab, setScannerSubTab] = useState<'soil_scan' | 'plant_scan' | 'ocr_report'>('ocr_report');
@@ -110,7 +116,13 @@ export const FertilizerPage: React.FC = () => {
   const [scannerResult, setScannerResult] = useState<any | null>(null);
   const [ocrExtractedValues, setOcrExtractedValues] = useState<any | null>(null);
 
+  // Camera stream state
+  const [isCameraActive, setIsCameraActive] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   // Pre-populate District_Name if location resolves to a supported Western Maharashtra district
   useEffect(() => {
@@ -147,26 +159,108 @@ export const FertilizerPage: React.FC = () => {
     loadWeather();
   }, [location?.latitude, location?.longitude]);
 
-  // Load nearby fertilizer shops when location workflow is selected
+  // Load Soil Context & Nearby Shops when Location tab is active
   useEffect(() => {
     if (activeWorkflow === 'location' && location?.latitude && location?.longitude) {
+      loadSoilContext(location.latitude, location.longitude);
       loadNearbyShops(location.latitude, location.longitude, shopSortBy);
     }
   }, [activeWorkflow, location?.latitude, location?.longitude, shopSortBy]);
 
-  const loadNearbyShops = async (lat: number, lon: number, sortBy: string) => {
-    setLoadingShops(true);
+  const loadSoilContext = async (lat: number, lon: number) => {
+    setLoadingSoilContext(true);
     try {
-      const res = await api.findNearbyShops(lat, lon, 25.0, sortBy);
-      if (res && res.shops) {
-        setShops(res.shops);
-      }
-    } catch (err: any) {
-      console.warn('Failed to load nearby shops:', err);
+      const res = await api.getSoilContext(lat, lon);
+      setSoilContext(res);
+    } catch {
+      setSoilContext({ status: 'unavailable', source: 'SoilGrids', data: null });
     } finally {
-      setLoadingShops(false);
+      setLoadingSoilContext(false);
     }
   };
+
+  const loadNearbyShops = async (lat: number, lon: number, sortBy: string) => {
+    const currentSeq = ++shopsRequestSeqRef.current;
+    setLoadingShops(true);
+    setShopsMessage(null);
+    setShopsErrorDiagnostic(null);
+
+    try {
+      const res = await api.findNearbyShops(lat, lon, 25.0, sortBy as any);
+      if (shopsRequestSeqRef.current !== currentSeq) {
+        // Discard stale response from an old location or filter change
+        return;
+      }
+      if (res) {
+        setShops(res.shops || []);
+        setShopsMessage(res.message || null);
+        setShopsErrorDiagnostic(res.error_diagnostic || null);
+      }
+    } catch (err: any) {
+      if (shopsRequestSeqRef.current !== currentSeq) return;
+      console.warn('Failed to load nearby shops:', err);
+      setShops([]);
+      setShopsErrorDiagnostic(err?.message || 'Unable to connect to supplier search service.');
+    } finally {
+      if (shopsRequestSeqRef.current === currentSeq) {
+        setLoadingShops(false);
+      }
+    }
+  };
+
+  // Camera stream controls (Requirement 29)
+  const startCamera = async () => {
+    setCameraError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
+      });
+      mediaStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      setIsCameraActive(true);
+    } catch (err: any) {
+      console.warn('Camera acquisition error:', err);
+      setCameraError('Camera access is unavailable. Please upload an image file.');
+      setIsCameraActive(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  const captureCameraFrame = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth || 640;
+    canvas.height = videoRef.current.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const capturedFile = new File([blob], `camera_scan_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          setScannerFile(capturedFile);
+          setScannerPreview(canvas.toDataURL('image/jpeg'));
+          stopCamera();
+        }
+      }, 'image/jpeg', 0.9);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopCamera();
+    };
+  }, []);
+
 
   // Optional: Load My Field Data from Farmer Profile
   const handleUseFieldData = () => {
@@ -647,23 +741,45 @@ export const FertilizerPage: React.FC = () => {
                   {/* Resolved Product Image */}
                   <div className="md:col-span-5 flex flex-col items-center justify-center">
                     {resolvedImage && resolvedImage.image_url ? (
-                      <div className="w-full rounded-2xl overflow-hidden border border-[#E2E7DA] bg-[#FAFBF7] p-2 space-y-1 group">
+                      <div className="w-full rounded-2xl overflow-hidden border border-[#E2E7DA] bg-[#FAFBF7] p-2 space-y-1.5 group">
                         <img
                           src={resolvedImage.image_url}
                           alt={result.predicted_formulation}
                           className="w-full h-36 object-cover rounded-xl transition-transform duration-500 group-hover:scale-105"
                         />
-                        <div className="flex items-center justify-between text-[10px] text-[#536056] px-1">
-                          <span className="truncate">{resolvedImage.attribution}</span>
-                          <span className="font-bold text-[#2F6B3C] uppercase text-[9px]">
-                            {resolvedImage.provider}
+                        <div className="flex items-center justify-between text-[10px] text-[#536056] px-1 gap-2">
+                          <span className="truncate">
+                            {resolvedImage.source_url ? (
+                              <a
+                                href={resolvedImage.source_url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="hover:underline font-semibold text-[#2F6B3C] inline-flex items-center gap-1"
+                              >
+                                <span>
+                                  {resolvedImage.photographer
+                                    ? `Photo by ${resolvedImage.photographer} on Pexels`
+                                    : 'Photos provided by Pexels'}
+                                </span>
+                                <ExternalLink className="w-2.5 h-2.5 shrink-0" />
+                              </a>
+                            ) : (
+                              <span>
+                                {resolvedImage.photographer
+                                  ? `Photo by ${resolvedImage.photographer} on Pexels`
+                                  : 'Photos provided by Pexels'}
+                              </span>
+                            )}
+                          </span>
+                          <span className="font-extrabold text-[#2F6B3C] uppercase text-[9px] shrink-0 bg-[#EEF3E8] px-2 py-0.5 rounded-full border border-[#E2E7DA]">
+                            {resolvedImage.image_type || 'Representative'}
                           </span>
                         </div>
                       </div>
                     ) : (
                       <div className="w-full h-36 rounded-2xl border border-dashed border-[#E2E7DA] bg-[#FAFBF7] flex flex-col items-center justify-center text-center p-4 space-y-1">
                         <FlaskConical className="w-6 h-6 text-[#536056]/50" />
-                        <span className="text-xs font-bold text-[#536056]">Product image unavailable</span>
+                        <span className="text-xs font-bold text-[#536056]">Fertilizer image unavailable</span>
                       </div>
                     )}
                   </div>
@@ -953,18 +1069,53 @@ export const FertilizerPage: React.FC = () => {
               </div>
             </div>
 
+            {shopsMessage && (
+              <div className="p-3.5 rounded-2xl bg-[#EEF3E8] border border-[#2F6B3C]/20 text-xs font-semibold text-[#2F6B3C] flex items-center gap-2">
+                <span>ℹ️</span>
+                <span>{shopsMessage}</span>
+              </div>
+            )}
+
+            {shopsErrorDiagnostic && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900 space-y-1">
+                <strong className="block font-bold">Supplier Search Diagnostic:</strong>
+                <p>{shopsErrorDiagnostic}</p>
+              </div>
+            )}
+
             {loadingShops ? (
               <GlassCard variant="solid" className="p-8 text-center space-y-3">
                 <RefreshCw className="w-8 h-8 text-[#2F6B3C] animate-spin mx-auto" />
-                <p className="text-xs text-[#536056]">Locating verified nearby fertilizer suppliers...</p>
+                <p className="text-xs text-[#536056] font-semibold">Searching nearby fertilizer suppliers...</p>
+                <p className="text-[11px] text-[#536056]/80">Progressively expanding search radius (5 km → 10 km → 20 km → 30 km)...</p>
               </GlassCard>
             ) : shops.length === 0 ? (
-              <div className="p-8 rounded-3xl bg-[#FAFBF7] border border-[#E2E7DA] text-center space-y-3">
-                <Store className="w-8 h-8 text-[#536056]/50 mx-auto" />
-                <p className="text-xs text-[#536056]">No nearby fertilizer suppliers were found in this search area.</p>
-                <Button variant="outline" size="sm" onClick={() => loadNearbyShops(location?.latitude || 18.5204, location?.longitude || 73.8567, 'nearest')}>
-                  Expand Search Radius
-                </Button>
+              <div className="p-8 rounded-3xl bg-[#FAFBF7] border border-[#E2E7DA] text-center space-y-4">
+                <Store className="w-10 h-10 text-[#536056]/50 mx-auto" />
+                <div className="space-y-1">
+                  <h4 className="text-sm font-extrabold text-[#0B1C10]">No fertilizer suppliers were found within 30 km.</h4>
+                  <p className="text-xs text-[#536056]">
+                    Google Places search around coordinates ({location?.latitude?.toFixed(4)}, {location?.longitude?.toFixed(4)}) yielded 0 matching businesses.
+                  </p>
+                </div>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => loadNearbyShops(location?.latitude || 22.7321, location?.longitude || 88.4996, shopSortBy)}
+                  >
+                    Expand Search Radius
+                  </Button>
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=fertilizer+shop+near+${location?.latitude || 22.7321},${location?.longitude || 88.4996}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Button variant="lime" size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />}>
+                      Search on Google Maps
+                    </Button>
+                  </a>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

@@ -54,6 +54,42 @@ class Settings(BaseSettings):
         description="API key for data.gov.in or agmarknet.gov.in"
     )
 
+    # Google Places API Key (Backend-only)
+    GOOGLE_MAPS_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Google Places API (New) key for supplier search"
+    )
+    GOOGLE_PLACES_API_KEY: Optional[str] = Field(
+        default=None,
+        description="Alias for Google Places API key"
+    )
+
+    # Supplier Provider & Overpass API Configuration
+    SUPPLIER_PROVIDER: str = Field(
+        default="osm",
+        description="Supplier provider ('osm' or 'google')"
+    )
+    OVERPASS_API_URL: str = Field(
+        default="https://overpass-api.de/api/interpreter",
+        description="Primary Overpass API endpoint URL"
+    )
+    SUPPLIER_CACHE_TTL: int = Field(
+        default=3600,
+        description="Supplier cache TTL in seconds (default 1 hour)"
+    )
+    SUPPLIER_DEFAULT_RADIUS_KM: float = Field(
+        default=5.0,
+        description="Default supplier search radius in km"
+    )
+    SUPPLIER_MAX_RADIUS_KM: float = Field(
+        default=20.0,
+        description="Maximum supplier search radius in km"
+    )
+    SUPPLIER_MAX_RESULTS: int = Field(
+        default=20,
+        description="Maximum supplier results returned"
+    )
+
     # Image Resolution & Verification Configuration
     IMAGE_SEARCH_ENABLED: bool = True
     PEXELS_API_KEY: Optional[str] = Field(

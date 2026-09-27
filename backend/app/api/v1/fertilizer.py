@@ -10,6 +10,8 @@ from ...schemas.fertilizer import (
     FertilizerImageResponse,
     NearbyShopsRequest,
     NearbyShopsResponse,
+    SoilContextRequest,
+    SoilContextResponse,
     OCRSoilReportResponse,
     SoilVisualScanResponse,
 )
@@ -18,6 +20,7 @@ from ...services.fertilizer_image_resolver import FertilizerImageResolver
 from ...services.nearby_shops_service import NearbyShopsService
 from ...services.ocr_service import OCRSoilTestService
 from ...services.cv_service import CVService
+from ...services.agriculture.soil_context import SoilContextService
 
 router = APIRouter(prefix="/fertilizer", tags=["fertilizer"])
 
@@ -44,7 +47,7 @@ async def recommend_fertilizer(payload: FertilizerRecommendRequest):
     "/resolve-image",
     response_model=FertilizerImageResponse,
     summary="Resolve fertilizer product image",
-    description="Resolves verified product images using catalogue, Pexels API, SerpApi, or clean fallback placeholders."
+    description="Resolves verified product images using catalogue, Pexels API, or clean fallback placeholders."
 )
 async def resolve_fertilizer_image(payload: FertilizerImageRequest):
     """Resolve product image for predicted fertilizer formulation."""
@@ -56,26 +59,43 @@ async def resolve_fertilizer_image(payload: FertilizerImageRequest):
 
 
 @router.post(
+    "/soil-context",
+    response_model=SoilContextResponse,
+    summary="Get location-based geospatial soil context",
+    description="Queries SoilGrids ISRIC REST API v2.0 for location soil properties. Returns status='unavailable' if offline (never fabricates values)."
+)
+async def get_soil_context(payload: SoilContextRequest):
+    """Fetch geospatial soil context for coordinates."""
+    try:
+        return SoilContextService.fetch_isric_soilgrids_data(payload.latitude, payload.longitude)
+    except Exception as e:
+        return SoilContextResponse(
+            success=True,
+            status="unavailable",
+            source="SoilGrids",
+            data=None,
+            error_message=str(e)
+        )
+
+
+@router.post(
     "/nearby-shops",
     response_model=NearbyShopsResponse,
     summary="Search nearby fertilizer & agro-input shops",
-    description="Uses Google Places API (New) or spatial dealer search to locate nearby fertilizer suppliers around user GPS coordinates."
+    description="Uses Google Places API (New) to locate nearby fertilizer suppliers around user GPS coordinates."
 )
 async def find_nearby_shops(payload: NearbyShopsRequest):
     """Find nearby fertilizer suppliers around GPS location."""
     try:
-        shops = NearbyShopsService.find_nearby_shops(
+        res = NearbyShopsService.find_nearby_shops(
             latitude=payload.latitude,
             longitude=payload.longitude,
             radius_km=payload.radius_km or 25.0,
             sort_by=payload.sort_by or "nearest"
         )
-        return NearbyShopsResponse(
-            success=True,
-            total_found=len(shops),
-            radius_km=payload.radius_km or 25.0,
-            shops=shops
-        )
+        return NearbyShopsResponse(**res)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Nearby shops search error: {str(e)}")
 
@@ -84,7 +104,7 @@ async def find_nearby_shops(payload: NearbyShopsRequest):
     "/ocr-soil-report",
     response_model=OCRSoilReportResponse,
     summary="Scan and extract soil test report",
-    description="Uses document OCR to extract N, P, K, pH, and Organic Carbon from Soil Health Cards for user verification."
+    description="Uses document OCR and OpenCV quality inspection to extract N, P, K, pH from Soil Health Cards for user verification."
 )
 async def ocr_soil_report(file: UploadFile = File(...)):
     """Extract soil test parameters from uploaded report image."""
@@ -110,4 +130,5 @@ async def soil_visual_scan(file: UploadFile = File(...)):
         return SoilVisualScanResponse(**res)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Soil visual scan failed: {str(e)}")
+
 

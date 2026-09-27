@@ -89,6 +89,9 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [error, setError] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState<boolean>(false);
 
+  // Requirement 5: Request sequence counter to guard against out-of-order async race conditions
+  const requestSeqRef = React.useRef<number>(0);
+
   // Synchronize browser permission state if supported
   useEffect(() => {
     if (typeof window !== 'undefined' && navigator?.permissions?.query) {
@@ -142,11 +145,16 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Request device current location via browser Geolocation API
   const requestCurrentLocation = useCallback(async (): Promise<UserLocation | null> => {
+    requestSeqRef.current += 1;
+    const seq = requestSeqRef.current;
+
     setIsLoading(true);
     setError(null);
 
     try {
       const deviceCoords = await locationService.getCurrentDeviceLocation();
+      if (seq !== requestSeqRef.current) return null;
+
       setPermissionState('granted');
 
       // Reverse geocode address details
@@ -154,6 +162,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         deviceCoords.latitude,
         deviceCoords.longitude
       );
+      if (seq !== requestSeqRef.current) return null;
 
       const newLocation: UserLocation = {
         latitude: deviceCoords.latitude,
@@ -173,6 +182,7 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setPendingLocation(newLocation);
       return newLocation;
     } catch (err: any) {
+      if (seq !== requestSeqRef.current) return null;
       const message = err.message || 'Failed to acquire current location.';
       setError(message);
       if (message.toLowerCase().includes('blocked') || message.toLowerCase().includes('denied')) {
@@ -184,7 +194,9 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       return null;
     } finally {
-      setIsLoading(false);
+      if (seq === requestSeqRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -195,26 +207,39 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   // Select search result -> retrieves full feature & updates pending location
   const selectSearchResult = useCallback(async (result: LocationSearchResult): Promise<UserLocation | null> => {
+    requestSeqRef.current += 1;
+    const seq = requestSeqRef.current;
+
     setIsLoading(true);
     setError(null);
     try {
       const fullLoc = await locationService.retrieveLocation(result);
+      if (seq !== requestSeqRef.current) return null;
+
       setPendingLocation(fullLoc);
       return fullLoc;
     } catch (err: any) {
+      if (seq !== requestSeqRef.current) return null;
       setError(err.message || 'Failed to retrieve selected location details.');
       return null;
     } finally {
-      setIsLoading(false);
+      if (seq === requestSeqRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
   // Select map coordinates -> reverse geocodes & updates pending location
   const selectMapLocation = useCallback(async (latitude: number, longitude: number): Promise<UserLocation | null> => {
+    requestSeqRef.current += 1;
+    const seq = requestSeqRef.current;
+
     setIsLoading(true);
     setError(null);
     try {
       const geocoded = await locationService.reverseGeocode(latitude, longitude);
+      if (seq !== requestSeqRef.current) return null;
+
       const newLoc: UserLocation = {
         latitude,
         longitude,
@@ -231,6 +256,8 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setPendingLocation(newLoc);
       return newLoc;
     } catch {
+      if (seq !== requestSeqRef.current) return null;
+
       const fallbackLoc: UserLocation = {
         latitude,
         longitude,
@@ -241,9 +268,12 @@ export const LocationProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setPendingLocation(fallbackLoc);
       return fallbackLoc;
     } finally {
-      setIsLoading(false);
+      if (seq === requestSeqRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
+
 
   // Refresh saved location telemetry
   const refreshLocation = useCallback(async () => {

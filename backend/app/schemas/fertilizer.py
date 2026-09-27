@@ -60,6 +60,28 @@ class NearbyShopsRequest(BaseModel):
     sort_by: Optional[str] = Field("nearest", description="nearest, highest_rated, open_now")
 
 
+class NearbyShopsLocation(BaseModel):
+    latitude: float
+    longitude: float
+
+
+class ShopProviderItem(BaseModel):
+    place_id: str
+    name: str
+    category: str
+    address: str
+    latitude: float
+    longitude: float
+    distance_km: float
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
+    open_now: Optional[bool] = None
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    google_maps_uri: Optional[str] = None
+    types: List[str] = Field(default_factory=list)
+
+
 class ShopItem(BaseModel):
     shop_id: str
     name: str
@@ -78,26 +100,64 @@ class ShopItem(BaseModel):
 
 class NearbyShopsResponse(BaseModel):
     success: bool = True
-    total_found: int
-    radius_km: float
-    shops: List[ShopItem]
+    location: Optional[NearbyShopsLocation] = None
+    search_radius_km: float = 25.0
+    count: int = 0
+    providers: List[ShopProviderItem] = Field(default_factory=list)
+    shops: List[ShopItem] = Field(default_factory=list)
+    total_found: int = 0
+    radius_km: float = 25.0
+    radius_km_searched: float = 5.0
+    message: Optional[str] = None
+    error_diagnostic: Optional[str] = None
+
+
+class SoilContextRequest(BaseModel):
+    latitude: float = Field(..., ge=-90.0, le=90.0)
+    longitude: float = Field(..., ge=-180.0, le=180.0)
+
+
+class SoilContextData(BaseModel):
+    ph: Optional[float] = None
+    total_nitrogen_g_kg: Optional[float] = None
+    organic_carbon_g_kg: Optional[float] = None
+    clay_percent: Optional[float] = None
+    sand_percent: Optional[float] = None
+    silt_percent: Optional[float] = None
+    soil_texture: str = "Unknown"
+    depth_layer: str = "0-30 cm"
+    provenance: str = "GEOSPATIAL_ESTIMATE"
+    disclaimer: str = "Estimated from geographic soil data. This is NOT a laboratory soil test result."
+
+
+class SoilContextResponse(BaseModel):
+    success: bool = True
+    status: str = "available"  # "available" | "unavailable"
+    source: str = "SoilGrids ISRIC REST API"
+    data: Optional[SoilContextData] = None
+    error_message: Optional[str] = None
 
 
 class OCRSoilReportResponse(BaseModel):
     success: bool = True
+    scanner_type: str = "soil_test"
     status: str
-    extracted_values: Dict[str, float]
-    confidence: float
+    quality: Dict[str, Any] = Field(default_factory=dict)
+    extracted_values: Dict[str, float] = Field(default_factory=dict)
+    confidence: float = 0.0
+    requires_verification: bool = True
     raw_text_snippet: Optional[str] = None
 
 
 class SoilVisualScanResponse(BaseModel):
+    success: bool = True
     observation_type: str = "Visual observation"
-    quality_report: Dict[str, Any]
+    quality_report: Dict[str, Any] = Field(default_factory=dict)
     visual_color: str
     visual_texture: str
     brightness_level: float
-    notice: str
-    recommendation: str
+    notice: str = "Nutrient levels cannot be reliably determined from this photograph."
+    recommendation: str = "Use laboratory soil-test results for precise N, P, K values."
+
 
 
