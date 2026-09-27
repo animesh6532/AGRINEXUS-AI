@@ -94,6 +94,17 @@ export interface FertilizerRecommendResponse {
   metadata: Record<string, any>;
 }
 
+export interface FertilizerImageResponse {
+  image_url: string | null;
+  source: string | null;
+  source_url: string | null;
+  photographer: string | null;
+  photographer_url: string | null;
+  image_type: "representative" | "product" | "fallback" | null;
+  verified_product: boolean;
+  match_score?: number | null;
+}
+
 // ------------------------------------------------------------------
 // 4. IRRIGATION PREDICTION
 // ------------------------------------------------------------------

@@ -39,6 +39,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Critical error during Model Registry initialization: {e}")
 
+    # 3. Pexels Image Search Configuration Check
+    if config.settings.IMAGE_SEARCH_ENABLED:
+        key = getattr(config.settings, "PEXELS_API_KEY", "") or ""
+        if key and key.strip() not in ("", "your_pexels_api_key_here"):
+            logger.info("Pexels image provider: configured")
+        else:
+            logger.warning("Pexels image search enabled but PEXELS_API_KEY is missing.")
+    else:
+        logger.info("Pexels image provider: not configured")
+
     yield
 
     logger.info("Shutting down AgriNexus-AI Master Backend")

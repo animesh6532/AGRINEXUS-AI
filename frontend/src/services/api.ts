@@ -6,6 +6,7 @@ import type {
   DiseasePredictResponse,
   FertilizerRecommendRequest,
   FertilizerRecommendResponse,
+  FertilizerImageResponse,
   IrrigationPredictionRequest,
   IrrigationPredictionResponse,
   VisualPestPredictResponse,
@@ -178,13 +179,13 @@ export const api = {
     return handleResponse<FertilizerRecommendResponse>(res);
   },
 
-  async resolveFertilizerImage(fertilizerName: string): Promise<any> {
+  async resolveFertilizerImage(fertilizerName: string): Promise<FertilizerImageResponse> {
     const res = await fetch(`${BASE_URL}/api/v1/fertilizer/resolve-image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ fertilizer_name: fertilizerName }),
     });
-    return handleResponse<any>(res);
+    return handleResponse<FertilizerImageResponse>(res);
   },
 
   async findNearbyShops(latitude: number, longitude: number, radiusKm: number = 25.0, sortBy: string = 'nearest'): Promise<any> {

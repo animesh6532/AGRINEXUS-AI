@@ -45,9 +45,12 @@ class FertilizerImageResponse(BaseModel):
     image_url: Optional[str] = None
     source: Optional[str] = None
     source_url: Optional[str] = None
-    attribution: str = "Product image unavailable"
-    match_score: float = 0.0
-    provider: str = "placeholder"
+    photographer: Optional[str] = None
+    photographer_url: Optional[str] = None
+    image_type: Optional[str] = None  # "representative", "product", "fallback"
+    verified_product: bool = False
+    match_score: Optional[float] = 0.0
+
 
 
 class NearbyShopsRequest(BaseModel):

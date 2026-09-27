@@ -1,287 +1,194 @@
 """
-Fertilizer Image Resolver Service.
-Resolves accurate, verified images for the 19 fertilizer formulation classes
-using local verified product mappings, Pexels API, optional SerpApi, and fallback placeholders.
+Fertilizer Image Resolver Service (Pexels Provider Only).
+
+Resolves representative agricultural imagery for fertilizer formulation recommendations
+using Pexels API with strict attribution, caching, and candidate scoring.
 """
 
-import os
+import time
 import requests
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 from ..core.config import settings
 from ..core.logging import logger
 
-# Local curated high-quality verified product imagery for the 19 formulation classes
-VERIFIED_FERTILIZER_CATALOGUE: Dict[str, Dict[str, Any]] = {
-    "Urea": {
-        "image_url": "https://images.unsplash.com/photo-1592417817098-8f3d6eb247a5?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/urea",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.98,
-        "provider": "verified_catalogue"
-    },
-    "DAP": {
-        "image_url": "https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/dap",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.98,
-        "provider": "verified_catalogue"
-    },
-    "MOP": {
-        "image_url": "https://images.unsplash.com/photo-1628352081506-83c43123ed6d?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/mop",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.95,
-        "provider": "verified_catalogue"
-    },
-    "SSP": {
-        "image_url": "https://images.unsplash.com/photo-1574943320219-553eb213f72d?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/ssp",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.95,
-        "provider": "verified_catalogue"
-    },
-    "19:19:19 NPK": {
-        "image_url": "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/npk-19-19-19",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.97,
-        "provider": "verified_catalogue"
-    },
-    "20:20:20 NPK": {
-        "image_url": "https://images.unsplash.com/photo-1589923188900-85dae523342b?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/npk-20-20-20",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.97,
-        "provider": "verified_catalogue"
-    },
-    "10:26:26 NPK": {
-        "image_url": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/npk-10-26-26",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.96,
-        "provider": "verified_catalogue"
-    },
-    "12:32:16 NPK": {
-        "image_url": "https://images.unsplash.com/photo-1500651230702-0e2d8a49d4ad?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/npk-12-32-16",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.96,
-        "provider": "verified_catalogue"
-    },
-    "13:32:26 NPK": {
-        "image_url": "https://images.unsplash.com/photo-1595974482597-4b8da8879bc5?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/npk-13-32-26",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.96,
-        "provider": "verified_catalogue"
-    },
-    "18:46:00 NPK": {
-        "image_url": "https://images.unsplash.com/photo-1585314062340-f1a5a7c9328d?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/npk-18-46-0",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.96,
-        "provider": "verified_catalogue"
-    },
-    "10:10:10 NPK": {
-        "image_url": "https://images.unsplash.com/photo-1589923188900-85dae523342b?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/npk-10-10-10",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.95,
-        "provider": "verified_catalogue"
-    },
-    "50:26:26 NPK": {
-        "image_url": "https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/npk-50-26-26",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.95,
-        "provider": "verified_catalogue"
-    },
-    "Ammonium Sulphate": {
-        "image_url": "https://images.unsplash.com/photo-1615811361523-6bd03d7748e7?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/ammonium-sulphate",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.94,
-        "provider": "verified_catalogue"
-    },
-    "Chilated Micronutrient": {
-        "image_url": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/chelated-micronutrient",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.94,
-        "provider": "verified_catalogue"
-    },
-    "Ferrous Sulphate": {
-        "image_url": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/ferrous-sulphate",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.94,
-        "provider": "verified_catalogue"
-    },
-    "Hydrated Lime": {
-        "image_url": "https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/hydrated-lime",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.93,
-        "provider": "verified_catalogue"
-    },
-    "Magnesium Sulphate": {
-        "image_url": "https://images.unsplash.com/photo-1567306301408-9b74779a11af?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/magnesium-sulphate",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.94,
-        "provider": "verified_catalogue"
-    },
-    "Sulphur": {
-        "image_url": "https://images.unsplash.com/photo-1607613009820-a29f7bb81c04?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/sulphur",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.94,
-        "provider": "verified_catalogue"
-    },
-    "White Potash": {
-        "image_url": "https://images.unsplash.com/photo-1628352081506-83c43123ed6d?auto=format&fit=crop&w=800&q=80",
-        "source": "AgriNexus Verified Fertilizer Catalogue",
-        "source_url": "https://agrinexus.ai/catalogue/white-potash",
-        "attribution": "AgriNexus Agricultural Product Registry",
-        "match_score": 0.94,
-        "provider": "verified_catalogue"
-    },
-}
+PEXELS_SEARCH_URL = "https://api.pexels.com/v1/search"
+
+
+def generate_fertilizer_queries(fertilizer_name: str) -> List[str]:
+    """Generate specific, non-generic search queries for a fertilizer formulation."""
+    if not fertilizer_name:
+        return ["fertilizer granules"]
+
+    name = fertilizer_name.strip()
+    name_lower = name.lower()
+
+    if name_lower == "urea":
+        return ["urea fertilizer", "urea fertilizer bag", "urea fertilizer granules"]
+    elif name_lower in ("dap", "18:46:00 npk", "18:46:0"):
+        return ["DAP fertilizer", "diammonium phosphate fertilizer", "DAP fertilizer bag"]
+    elif name_lower in ("mop", "white potash"):
+        return ["potash fertilizer", "muriate of potash fertilizer", "potash granules"]
+    elif name_lower == "ssp":
+        return ["single superphosphate fertilizer", "phosphate fertilizer bag", "SSP fertilizer"]
+    elif "npk" in name_lower or any(char.isdigit() for char in name):
+        clean_npk = name.replace(":", "-")
+        return [f"{clean_npk} NPK fertilizer", f"{clean_npk} fertilizer", "NPK fertilizer bag", "NPK fertilizer granules"]
+    else:
+        return [f"{name} fertilizer", f"{name} agricultural fertilizer", "fertilizer bag granules"]
+
+
+def score_pexels_candidate(photo: Dict[str, Any], fertilizer_name: str) -> int:
+    """Score a Pexels photo candidate based on fertilizer relevance signals."""
+    score = 50
+    alt_text = (photo.get("alt") or "").lower()
+    url_str = (photo.get("url") or "").lower()
+    combined_text = f"{alt_text} {url_str}"
+
+    name_clean = fertilizer_name.lower().replace(":", "-").strip()
+    name_parts = [p for p in name_clean.split() if len(p) >= 2]
+
+    # Positive signals
+    positives = ["fertilizer", "fertilizers", "granules", "pellets", "bag", "sack", "plant food", "plant nutrition", "agriculture", "soil nutrient"]
+    for pos in positives:
+        if pos in combined_text:
+            score += 12
+
+    for part in name_parts:
+        if part in combined_text:
+            score += 20
+
+    # Negative signals
+    negatives = ["pesticide", "insecticide", "herbicide", "fungicide", "tractor", "combine harvester", "diseased leaf", "plant disease"]
+    for neg in negatives:
+        if neg in combined_text:
+            score -= 25
+
+    # Resolution and orientation
+    w = photo.get("width") or 0
+    h = photo.get("height") or 0
+    if w >= getattr(settings, "IMAGE_MIN_WIDTH", 640) and h >= getattr(settings, "IMAGE_MIN_HEIGHT", 360):
+        score += 10
+    if w >= h:
+        score += 5
+
+    return max(0, min(100, score))
 
 
 class FertilizerImageResolver:
     """
-    Resolver priority:
-    1. Verified manufacturer / product catalogue
-    2. SerpApi Google Images (optional, if SERPAPI_KEY set)
-    3. Pexels API (using PEXELS_API_KEY with Authorization: <API_KEY>)
-    4. Clean fallback placeholder ("Product image unavailable")
+    Pexels-only image resolver for fertilizer recommendations.
+    Provides cache-first resolution with fallback handling.
     """
 
     _cache: Dict[str, Dict[str, Any]] = {}
 
     @classmethod
+    def _normalize_cache_key(cls, fertilizer_name: str) -> str:
+        """Normalize query to canonical cache key (e.g., 'fertilizer_image:urea')."""
+        clean = fertilizer_name.strip().lower().replace(":", "-").replace(" ", "_")
+        return f"fertilizer_image:{clean}"
+
+    @classmethod
     def resolve_fertilizer_image(cls, fertilizer_name: str) -> Dict[str, Any]:
-        """Resolve product image details for a given fertilizer class name."""
-        if not fertilizer_name:
-            return cls._fallback_result("Product image unavailable")
+        """
+        Resolve a representative Pexels image for a fertilizer prediction.
+        Cache-first lookup with TTL expiration.
+        """
+        if not fertilizer_name or not fertilizer_name.strip():
+            return cls._empty_fallback("Product image unavailable")
 
-        clean_name = fertilizer_name.strip()
+        cache_key = cls._normalize_cache_key(fertilizer_name)
+        now = time.time()
+        ttl = getattr(settings, "IMAGE_CACHE_TTL", 86400)
 
-        if clean_name in cls._cache:
-            return cls._cache[clean_name]
+        # Cache hit check
+        if cache_key in cls._cache:
+            entry = cls._cache[cache_key]
+            if now - entry.get("_timestamp", 0) < ttl:
+                return entry["result"]
 
-        # 1. Verified Catalogue Priority
-        if clean_name in VERIFIED_FERTILIZER_CATALOGUE:
-            result = VERIFIED_FERTILIZER_CATALOGUE[clean_name]
-            cls._cache[clean_name] = result
+        # If search is disabled or PEXELS_API_KEY missing
+        api_key = getattr(settings, "PEXELS_API_KEY", None) or ""
+        search_enabled = getattr(settings, "IMAGE_SEARCH_ENABLED", True)
+
+        if not search_enabled or not api_key or api_key.strip() in ("", "your_pexels_api_key_here"):
+            fallback = cls._empty_fallback("Pexels provider unconfigured")
+            cls._cache[cache_key] = {"result": fallback, "_timestamp": now}
+            return fallback
+
+        # Search Pexels API
+        try:
+            result = cls._fetch_pexels_image(fertilizer_name, api_key.strip())
+            cls._cache[cache_key] = {"result": result, "_timestamp": now}
             return result
-
-        # 2. SerpApi Search (Optional)
-        serpapi_key = getattr(settings, "SERPAPI_KEY", None) or os.getenv("SERPAPI_KEY")
-        if serpapi_key:
-            try:
-                serp_res = cls._fetch_serpapi_image(clean_name, serpapi_key)
-                if serp_res:
-                    cls._cache[clean_name] = serp_res
-                    return serp_res
-            except Exception as e:
-                logger.warning(f"SerpApi fertilizer image resolution warning for '{clean_name}': {e}")
-
-        # 3. Pexels API Search (Optional)
-        pexels_key = getattr(settings, "PEXELS_API_KEY", None) or os.getenv("PEXELS_API_KEY")
-        if pexels_key:
-            try:
-                pexels_res = cls._fetch_pexels_image(clean_name, pexels_key)
-                if pexels_res:
-                    cls._cache[clean_name] = pexels_res
-                    return pexels_res
-            except Exception as e:
-                logger.warning(f"Pexels fertilizer image resolution warning for '{clean_name}': {e}")
-
-        # 4. Fallback Placeholder
-        fallback = cls._fallback_result("Product image unavailable")
-        cls._cache[clean_name] = fallback
-        return fallback
+        except Exception as e:
+            logger.warning(f"Pexels image search error for '{fertilizer_name}': {e}")
+            fallback = cls._empty_fallback(f"Pexels search error: {str(e)}")
+            cls._cache[cache_key] = {"result": fallback, "_timestamp": now}
+            return fallback
 
     @classmethod
-    def _fetch_pexels_image(cls, fertilizer_name: str, api_key: str) -> Optional[Dict[str, Any]]:
-        """Search Pexels API using header Authorization: <API_KEY>."""
-        url = "https://api.pexels.com/v1/search"
+    def _fetch_pexels_image(cls, fertilizer_name: str, api_key: str) -> Dict[str, Any]:
+        """Fetch candidates from Pexels API using Authorization: <API_KEY> header."""
+        queries = generate_fertilizer_queries(fertilizer_name)
+        candidates: List[Dict[str, Any]] = []
+
         headers = {"Authorization": api_key}
-        params = {"query": f"{fertilizer_name} fertilizer agriculture", "per_page": 1}
+        timeout = getattr(settings, "IMAGE_REQUEST_TIMEOUT", 8.0)
+        max_cand = getattr(settings, "IMAGE_MAX_CANDIDATES", 10)
+        min_score = getattr(settings, "IMAGE_MIN_RELEVANCE_SCORE", 60)
 
-        res = requests.get(url, headers=headers, params=params, timeout=3.5)
-        if res.status_code == 200:
-            data = res.json()
-            photos = data.get("photos", [])
-            if photos:
-                p = photos[0]
-                photographer = p.get("photographer", "Pexels Contributor")
-                src_url = p.get("url", "https://pexels.com")
-                img_url = p.get("src", {}).get("large", p.get("src", {}).get("medium"))
-                if img_url:
-                    return {
-                        "image_url": img_url,
-                        "source": "Pexels",
-                        "source_url": src_url,
-                        "attribution": f"Photo by {photographer} on Pexels",
-                        "match_score": 0.85,
-                        "provider": "pexels"
-                    }
-        return None
-
-    @classmethod
-    def _fetch_serpapi_image(cls, fertilizer_name: str, api_key: str) -> Optional[Dict[str, Any]]:
-        """Search SerpApi Google Images for exact fertilizer product imagery."""
-        url = "https://serpapi.com/search.json"
-        params = {
-            "q": f"{fertilizer_name} fertilizer bag India",
-            "tbm": "isch",
-            "api_key": api_key,
-            "num": 1
-        }
-        res = requests.get(url, params=params, timeout=3.5)
-        if res.status_code == 200:
-            data = res.json()
-            images = data.get("images_results", [])
-            if images:
-                img = images[0]
-                return {
-                    "image_url": img.get("original", img.get("thumbnail")),
-                    "source": img.get("source", "Google Images"),
-                    "source_url": img.get("link", "https://google.com"),
-                    "attribution": f"Image from {img.get('source', 'Supplier')}",
-                    "match_score": 0.90,
-                    "provider": "serpapi"
+        for query in queries:
+            try:
+                params = {
+                    "query": query,
+                    "per_page": min(max_cand, 15),
+                    "orientation": "landscape"
                 }
-        return None
+                res = requests.get(PEXELS_SEARCH_URL, headers=headers, params=params, timeout=timeout)
+                if res.status_code == 200:
+                    data = res.json()
+                    photos = data.get("photos", [])
+                    for photo in photos:
+                        match_score = score_pexels_candidate(photo, fertilizer_name)
+                        if match_score >= min_score:
+                            src = photo.get("src", {})
+                            img_url = src.get("large2x") or src.get("large") or src.get("medium")
+                            photographer = photo.get("photographer", "Pexels Contributor")
+                            photographer_url = photo.get("photographer_url") or "https://www.pexels.com"
+                            src_url = photo.get("url") or "https://www.pexels.com"
+
+                            candidates.append({
+                                "image_url": img_url,
+                                "source": "pexels",
+                                "source_url": src_url,
+                                "photographer": photographer,
+                                "photographer_url": photographer_url,
+                                "image_type": "representative",
+                                "verified_product": False,
+                                "match_score": match_score
+                            })
+
+                    if candidates:
+                        # Pick highest scoring candidate
+                        candidates.sort(key=lambda x: x["match_score"], reverse=True)
+                        return candidates[0]
+            except Exception as query_err:
+                logger.warning(f"Pexels query '{query}' failed: {query_err}")
+                continue
+
+        return cls._empty_fallback("No relevant Pexels fertilizer image found")
 
     @classmethod
-    def _fallback_result(cls, reason: str = "Product image unavailable") -> Dict[str, Any]:
+    def _empty_fallback(cls, reason: str = "Fertilizer image unavailable") -> Dict[str, Any]:
+        """Return standardized empty fallback schema per Phase 16."""
         return {
             "image_url": None,
             "source": None,
             "source_url": None,
-            "attribution": reason,
-            "match_score": 0.0,
-            "provider": "placeholder"
+            "photographer": None,
+            "photographer_url": None,
+            "image_type": None,
+            "verified_product": False,
+            "match_score": 0
         }
