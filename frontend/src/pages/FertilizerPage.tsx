@@ -186,7 +186,7 @@ export const FertilizerPage: React.FC = () => {
     setShopsErrorDiagnostic(null);
 
     try {
-      const res = await api.findNearbyShops(lat, lon, 25.0, sortBy as any);
+      const res = await api.getSuppliers(lat, lon, 5.0, sortBy as any);
       if (shopsRequestSeqRef.current !== currentSeq) {
         // Discard stale response from an old location or filter change
         return;
@@ -1086,16 +1086,16 @@ export const FertilizerPage: React.FC = () => {
             {loadingShops ? (
               <GlassCard variant="solid" className="p-8 text-center space-y-3">
                 <RefreshCw className="w-8 h-8 text-[#2F6B3C] animate-spin mx-auto" />
-                <p className="text-xs text-[#536056] font-semibold">Searching nearby fertilizer suppliers...</p>
-                <p className="text-[11px] text-[#536056]/80">Progressively expanding search radius (5 km → 10 km → 20 km → 30 km)...</p>
+                <p className="text-xs text-[#536056] font-semibold">Searching nearby fertilizer suppliers on OpenStreetMap...</p>
+                <p className="text-[11px] text-[#536056]/80">Progressively expanding search radius (5 km → 10 km → 20 km max)...</p>
               </GlassCard>
             ) : shops.length === 0 ? (
               <div className="p-8 rounded-3xl bg-[#FAFBF7] border border-[#E2E7DA] text-center space-y-4">
                 <Store className="w-10 h-10 text-[#536056]/50 mx-auto" />
                 <div className="space-y-1">
-                  <h4 className="text-sm font-extrabold text-[#0B1C10]">No fertilizer suppliers were found within 30 km.</h4>
+                  <h4 className="text-sm font-extrabold text-[#0B1C10]">No fertilizer or agro-input suppliers were found within 20 km.</h4>
                   <p className="text-xs text-[#536056]">
-                    Google Places search around coordinates ({location?.latitude?.toFixed(4)}, {location?.longitude?.toFixed(4)}) yielded 0 matching businesses.
+                    OpenStreetMap query around coordinates ({location?.latitude?.toFixed(4)}, {location?.longitude?.toFixed(4)}) returned 0 mapped agricultural stores. Supplier coverage depends on OpenStreetMap data.
                   </p>
                 </div>
                 <div className="flex items-center justify-center gap-3 pt-2">
@@ -1104,70 +1104,76 @@ export const FertilizerPage: React.FC = () => {
                     size="sm"
                     onClick={() => loadNearbyShops(location?.latitude || 22.7321, location?.longitude || 88.4996, shopSortBy)}
                   >
-                    Expand Search Radius
+                    Refresh Search
                   </Button>
                   <a
-                    href={`https://www.google.com/maps/search/?api=1&query=fertilizer+shop+near+${location?.latitude || 22.7321},${location?.longitude || 88.4996}`}
+                    href={`https://www.openstreetmap.org/#map=13/${location?.latitude || 22.7321}/${location?.longitude || 88.4996}`}
                     target="_blank"
                     rel="noopener noreferrer"
                   >
                     <Button variant="lime" size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />}>
-                      Search on Google Maps
+                      Explore OpenStreetMap
                     </Button>
                   </a>
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {shops.map((shop) => (
-                  <GlassCard
-                    key={shop.shop_id}
-                    variant="solid"
-                    className="p-5 space-y-3 flex flex-col justify-between hover:border-[#2F6B3C] transition-all cursor-pointer group"
-                    onClick={() => setSelectedShop(shop)}
-                  >
-                    <div className="space-y-2">
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="text-sm font-extrabold text-[#0B1C10] group-hover:text-[#2F6B3C] transition-colors">
-                          {shop.name}
-                        </h4>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEF3E8] text-[#2F6B3C] shrink-0">
-                          {shop.distance} km
-                        </span>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {shops.map((shop) => (
+                    <GlassCard
+                      key={shop.shop_id}
+                      variant="solid"
+                      className="p-5 space-y-3 flex flex-col justify-between hover:border-[#2F6B3C] transition-all cursor-pointer group"
+                      onClick={() => setSelectedShop(shop)}
+                    >
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="text-sm font-extrabold text-[#0B1C10] group-hover:text-[#2F6B3C] transition-colors">
+                            {shop.name}
+                          </h4>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEF3E8] text-[#2F6B3C] shrink-0">
+                            {shop.distance} km
+                          </span>
+                        </div>
+
+                        <p className="text-xs text-[#536056] line-clamp-2">{shop.address}</p>
+
+                        <div className="flex items-center gap-3 text-xs pt-1">
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            {shop.opening_status || 'Hours unavailable'}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#EEF3E8] text-[#2F6B3C]">
+                            OSM Supplier
+                          </span>
+                        </div>
                       </div>
 
-                      <p className="text-xs text-[#536056] line-clamp-2">{shop.address}</p>
+                      <div className="pt-3 border-t border-[#E2E7DA] flex items-center justify-between text-xs">
+                        <span className="text-[#2F6B3C] font-bold flex items-center gap-1 group-hover:underline">
+                          <span>View Details</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
 
-                      <div className="flex items-center gap-3 text-xs pt-1">
-                        <span className="flex items-center gap-1 text-amber-600 font-bold">
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                          {shop.rating} ({shop.review_count})
-                        </span>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {shop.opening_status}
-                        </span>
+                        {shop.phone && (
+                          <a
+                            href={`tel:${shop.phone}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="p-1.5 rounded-lg bg-[#EEF3E8] text-[#2F6B3C] hover:bg-[#D4E768] transition-colors"
+                            title="Call Shop"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                          </a>
+                        )}
                       </div>
-                    </div>
+                    </GlassCard>
+                  ))}
+                </div>
 
-                    <div className="pt-3 border-t border-[#E2E7DA] flex items-center justify-between text-xs">
-                      <span className="text-[#2F6B3C] font-bold flex items-center gap-1 group-hover:underline">
-                        <span>View Details</span>
-                        <ChevronRight className="w-3.5 h-3.5" />
-                      </span>
-
-                      {shop.phone && (
-                        <a
-                          href={`tel:${shop.phone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="p-1.5 rounded-lg bg-[#EEF3E8] text-[#2F6B3C] hover:bg-[#D4E768] transition-colors"
-                          title="Call Shop"
-                        >
-                          <Phone className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </div>
-                  </GlassCard>
-                ))}
+                {/* OpenStreetMap Attribution Footer (Requirement 25) */}
+                <p className="text-[11px] text-[#536056]/70 text-right pt-1">
+                  Supplier data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer" className="underline hover:text-[#0B1C10]">OpenStreetMap contributors</a>
+                </p>
               </div>
             )}
           </div>

@@ -201,7 +201,18 @@ export const api = {
     return handleResponse<SoilContextResponse>(res);
   },
 
-  async findNearbyShops(latitude: number, longitude: number, radiusKm: number = 25.0, sortBy: string = 'nearest'): Promise<NearbyShopsResponse> {
+  async getSuppliers(latitude: number, longitude: number, radiusKm: number = 5.0, sortBy: string = 'nearest'): Promise<NearbyShopsResponse> {
+    const params = new URLSearchParams({
+      latitude: latitude.toString(),
+      longitude: longitude.toString(),
+      radius_km: radiusKm.toString(),
+      sort_by: sortBy,
+    });
+    const res = await fetch(`${BASE_URL}/api/v1/fertilizer/suppliers?${params.toString()}`);
+    return handleResponse<NearbyShopsResponse>(res);
+  },
+
+  async findNearbyShops(latitude: number, longitude: number, radiusKm: number = 5.0, sortBy: string = 'nearest'): Promise<NearbyShopsResponse> {
     const res = await fetch(`${BASE_URL}/api/v1/fertilizer/nearby-shops`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

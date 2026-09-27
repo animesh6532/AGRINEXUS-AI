@@ -10,6 +10,7 @@ from ...schemas.fertilizer import (
     FertilizerImageResponse,
     NearbyShopsRequest,
     NearbyShopsResponse,
+    SupplierResponse,
     SoilContextRequest,
     SoilContextResponse,
     OCRSoilReportResponse,
@@ -17,7 +18,7 @@ from ...schemas.fertilizer import (
 )
 from ...services.model_registry import ModelRegistry
 from ...services.fertilizer_image_resolver import FertilizerImageResolver
-from ...services.nearby_shops_service import NearbyShopsService
+from ...services.supplier_provider_factory import SupplierProviderFactory
 from ...services.ocr_service import OCRSoilTestService
 from ...services.cv_service import CVService
 from ...services.agriculture.soil_context import SoilContextService
@@ -78,19 +79,48 @@ async def get_soil_context(payload: SoilContextRequest):
         )
 
 
+@router.get(
+    "/suppliers",
+    response_model=SupplierResponse,
+    summary="Search nearby fertilizer & agro-input suppliers",
+    description="Locates nearby fertilizer and agricultural suppliers around user GPS coordinates using OpenStreetMap (OSM) or configured provider."
+)
+async def get_suppliers(
+    latitude: float,
+    longitude: float,
+    radius_km: float = 5.0,
+    sort_by: str = "nearest"
+):
+    """GET endpoint to search nearby suppliers."""
+    try:
+        provider = SupplierProviderFactory.get_provider()
+        res = provider.find_suppliers(
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km,
+            sort_by=sort_by
+        )
+        return SupplierResponse(**res)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Supplier search error: {str(e)}")
+
+
 @router.post(
     "/nearby-shops",
     response_model=NearbyShopsResponse,
-    summary="Search nearby fertilizer & agro-input shops",
-    description="Uses Google Places API (New) to locate nearby fertilizer suppliers around user GPS coordinates."
+    summary="Search nearby fertilizer & agro-input shops (POST)",
+    description="POST endpoint for finding nearby fertilizer suppliers around GPS location."
 )
 async def find_nearby_shops(payload: NearbyShopsRequest):
-    """Find nearby fertilizer suppliers around GPS location."""
+    """POST endpoint to search nearby suppliers."""
     try:
-        res = NearbyShopsService.find_nearby_shops(
+        provider = SupplierProviderFactory.get_provider()
+        res = provider.find_suppliers(
             latitude=payload.latitude,
             longitude=payload.longitude,
-            radius_km=payload.radius_km or 25.0,
+            radius_km=payload.radius_km or 5.0,
             sort_by=payload.sort_by or "nearest"
         )
         return NearbyShopsResponse(**res)

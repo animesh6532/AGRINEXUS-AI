@@ -98,11 +98,53 @@ class ShopItem(BaseModel):
     google_maps_uri: Optional[str] = None
 
 
+class SupplierItem(BaseModel):
+    provider: str = "osm"
+    osm_type: Optional[str] = None
+    osm_id: Optional[str] = None
+    place_id: str
+    name: str
+    category: str
+    address: str
+    latitude: float
+    longitude: float
+    distance_km: float
+    phone: Optional[str] = None
+    website: Optional[str] = None
+    opening_hours: Optional[str] = None
+    rating: Optional[float] = None
+    review_count: Optional[int] = None
+    open_now: Optional[bool] = None
+    google_maps_uri: Optional[str] = None
+    osm_uri: Optional[str] = None
+    tags: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SupplierResponse(BaseModel):
+    success: bool = True
+    provider: str = "osm"
+    status: str = "success"
+    location: Optional[NearbyShopsLocation] = None
+    search_radius_km: float = 5.0
+    count: int = 0
+    suppliers: List[SupplierItem] = Field(default_factory=list)
+    providers: List[ShopProviderItem] = Field(default_factory=list)
+    shops: List[ShopItem] = Field(default_factory=list)
+    total_found: int = 0
+    radius_km: float = 5.0
+    radius_km_searched: float = 5.0
+    message: Optional[str] = None
+    error_diagnostic: Optional[str] = None
+
+
 class NearbyShopsResponse(BaseModel):
     success: bool = True
+    provider: str = "osm"
+    status: str = "success"
     location: Optional[NearbyShopsLocation] = None
-    search_radius_km: float = 25.0
+    search_radius_km: float = 5.0
     count: int = 0
+    suppliers: List[SupplierItem] = Field(default_factory=list)
     providers: List[ShopProviderItem] = Field(default_factory=list)
     shops: List[ShopItem] = Field(default_factory=list)
     total_found: int = 0
