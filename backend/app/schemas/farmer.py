@@ -89,6 +89,7 @@ class FieldBase(BaseModel):
     longitude: Optional[float] = None
     soil_type: Optional[str] = None
     soil_test_available: bool = False
+    boundary_geojson: Optional[Any] = None
     notes: Optional[str] = None
 
     # Soil Data & Provenance
@@ -122,6 +123,7 @@ class FieldUpdate(BaseModel):
     longitude: Optional[float] = None
     soil_type: Optional[str] = None
     soil_test_available: Optional[bool] = None
+    boundary_geojson: Optional[Any] = None
     notes: Optional[str] = None
 
     ph: Optional[float] = None

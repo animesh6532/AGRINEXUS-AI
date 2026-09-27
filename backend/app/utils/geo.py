@@ -5,10 +5,52 @@ perimeter estimation, and centroid resolution.
 Uses standard WGS84 geodesic algorithms to accurately compute total area in square meters.
 """
 
+import json
 import math
 from typing import List, Tuple, Dict, Any, Optional
 
 EARTH_RADIUS_M = 6378137.0  # WGS84 ellipsoid semi-major axis in meters
+
+
+def extract_linear_ring(boundary_obj: Any) -> Tuple[List[List[float]], Optional[str]]:
+    """
+    Extract a 2D list of [lng, lat] coordinate points from arbitrary GeoJSON formats
+    (dict or JSON string; Polygon or Feature).
+    Returns (coordinates_list, json_string).
+    """
+    if not boundary_obj:
+        return [], None
+
+    raw_dict = boundary_obj
+    if isinstance(boundary_obj, str):
+        try:
+            raw_dict = json.loads(boundary_obj)
+        except Exception:
+            return [], None
+
+    if not isinstance(raw_dict, dict):
+        return [], None
+
+    boundary_json_str = json.dumps(raw_dict)
+    geom = raw_dict.get("geometry") if raw_dict.get("type") == "Feature" else raw_dict
+    raw_coords = geom.get("coordinates", [])
+
+    if not raw_coords or not isinstance(raw_coords, list):
+        return [], boundary_json_str
+
+    curr = raw_coords
+    while (
+        curr
+        and isinstance(curr, list)
+        and len(curr) > 0
+        and isinstance(curr[0], list)
+        and len(curr[0]) > 0
+        and isinstance(curr[0][0], list)
+    ):
+        curr = curr[0]
+
+    return (curr if isinstance(curr, list) else []), boundary_json_str
+
 
 
 def calculate_polygon_area_m2(coordinates: List[List[float]]) -> float:

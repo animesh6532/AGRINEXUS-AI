@@ -66,7 +66,7 @@ app.add_middleware(
 
 
 # Include ALL API routers
-app.include_router(market.router)
+app.include_router(market.router, prefix="/api")
 app.include_router(weather.router)
 app.include_router(crop_calendar.router)
 app.include_router(decision.router)

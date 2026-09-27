@@ -156,19 +156,7 @@ class FarmerRepository:
             total_m2 = models.normalize_area_to_m2(area_val, area_unit)
 
             if boundary_obj:
-                if isinstance(boundary_obj, dict):
-                    boundary_json_str = json.dumps(boundary_obj)
-                    coords = boundary_obj.get("coordinates", [[]])[0]
-                elif isinstance(boundary_obj, str):
-                    boundary_json_str = boundary_obj
-                    try:
-                        parsed = json.loads(boundary_obj)
-                        coords = parsed.get("coordinates", [[]])[0]
-                    except Exception:
-                        coords = []
-                else:
-                    coords = []
-
+                coords, boundary_json_str = geo.extract_linear_ring(boundary_obj)
                 if coords and len(coords) >= 3:
                     calc_m2 = geo.calculate_polygon_area_m2(coords)
                     if calc_m2 > 0:
@@ -243,20 +231,8 @@ class FarmerRepository:
 
             if "boundary_geojson" in field_data:
                 boundary_obj = field_data["boundary_geojson"]
-                if isinstance(boundary_obj, dict):
-                    field.boundary_geojson = json.dumps(boundary_obj)
-                    coords = boundary_obj.get("coordinates", [[]])[0]
-                elif isinstance(boundary_obj, str):
-                    field.boundary_geojson = boundary_obj
-                    try:
-                        parsed = json.loads(boundary_obj)
-                        coords = parsed.get("coordinates", [[]])[0]
-                    except Exception:
-                        coords = []
-                else:
-                    field.boundary_geojson = None
-                    coords = []
-
+                coords, boundary_json_str = geo.extract_linear_ring(boundary_obj)
+                field.boundary_geojson = boundary_json_str
                 if coords and len(coords) >= 3:
                     calc_m2 = geo.calculate_polygon_area_m2(coords)
                     if calc_m2 > 0:
@@ -268,6 +244,8 @@ class FarmerRepository:
                         field.centroid_lat, field.centroid_lng = c_lat, c_lng
                         field.latitude, field.longitude = c_lat, c_lng
                     field.geometry_updated_at = datetime.now(timezone.utc)
+                elif not boundary_json_str:
+                    field.boundary_geojson = None
 
             if ("area_value" in field_data or "area_unit" in field_data) and field.geometry_source != "GEOMETRIC":
                 field.total_area_m2 = models.normalize_area_to_m2(field.area_value, field.area_unit)

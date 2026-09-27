@@ -118,7 +118,7 @@ class NotificationDispatcher:
         if "quiet_hours_enabled" in pref_data: prefs.quiet_hours_enabled = bool(pref_data["quiet_hours_enabled"])
 
         try:
-            prefs.updated_at = datetime.now(timezone.utc)
+            prefs.updated_at = datetime.utcnow()
             self.db.commit()
             self.db.refresh(prefs)
         except Exception as e:
@@ -201,7 +201,7 @@ class NotificationDispatcher:
         return alert_record
 
     def _log_delivery(self, alert_id: str, channel: str, recipient: str, status: str, provider_msg_id: str, error: Optional[str] = None):
-        now_dt = datetime.now(timezone.utc)
+        now_dt = datetime.utcnow()
         delivery = models.NotificationDeliveryRecord(
             alert_id=alert_id,
             channel=channel,

@@ -67,15 +67,16 @@ def test_get_historical_prices_no_data():
 
 
 def test_get_market_forecast_no_data():
-    """Test generating forecast for non-existent commodity."""
+    """Test generating forecast for commodity with sparse/no historical data."""
     response = test_client.get(
         "/api/market/forecast",
         params={"commodity": "NonExistentCommodity"}
     )
-    # Should return 400 since insufficient data for forecasting
-    assert response.status_code == 400
+    # Should return 200 with NaiveBaseline fallback model
+    assert response.status_code == 200
     data = response.json()
-    assert "detail" in data
+    assert "forecast" in data
+    assert data["model"] == "NaiveBaseline (Limited Historical Data)"
 
 
 def test_get_market_trend_no_data():

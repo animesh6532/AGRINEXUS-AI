@@ -134,26 +134,38 @@ export const NotificationPreferencesModal: React.FC<NotificationPreferencesModal
                 <span className="font-bold">Email Digest</span>
               </label>
 
-              <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={sms}
-                  onChange={(e) => setSms(e.target.checked)}
-                  className="rounded text-[#D4E768] focus:ring-0"
-                />
-                <Smartphone className="w-4 h-4 text-amber-400" />
-                <span className="font-bold">SMS (Critical)</span>
+              <label className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10 cursor-not-allowed opacity-75">
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={sms}
+                    onChange={(e) => setSms(e.target.checked)}
+                    disabled
+                    className="rounded text-gray-500 focus:ring-0 cursor-not-allowed"
+                  />
+                  <Smartphone className="w-4 h-4 text-amber-400" />
+                  <span className="font-bold">SMS</span>
+                </div>
+                <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-400/30">
+                  Not Configured
+                </span>
               </label>
 
-              <label className="flex items-center gap-2.5 p-3 rounded-2xl bg-white/5 border border-white/10 cursor-pointer hover:bg-white/10 transition-colors">
-                <input
-                  type="checkbox"
-                  checked={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.checked)}
-                  className="rounded text-[#D4E768] focus:ring-0"
-                />
-                <MessageSquare className="w-4 h-4 text-emerald-400" />
-                <span className="font-bold">WhatsApp Business</span>
+              <label className="flex items-center justify-between p-3 rounded-2xl bg-white/5 border border-white/10 cursor-not-allowed opacity-75">
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    checked={whatsapp}
+                    onChange={(e) => setWhatsapp(e.target.checked)}
+                    disabled
+                    className="rounded text-gray-500 focus:ring-0 cursor-not-allowed"
+                  />
+                  <MessageSquare className="w-4 h-4 text-emerald-400" />
+                  <span className="font-bold">WhatsApp</span>
+                </div>
+                <span className="text-[10px] font-bold text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-400/30">
+                  Not Configured
+                </span>
               </label>
             </div>
           </div>

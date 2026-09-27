@@ -339,6 +339,16 @@ class MarketService:
 
         return observation.to_dict() if observation else None
 
+    def get_latest_market_data(
+        self,
+        commodity: str,
+        state: Optional[str] = None,
+        district: Optional[str] = None,
+        market: Optional[str] = None
+    ) -> Optional[dict]:
+        """Alias for get_latest_price for service compatibility."""
+        return self.get_latest_price(commodity=commodity, state=state, district=district, market=market)
+
     def get_historical_prices(
         self,
         commodity: str,

@@ -45,6 +45,7 @@ import { RiskOpportunityCenter } from '../components/intelligence/RiskOpportunit
 import { PersonalizedActionPlan } from '../components/intelligence/PersonalizedActionPlan';
 import { SmartAlertCenter } from '../components/intelligence/SmartAlertCenter';
 import { NotificationPreferencesModal } from '../components/settings/NotificationPreferencesModal';
+import { EditProfileModal } from '../components/settings/EditProfileModal';
 import { api } from '../services/api';
 
 export const ProfilePage: React.FC = () => {
@@ -78,6 +79,7 @@ export const ProfilePage: React.FC = () => {
   >('overview');
 
   // Modals & Drawers
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
   const [showFarmModal, setShowFarmModal] = useState(false);
   const [showFieldModal, setShowFieldModal] = useState(false);
   const [showCropModal, setShowCropModal] = useState(false);
@@ -241,21 +243,62 @@ export const ProfilePage: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                onClick={() => setShowEditProfileModal(true)}
+                variant="lime"
+                size="sm"
+                icon={<Edit3 className="w-4 h-4 text-[#0B1C10]" />}
+              >
+                Edit Profile
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditingFarm(null);
+                  setShowFarmModal(true);
+                }}
+                variant="secondary"
+                size="sm"
+                icon={<Plus className="w-4 h-4 text-[#D4E768]" />}
+              >
+                Add Farm
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditingField(null);
+                  setShowFieldModal(true);
+                }}
+                variant="secondary"
+                size="sm"
+                icon={<Plus className="w-4 h-4 text-[#D4E768]" />}
+              >
+                Add Field
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditingCrop(null);
+                  setShowCropModal(true);
+                }}
+                variant="secondary"
+                size="sm"
+                icon={<Plus className="w-4 h-4 text-[#D4E768]" />}
+              >
+                Add Crop
+              </Button>
               <Button
                 onClick={() => setShowNotifModal(true)}
                 variant="secondary"
                 size="sm"
                 icon={<Bell className="w-4 h-4 text-[#D4E768]" />}
               >
-                Preferences
+                Notifications
               </Button>
               <Button
                 onClick={() => refreshIntelligence()}
-                variant="lime"
+                variant="secondary"
                 size="sm"
                 disabled={isRefreshing}
-                icon={<RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
+                icon={<RefreshCw className={`w-4 h-4 text-white ${isRefreshing ? 'animate-spin' : ''}`} />}
               >
                 {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </Button>
@@ -1232,6 +1275,15 @@ export const ProfilePage: React.FC = () => {
         preferences={dashboardData?.notification_preferences}
         onSave={saveNotificationPreferences}
         onClose={() => setShowNotifModal(false)}
+      />
+
+      {/* MODAL 6: EDIT FARMER PROFILE MODAL */}
+      <EditProfileModal
+        isOpen={showEditProfileModal}
+        farmer={farmer}
+        userEmail={user?.email}
+        onSave={saveProfile}
+        onClose={() => setShowEditProfileModal(false)}
       />
     </div>
   );
