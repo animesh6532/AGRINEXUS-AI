@@ -15,13 +15,13 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
       case 'device':
         return 'Current Device Location';
       case 'search':
-        return 'Search Result';
+        return 'Search Result Location';
       case 'map':
         return 'Map Selection';
       case 'manual':
         return 'Manual Entry';
       default:
-        return 'Field Location';
+        return 'Application Location';
     }
   };
 
@@ -40,7 +40,7 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
       <button
         onClick={openPicker}
         className={`w-10 h-10 mx-auto rounded-2xl bg-[#112316] hover:bg-white/10 border border-white/10 flex items-center justify-center text-[#D4E768] transition-all group ${className}`}
-        title={location ? `Field Location: ${location.displayName}` : 'Change field location'}
+        title={location ? `Device/App Location: ${location.displayName}` : 'Change device location'}
       >
         <MapPin className="w-4 h-4 group-hover:scale-110 transition-transform" />
       </button>
@@ -52,7 +52,7 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
       <button
         onClick={openPicker}
         className={`w-full p-3 rounded-2xl bg-[#112316] hover:bg-[#162a1c] border border-white/10 hover:border-[#D4E768]/30 transition-all flex items-center justify-between text-left group ${className}`}
-        title="Click to select or update field location"
+        title="Click to select device location"
       >
         <div className="flex items-center gap-2.5 min-w-0 pr-2">
           <div className="w-7 h-7 rounded-xl bg-[#D4E768]/15 text-[#D4E768] flex items-center justify-center shrink-0">
@@ -62,7 +62,7 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full ${location ? 'bg-[#D4E768]' : 'bg-white/30'}`} />
               <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block truncate">
-                FIELD LOCATION
+                APP LOCATION
               </span>
             </div>
             <p className="text-xs font-bold text-[#FAFBF7] truncate">
@@ -80,7 +80,7 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
       <button
         onClick={openPicker}
         className={`inline-flex items-center gap-1.5 text-xs font-semibold text-[#2F6B3C] hover:text-[#0B1C10] transition-colors ${className}`}
-        title="Change location"
+        title="Change application location"
       >
         <MapPin className="w-3.5 h-3.5" />
         <span className="truncate max-w-[140px]">{displayName}</span>
@@ -101,10 +101,10 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-widest text-[#D4E768]/80 block">
-                Field Location
+                Application Location
               </span>
               <p className="text-sm font-bold text-[#FAFBF7] truncate max-w-[200px] sm:max-w-[280px]">
-                {location ? location.displayName : 'No field location set'}
+                {location ? location.displayName : 'No location set'}
               </p>
               {location?.source && (
                 <span className="text-[10px] text-white/50 flex items-center gap-1 mt-0.5">
@@ -126,7 +126,7 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
     <button
       onClick={openPicker}
       className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#EEF3E8] hover:bg-[#E2E7DA] border border-[#E2E7DA] text-xs font-bold text-[#0B1C10] transition-all duration-200 group ${className}`}
-      title="Click to select or update field location"
+      title="Current device location (Click to update)"
     >
       <MapPin className="w-3.5 h-3.5 text-[#2F6B3C] group-hover:scale-110 transition-transform" />
       <span className="truncate max-w-[160px] sm:max-w-[220px]">
@@ -135,5 +135,6 @@ export const LocationBadge: React.FC<LocationBadgeProps> = ({ variant = 'pill', 
       <ChevronDown className="w-3 h-3 text-[#536056] group-hover:translate-y-0.5 transition-transform" />
     </button>
   );
+
 };
 

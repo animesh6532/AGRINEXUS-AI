@@ -24,7 +24,11 @@ interface FarmerProfileContextType {
   error: string | null;
 
   fetchProfile: () => Promise<void>;
-  fetchDashboard: (locationOverride?: { latitude: number; longitude: number; displayName?: string }) => Promise<void>;
+  fetchDashboard: (
+    overrideFarmId?: number,
+    overrideFieldId?: number,
+    locationOverride?: { latitude: number; longitude: number; displayName?: string }
+  ) => Promise<void>;
   saveProfile: (data: Partial<FarmerProfile>) => Promise<void>;
   saveFarm: (data: Partial<FarmRecord>) => Promise<FarmRecord | null>;
   saveField: (data: Partial<FieldRecord> & { farm_id: number }) => Promise<FieldRecord | null>;
@@ -51,6 +55,17 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const [farmer, setFarmer] = useState<FarmerProfile | null>(null);
   const [dashboardData, setDashboardData] = useState<FarmDashboardResponse | null>(null);
+
+  const [selectedFarmId, setSelectedFarmId] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem('agrinexus.selected_farm_id.v1');
+      return saved ? Number(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [selectedFieldId, setSelectedFieldId] = useState<number | null>(null);
+
   const [selectedFarm, setSelectedFarm] = useState<FarmRecord | null>(null);
   const [selectedField, setSelectedField] = useState<FieldRecord | null>(null);
   const [selectedCrop, setSelectedCrop] = useState<CropPlanting | null>(null);
@@ -68,25 +83,28 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       if (data && data.full_name) {
         updateProfile({ name: data.full_name });
       }
-      if (data.farms && data.farms.length > 0) {
-        setSelectedFarm((prev) => prev || data.farms[0]);
-      }
     } catch (err: any) {
       console.warn('Failed to fetch farmer profile:', err);
     }
   }, [userId, updateProfile]);
 
   const fetchDashboard = useCallback(
-    async (locationOverride?: { latitude: number; longitude: number; displayName?: string }) => {
+    async (
+      overrideFarmId?: number,
+      overrideFieldId?: number,
+      locationOverride?: { latitude: number; longitude: number; displayName?: string }
+    ) => {
       const currentRequestId = ++requestIdRef.current;
       setIsRefreshing(true);
       setError(null);
       try {
+        const farmId = overrideFarmId ?? selectedFarmId ?? undefined;
+        const fieldId = overrideFieldId ?? selectedFieldId ?? undefined;
         const lat = locationOverride?.latitude;
         const lon = locationOverride?.longitude;
         const name = locationOverride?.displayName;
 
-        const data = await api.getFarmerDashboard(userId, lat, lon, name);
+        const data = await api.getFarmerDashboard(userId, farmId, fieldId, lat, lon, name);
         if (currentRequestId !== requestIdRef.current) {
           return;
         }
@@ -95,6 +113,33 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
           setFarmer(data.farmer);
           if (data.farmer.full_name) {
             updateProfile({ name: data.farmer.full_name });
+          }
+
+          // Sync selected farm & field entities from dashboard response
+          const returnedFarms = data.farmer.farms || [];
+          if (returnedFarms.length > 0) {
+            const match = returnedFarms.find((f: FarmRecord) => f.id === (data.selected_farm_id || farmId)) || returnedFarms[0];
+            setSelectedFarm(match);
+            setSelectedFarmId(match.id);
+            try {
+              localStorage.setItem('agrinexus.selected_farm_id.v1', String(match.id));
+            } catch {
+              // Ignore
+            }
+
+            if (match.fields && match.fields.length > 0) {
+              const fieldMatch = match.fields.find((fl: FieldRecord) => fl.id === (data.selected_field_id || fieldId)) || match.fields[0];
+              setSelectedField(fieldMatch);
+              setSelectedFieldId(fieldMatch.id);
+            } else {
+              setSelectedField(null);
+              setSelectedFieldId(null);
+            }
+          } else {
+            setSelectedFarm(null);
+            setSelectedFarmId(null);
+            setSelectedField(null);
+            setSelectedFieldId(null);
           }
         }
       } catch (err: any) {
@@ -108,10 +153,10 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       }
     },
-    [userId, updateProfile]
+    [userId, selectedFarmId, selectedFieldId, updateProfile]
   );
 
-  // Clear state when user identity changes (login, logout, switch) or location changes
+  // Clear state when user identity changes
   useEffect(() => {
     setFarmer(null);
     setDashboardData(null);
@@ -119,16 +164,42 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     setSelectedField(null);
     setSelectedCrop(null);
     setIsLoading(true);
-    if (location) {
-      fetchDashboard({
-        latitude: location.latitude,
-        longitude: location.longitude,
-        displayName: location.displayName,
-      });
-    } else {
-      fetchDashboard();
-    }
-  }, [userId, location?.latitude, location?.longitude, location?.displayName, fetchDashboard]);
+    fetchDashboard();
+  }, [userId, fetchDashboard]);
+
+  const handleSelectFarm = useCallback(
+    (farm: FarmRecord | null) => {
+      setSelectedFarm(farm);
+      const farmId = farm ? farm.id : null;
+      setSelectedFarmId(farmId);
+      if (farmId) {
+        try {
+          localStorage.setItem('agrinexus.selected_farm_id.v1', String(farmId));
+        } catch {
+          // Ignore
+        }
+      } else {
+        try {
+          localStorage.removeItem('agrinexus.selected_farm_id.v1');
+        } catch {
+          // Ignore
+        }
+      }
+      fetchDashboard(farmId || undefined, undefined);
+    },
+    [fetchDashboard]
+  );
+
+  const handleSelectField = useCallback(
+    (field: FieldRecord | null) => {
+      setSelectedField(field);
+      const fieldId = field ? field.id : null;
+      setSelectedFieldId(fieldId);
+      fetchDashboard(selectedFarmId || undefined, fieldId || undefined);
+    },
+    [fetchDashboard, selectedFarmId]
+  );
+
 
   const saveProfile = async (data: Partial<FarmerProfile>) => {
     setIsRefreshing(true);
@@ -138,7 +209,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
       if (updated && updated.full_name) {
         updateProfile({ name: updated.full_name });
       }
-      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
+      await fetchDashboard(undefined, undefined, location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
     } catch (err: any) {
       setError(err.message || 'Failed to save farmer profile.');
       throw err;
@@ -157,7 +228,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         result = await api.createFarm(data, userId);
       }
       setSelectedFarm(result);
-      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
+      await fetchDashboard(undefined, undefined, location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return result;
     } catch (err: any) {
       setError(err.message || 'Failed to save farm.');
@@ -177,7 +248,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         result = await api.createField(data, userId);
       }
       setSelectedField(result);
-      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
+      await fetchDashboard(undefined, undefined, location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return result;
     } catch (err: any) {
       setError(err.message || 'Failed to save field.');
@@ -197,7 +268,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         result = await api.createCrop(data, userId);
       }
       setSelectedCrop(result);
-      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
+      await fetchDashboard(undefined, undefined, location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return result;
     } catch (err: any) {
       setError(err.message || 'Failed to save crop planting.');
@@ -212,7 +283,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await api.deleteFarm(farmId, userId);
       if (selectedFarm?.id === farmId) setSelectedFarm(null);
-      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
+      await fetchDashboard(undefined, undefined, location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return true;
     } catch (err: any) {
       setError(err.message || 'Failed to delete farm.');
@@ -227,7 +298,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await api.deleteField(fieldId, userId);
       if (selectedField?.id === fieldId) setSelectedField(null);
-      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
+      await fetchDashboard(undefined, undefined, location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return true;
     } catch (err: any) {
       setError(err.message || 'Failed to delete field.');
@@ -242,7 +313,7 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       await api.deleteCrop(cropId, userId);
       if (selectedCrop?.id === cropId) setSelectedCrop(null);
-      await fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
+      await fetchDashboard(undefined, undefined, location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined);
       return true;
     } catch (err: any) {
       setError(err.message || 'Failed to delete crop planting.');
@@ -317,11 +388,11 @@ export const FarmerProfileProvider: React.FC<{ children: React.ReactNode }> = ({
         completeAction,
         saveObservation,
         saveNotificationPreferences,
-        selectFarm: setSelectedFarm,
-        selectField: setSelectedField,
+        selectFarm: handleSelectFarm,
+        selectField: handleSelectField,
         selectCrop: setSelectedCrop,
-        refreshIntelligence: () =>
-          fetchDashboard(location ? { latitude: location.latitude, longitude: location.longitude, displayName: location.displayName } : undefined),
+        refreshIntelligence: () => fetchDashboard(selectedFarmId || undefined, selectedFieldId || undefined),
+
       }}
     >
       {children}

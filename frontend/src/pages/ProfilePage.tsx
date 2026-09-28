@@ -53,7 +53,9 @@ import { PersonalizedActionPlan } from '../components/intelligence/PersonalizedA
 import { SmartAlertCenter } from '../components/intelligence/SmartAlertCenter';
 import { NotificationPreferencesModal } from '../components/settings/NotificationPreferencesModal';
 import { EditProfileModal } from '../components/settings/EditProfileModal';
+import { FarmSelectorModal } from '../components/location/FarmSelectorModal';
 import { api } from '../services/api';
+
 
 export const ProfilePage: React.FC = () => {
   const navigate = useNavigate();
@@ -66,6 +68,7 @@ export const ProfilePage: React.FC = () => {
     fields,
     activeCrops,
     dashboardData,
+    selectedFarm,
     isLoading,
     isRefreshing,
     error,
@@ -93,6 +96,8 @@ export const ProfilePage: React.FC = () => {
   const [showCropModal, setShowCropModal] = useState(false);
   const [showObservationModal, setShowObservationModal] = useState(false);
   const [showNotifModal, setShowNotifModal] = useState(false);
+  const [showFarmSelectorModal, setShowFarmSelectorModal] = useState(false);
+
 
   // Editing state objects
   const [editingFarm, setEditingFarm] = useState<any>(null);
@@ -232,16 +237,16 @@ export const ProfilePage: React.FC = () => {
             {/* Quick Metrics Badges Bar */}
             <div className="flex flex-wrap items-center gap-2 text-xs font-bold pt-1">
               <span className="px-3 py-1 rounded-xl bg-white/10 text-white border border-white/15">
-                {fields.length} Field{fields.length !== 1 ? 's' : ''}
+                {dashboardData?.summary ? dashboardData.summary.fieldCount : fields.length} Field{(dashboardData?.summary ? dashboardData.summary.fieldCount : fields.length) !== 1 ? 's' : ''}
               </span>
               <span className="px-3 py-1 rounded-xl bg-[#D4E768]/20 text-[#D4E768] border border-[#D4E768]/30">
-                {activeCrops.length} Active Crop{activeCrops.length !== 1 ? 's' : ''}
+                {dashboardData?.summary ? dashboardData.summary.activeCropCount : activeCrops.length} Active Crop{(dashboardData?.summary ? dashboardData.summary.activeCropCount : activeCrops.length) !== 1 ? 's' : ''}
               </span>
-              <span className="px-3 py-1 rounded-xl bg-sky-500/20 text-sky-300 border border-sky-400/30 flex items-center gap-1">
-                <CloudSun className="w-3.5 h-3.5" /> Weather Watch
+              <span className="px-3 py-1 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                {dashboardData?.summary ? dashboardData.summary.activeCropFieldCount : 0} Active Crop Field{(dashboardData?.summary ? dashboardData.summary.activeCropFieldCount : 0) !== 1 ? 's' : ''}
               </span>
               <span className="px-3 py-1 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-400/30 flex items-center gap-1">
-                <Activity className="w-3.5 h-3.5" /> {dashboardData?.action_plan?.total_actions || 0} Actions
+                <Activity className="w-3.5 h-3.5" /> {dashboardData?.summary ? dashboardData.summary.actionCount : (dashboardData?.action_plan?.total_actions || 0)} Actions
               </span>
             </div>
           </div>
@@ -249,14 +254,24 @@ export const ProfilePage: React.FC = () => {
           <div className="flex flex-col sm:flex-row lg:flex-col items-start lg:items-end gap-3">
             <div className="flex items-center gap-2 text-xs bg-white/5 px-4 py-2 rounded-2xl border border-white/10 text-white/90">
               <MapPin className="w-4 h-4 text-[#D4E768] shrink-0" />
-              <span className="font-semibold truncate max-w-[200px]">{locationName}</span>
+              <div className="min-w-0">
+                <span className="text-[10px] text-[#D4E768] uppercase font-bold block leading-none mb-0.5">SELECTED FARM</span>
+                <span className="font-semibold truncate max-w-[220px] block">
+                  {selectedFarm
+                    ? `${selectedFarm.farm_name}`
+                    : dashboardData?.location?.farm_name
+                    ? `${dashboardData.location.farm_name}`
+                    : locationName}
+                </span>
+              </div>
               <button
-                onClick={openPicker}
-                className="text-[#D4E768] hover:underline font-bold text-[11px] ml-1 shrink-0"
+                onClick={() => setShowFarmSelectorModal(true)}
+                className="text-[#D4E768] hover:underline font-bold text-[11px] ml-1 shrink-0 bg-[#D4E768]/15 px-2.5 py-1 rounded-xl border border-[#D4E768]/30"
               >
-                Change
+                Change Farm
               </button>
             </div>
+
 
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -394,7 +409,7 @@ export const ProfilePage: React.FC = () => {
                 <Badge variant="info">LIVE</Badge>
               </div>
               <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
-                {dashboardData?.today_status.weather_summary || '31°C • Forecast 12mm'}
+                {dashboardData?.today_status.weather_summary || 'Weather telemetry unavailable'}
               </p>
               <p className="text-[11px] text-[#536056]">Open-Meteo validated telemetry</p>
             </GlassCard>
@@ -402,10 +417,12 @@ export const ProfilePage: React.FC = () => {
             <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-emerald-500">
               <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                 <span className="flex items-center gap-1.5"><Database className="w-4 h-4 text-emerald-500" /> SOIL STATUS</span>
-                <Badge variant="success">TESTED</Badge>
+                <Badge variant={dashboardData?.today_status.soil_summary?.includes('recorded') ? 'success' : 'neutral'}>
+                  {dashboardData?.today_status.soil_summary?.includes('recorded') ? 'TESTED' : 'UNTESTED'}
+                </Badge>
               </div>
               <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
-                {dashboardData?.today_status.soil_summary || 'pH 6.5 • N 90 kg/ha'}
+                {dashboardData?.today_status.soil_summary || 'No measured soil test available'}
               </p>
               <p className="text-[11px] text-[#536056]">Field soil telemetry provenance</p>
             </GlassCard>
@@ -413,10 +430,12 @@ export const ProfilePage: React.FC = () => {
             <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-blue-500">
               <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                 <span className="flex items-center gap-1.5"><Droplets className="w-4 h-4 text-blue-500" /> WATER STATUS</span>
-                <Badge variant="warning">MONITOR</Badge>
+                <Badge variant={activeCrops.length > 0 ? 'warning' : 'neutral'}>
+                  {activeCrops.length > 0 ? 'MONITOR' : 'IDLE'}
+                </Badge>
               </div>
               <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
-                {dashboardData?.today_status.water_summary || '2 Active Crop Fields'}
+                {dashboardData?.today_status.water_summary || 'No active crop fields'}
               </p>
               <p className="text-[11px] text-[#536056]">SWC & ET0 irrigation requirement</p>
             </GlassCard>
@@ -424,14 +443,15 @@ export const ProfilePage: React.FC = () => {
             <GlassCard variant="solid" className="p-5 space-y-2 border-l-4 border-l-amber-500">
               <div className="flex justify-between items-center text-xs text-[#536056] font-bold">
                 <span className="flex items-center gap-1.5"><TrendingUp className="w-4 h-4 text-amber-500" /> MARKET WATCH</span>
-                <Badge variant="primary">RISING</Badge>
+                <Badge variant="primary">LIVE</Badge>
               </div>
               <p className="text-lg font-extrabold text-[#0B1C10] font-editorial">
-                {dashboardData?.today_status.market_summary || 'Tracking Active Crops'}
+                {dashboardData?.today_status.market_summary || 'No active crops registered'}
               </p>
               <p className="text-[11px] text-[#536056]">AGMARKNET live prices</p>
             </GlassCard>
           </div>
+
 
           {/* FARM AI COPILOT INTERACTIVE ASSISTANT COMMAND BANNER */}
           <GlassCard
@@ -1934,6 +1954,17 @@ export const ProfilePage: React.FC = () => {
         onSave={saveProfile}
         onClose={() => setShowEditProfileModal(false)}
       />
+
+      {/* MODAL 7: FARM SELECTOR MODAL */}
+      <FarmSelectorModal
+        isOpen={showFarmSelectorModal}
+        onClose={() => setShowFarmSelectorModal(false)}
+        onOpenAddFarm={() => {
+          setEditingFarm(null);
+          setShowFarmModal(true);
+        }}
+      />
+
     </div>
   );
 };

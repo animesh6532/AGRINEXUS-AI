@@ -283,3 +283,51 @@ def test_area_unit_conversions():
 
     assert farm_ha["total_area_m2"] == pytest.approx(20000.0, rel=1e-3)
 
+
+def test_canonical_summary_and_multi_farm_switching():
+    headers = {"X-User-ID": "multi_farm_user"}
+
+    # Step 1: Create Farm A (2 fields, 2 active crops on field 1, 1 active crop on field 2)
+    farm_a = client.post(
+        "/api/v1/farmer/farms",
+        json={"farm_name": "Farm Alpha", "location_name": "Champadali, North 24 Parganas", "latitude": 22.71, "longitude": 88.45, "area_value": 4.0},
+        headers=headers,
+    ).json()
+
+    farm_b = client.post(
+        "/api/v1/farmer/farms",
+        json={"farm_name": "Farm Beta", "location_name": "Barasat, West Bengal", "latitude": 22.72, "longitude": 88.48, "area_value": 6.0},
+        headers=headers,
+    ).json()
+
+    # Fields on Farm A
+    f_a1 = client.post("/api/v1/farmer/fields", json={"farm_id": farm_a["id"], "field_name": "Field A1", "area_value": 2.0}, headers=headers).json()
+    f_a2 = client.post("/api/v1/farmer/fields", json={"farm_id": farm_a["id"], "field_name": "Field A2", "area_value": 2.0}, headers=headers).json()
+
+    # Field on Farm B
+    f_b1 = client.post("/api/v1/farmer/fields", json={"farm_id": farm_b["id"], "field_name": "Field B1", "area_value": 6.0}, headers=headers).json()
+
+    # Crop on Farm A Field A1
+    client.post("/api/v1/farmer/crops", json={"field_id": f_a1["id"], "crop_name": "Rice", "status": "ACTIVE"}, headers=headers)
+    # Crop on Farm B Field B1
+    client.post("/api/v1/farmer/crops", json={"field_id": f_b1["id"], "crop_name": "Potato", "status": "ACTIVE"}, headers=headers)
+
+    # Dashboard with Farm A selected
+    dash_a = client.get(f"/api/v1/farmer/dashboard?farm_id={farm_a['id']}", headers=headers).json()
+    assert dash_a["summary"]["farmCount"] == 2
+    assert dash_a["summary"]["fieldCount"] == 2
+    assert dash_a["summary"]["activeCropCount"] == 1
+    assert dash_a["summary"]["activeCropFieldCount"] == 1
+    assert dash_a["location"]["display_name"] == "Champadali, North 24 Parganas"
+    assert dash_a["system_status"]["overall"] in ("Operational", "Degraded")
+
+    # Dashboard with Farm B selected
+    dash_b = client.get(f"/api/v1/farmer/dashboard?farm_id={farm_b['id']}", headers=headers).json()
+    assert dash_b["summary"]["farmCount"] == 2
+    assert dash_b["summary"]["fieldCount"] == 1
+    assert dash_b["summary"]["activeCropCount"] == 1
+    assert dash_b["summary"]["activeCropFieldCount"] == 1
+    assert dash_b["location"]["display_name"] == "Barasat, West Bengal"
+    assert dash_b["active_crop_cards"][0]["crop_name"] == "Potato"
+
+

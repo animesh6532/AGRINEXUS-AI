@@ -1,6 +1,8 @@
 export interface PageContext {
   route: string;
   page_name: string;
+  selected_farm_id?: number;
+  selected_farm_name?: string;
   selected_field_id?: number;
   selected_field_name?: string;
   selected_crop_id?: number;
@@ -11,6 +13,7 @@ export interface PageContext {
     displayName: string;
   };
 }
+
 
 export interface AssistantToolCall {
   tool_name: string;

@@ -478,9 +478,22 @@ export const api = {
     return handleResponse<any>(res);
   },
 
-  async getFarmerDashboard(userId?: string, lat?: number, lon?: number, displayName?: string): Promise<any> {
+  async getFarmerDashboard(
+    userId?: string,
+    farmId?: number,
+    fieldId?: number,
+    lat?: number,
+    lon?: number,
+    displayName?: string
+  ): Promise<any> {
     let url = `${BASE_URL}/api/v1/farmer/dashboard`;
     const params: string[] = [];
+    if (farmId !== undefined && farmId !== null) {
+      params.push(`farm_id=${farmId}`);
+    }
+    if (fieldId !== undefined && fieldId !== null) {
+      params.push(`field_id=${fieldId}`);
+    }
     if (lat !== undefined && lon !== undefined) {
       params.push(`lat=${lat}`, `lon=${lon}`);
     }
@@ -496,6 +509,7 @@ export const api = {
     });
     return handleResponse<any>(res);
   },
+
 
   async createFarm(payload: any, userId?: string): Promise<any> {
     const res = await fetch(`${BASE_URL}/api/v1/farmer/farms`, {

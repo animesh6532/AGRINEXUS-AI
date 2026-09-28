@@ -349,18 +349,40 @@ export interface ActiveCropCard {
   market_trend: string;
 }
 
+export interface CanonicalDashboardSummary {
+  farmCount: number;
+  fieldCount: number;
+  activeCropCount: number;
+  activeCropFieldCount: number;
+  actionCount: number;
+}
+
+export interface SystemStatusSummary {
+  overall: 'Operational' | 'Degraded' | 'Unavailable' | 'Refreshing';
+  database: string;
+  weather: string;
+  market: string;
+  models: string;
+  alerts: string;
+}
+
 export interface FarmDashboardResponse {
   farmer: FarmerProfile;
+  selected_farm_id?: number | null;
+  selected_field_id?: number | null;
   location: {
     latitude: number;
     longitude: number;
     display_name: string;
     source: string;
+    farm_name?: string;
   };
   total_farm_area: number;
   total_farm_area_unit: string;
   active_crops_count: number;
   fields_count: number;
+  summary: CanonicalDashboardSummary;
+  system_status?: SystemStatusSummary;
   today_status: TodayFarmStatus;
   active_crop_cards: ActiveCropCard[];
   weather_impacts: WeatherImpactItem[];
@@ -392,3 +414,4 @@ export interface FarmDashboardResponse {
   data_quality: DataQualitySummary;
   last_updated: string;
 }
+

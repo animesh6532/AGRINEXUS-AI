@@ -61,6 +61,8 @@ def update_farmer_profile(
 
 @router.get("/dashboard")
 async def get_farmer_dashboard(
+    farm_id: Optional[int] = Query(None, description="Optional selected farm ID"),
+    field_id: Optional[int] = Query(None, description="Optional selected field ID"),
     lat: Optional[float] = Query(None, description="Optional override latitude"),
     lon: Optional[float] = Query(None, description="Optional override longitude"),
     display_name: Optional[str] = Query(None, description="Optional location name"),
@@ -75,8 +77,11 @@ async def get_farmer_dashboard(
     if lat is not None and lon is not None:
         location_override = {"latitude": lat, "longitude": lon, "displayName": display_name}
 
-    dashboard = await service.get_dashboard(user_id, location_override=location_override)
+    dashboard = await service.get_dashboard(
+        user_id, farm_id=farm_id, field_id=field_id, location_override=location_override
+    )
     return dashboard
+
 
 
 @router.post("/farms")

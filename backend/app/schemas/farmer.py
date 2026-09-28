@@ -345,6 +345,14 @@ class ImpactMatrixRow(BaseModel):
     attention_level: str  # "High", "Medium", "Low"
 
 
+class CanonicalDashboardSummary(BaseModel):
+    farmCount: int = 0
+    fieldCount: int = 0
+    activeCropCount: int = 0
+    activeCropFieldCount: int = 0
+    actionCount: int = 0
+
+
 class DataQualitySummary(BaseModel):
     location_confidence: str
     weather_freshness: str
@@ -363,13 +371,26 @@ class TodayFarmStatus(BaseModel):
     action_items_count: int
 
 
+class SystemStatusSummary(BaseModel):
+    overall: str = "Operational"  # "Operational", "Degraded", "Unavailable", "Refreshing"
+    database: str = "OK"
+    weather: str = "OK"
+    market: str = "OK"
+    models: str = "OK"
+    alerts: str = "OK"
+
+
 class FarmDashboardResponse(BaseModel):
     farmer: FarmerProfileResponse
+    selected_farm_id: Optional[int] = None
+    selected_field_id: Optional[int] = None
     location: Dict[str, Any]
     total_farm_area: float
     total_farm_area_unit: str
     active_crops_count: int
     fields_count: int
+    summary: CanonicalDashboardSummary
+    system_status: SystemStatusSummary = PydanticField(default_factory=SystemStatusSummary)
     today_status: TodayFarmStatus
     active_crop_cards: List[Dict[str, Any]]
     weather_impacts: List[WeatherImpactItem]
@@ -384,3 +405,4 @@ class FarmDashboardResponse(BaseModel):
     impact_matrix: List[ImpactMatrixRow]
     data_quality: DataQualitySummary
     last_updated: str
+

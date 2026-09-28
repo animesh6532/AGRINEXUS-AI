@@ -45,13 +45,19 @@ export function usePageContext(): PageContext {
     // Context unmounted
   }
 
+  let selectedFarmId: number | undefined = undefined;
+  let selectedFarmName: string | undefined = undefined;
   let selectedFieldId: number | undefined = undefined;
   let selectedFieldName: string | undefined = undefined;
   let selectedCropId: number | undefined = undefined;
   let selectedCropName: string | undefined = undefined;
 
   try {
-    const { selectedField, selectedCrop } = useFarmerProfile();
+    const { selectedFarm, selectedField, selectedCrop } = useFarmerProfile();
+    if (selectedFarm) {
+      selectedFarmId = selectedFarm.id;
+      selectedFarmName = selectedFarm.farm_name;
+    }
     if (selectedField) {
       selectedFieldId = selectedField.id;
       selectedFieldName = selectedField.field_name;
@@ -67,6 +73,8 @@ export function usePageContext(): PageContext {
   return {
     route: pathname,
     page_name: pageName,
+    selected_farm_id: selectedFarmId,
+    selected_farm_name: selectedFarmName,
     selected_field_id: selectedFieldId,
     selected_field_name: selectedFieldName,
     selected_crop_id: selectedCropId,
@@ -74,3 +82,4 @@ export function usePageContext(): PageContext {
     selected_location: userLocation,
   };
 }
+

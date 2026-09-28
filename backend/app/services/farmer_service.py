@@ -458,27 +458,52 @@ class FarmIntelligenceService:
         self.action_plan_service = ActionPlanService()
         self.notification_dispatcher = NotificationDispatcher(db=db)
 
-    async def get_dashboard(self, user_id: str, location_override: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def get_dashboard(
+        self,
+        user_id: str,
+        farm_id: Optional[int] = None,
+        field_id: Optional[int] = None,
+        location_override: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         """Aggregate full personalized farm intelligence for the Farm Command Center."""
         profile = self.repo.get_or_create_profile(user_id)
 
-        # Build farms, fields, active crops list
-        farms = self.db.query(models.Farm).filter(models.Farm.farmer_id == profile.id).all()
-        fields: List[models.Field] = []
-        for farm in farms:
-            fields.extend(farm.fields)
+        # Build farms list
+        all_farms = self.db.query(models.Farm).filter(models.Farm.farmer_id == profile.id).all()
+
+        # Select target farm
+        selected_farm: Optional[models.Farm] = None
+        if farm_id:
+            selected_farm = next((f for f in all_farms if f.id == farm_id), None)
+        if not selected_farm and all_farms:
+            selected_farm = all_farms[0]
+
+        # Determine fields to use (belonging to selected farm, or all fields)
+        if selected_farm:
+            fields = list(selected_farm.fields)
+        else:
+            fields = []
+            for f in all_farms:
+                fields.extend(f.fields)
+
+        # Select target field if specified
+        selected_field: Optional[models.Field] = None
+        if field_id:
+            selected_field = next((fl for fl in fields if fl.id == field_id), None)
+        if not selected_field and fields:
+            selected_field = fields[0]
 
         active_crops: List[models.CropPlanting] = []
-        for field in fields:
-            for planting in field.plantings:
+        for fl in fields:
+            for planting in fl.plantings:
                 if planting.status == "ACTIVE":
                     active_crops.append(planting)
 
         # Primary location resolution (Canonical Location System)
-        primary_farm = farms[0] if farms else None
-        lat = primary_farm.latitude if primary_farm else 22.5726
-        lon = primary_farm.longitude if primary_farm else 88.3639
-        location_name = primary_farm.location_name if primary_farm else "North 24 Parganas, West Bengal"
+        # Farm location takes precedence for farm weather & intelligence
+        lat = selected_farm.latitude if selected_farm else 22.5726
+        lon = selected_farm.longitude if selected_farm else 88.3639
+        location_name = selected_farm.location_name if selected_farm and selected_farm.location_name else "North 24 Parganas, West Bengal"
 
         if location_override and "latitude" in location_override and "longitude" in location_override:
             lat = float(location_override["latitude"])
@@ -490,7 +515,8 @@ class FarmIntelligenceService:
             "latitude": lat,
             "longitude": lon,
             "display_name": location_name,
-            "source": "PROFILE" if primary_farm else "DEFAULT",
+            "source": "SELECTED_FARM" if selected_farm else "DEFAULT",
+            "farm_name": selected_farm.farm_name if selected_farm else None,
         }
 
         # Fetch Weather safely
@@ -597,8 +623,8 @@ class FarmIntelligenceService:
 
         # Fetch observations
         obs_records = []
-        for field in fields:
-            for obs in field.observations:
+        for fl in fields:
+            for obs in fl.observations:
                 obs_records.append(obs.to_dict())
 
         # Fetch notification preferences
@@ -615,18 +641,37 @@ class FarmIntelligenceService:
         )
 
         # Calculate Data Quality & Completeness
-        data_quality = self._calculate_data_quality(farms, fields, active_crops, current_weather, market_watch)
+        data_quality = self._calculate_data_quality(profile, all_farms, fields, active_crops, current_weather, market_watch)
 
-        # Calculate Summaries
-        total_area = sum(f.area_value for f in farms) if farms else 0.0
-        area_unit = farms[0].area_unit if farms else "acre"
+        # Calculate Summaries & Canonical Metrics
+        total_area = sum(f.area_value for f in all_farms) if all_farms else 0.0
+        area_unit = all_farms[0].area_unit if all_farms else "acre"
+
+        distinct_crop_fields = len(set(c.field_id for c in active_crops))
+
+        canonical_summary = {
+            "farmCount": len(all_farms),
+            "fieldCount": len(fields),
+            "activeCropCount": len(active_crops),
+            "activeCropFieldCount": distinct_crop_fields,
+            "actionCount": len(action_plan_res.actions),
+        }
+
+        system_status = {
+            "overall": "Operational" if current_weather is not None else "Degraded",
+            "database": "OK",
+            "weather": "OK" if current_weather is not None else "Unavailable",
+            "market": "OK" if market_watch else "Unavailable",
+            "models": "OK",
+            "alerts": "OK",
+        }
 
         today_temp = f"{current_weather.get('temperature', '--')}°C" if current_weather else "N/A"
         today_rain = f"{current_weather.get('precipitation', 0)} mm" if current_weather else "0 mm"
 
         weather_status_str = f"{today_temp} • Rain {today_rain}" if current_weather else "Weather telemetry unavailable"
-        soil_status_str = "Soil lab data recorded" if any(f.soil_test_available for f in fields) else "Soil test recommended"
-        water_status_str = f"Monitoring {len(active_crops)} active crop field(s)" if active_crops else "No active crops registered"
+        soil_status_str = "Soil lab data recorded" if any(f.soil_test_available for f in fields) else "No measured soil test available"
+        water_status_str = f"{distinct_crop_fields} Active Crop Field{'s' if distinct_crop_fields != 1 else ''}" if distinct_crop_fields > 0 else "No active crop fields"
         avail_markets = [m for m in market_watch if m.get("available")]
         market_status_str = f"Tracking {len(avail_markets)} crop market(s)" if avail_markets else ("No market data for current crop" if active_crops else "No active crops registered")
 
@@ -653,16 +698,20 @@ class FarmIntelligenceService:
                     for fl in f.fields
                 ],
             }
-            for f in farms
+            for f in all_farms
         ]
 
         return {
             "farmer": profile_dict,
+            "selected_farm_id": selected_farm.id if selected_farm else None,
+            "selected_field_id": selected_field.id if selected_field else None,
             "location": location_info,
             "total_farm_area": round(total_area, 2),
             "total_farm_area_unit": area_unit,
             "active_crops_count": len(active_crops),
             "fields_count": len(fields),
+            "summary": canonical_summary,
+            "system_status": system_status,
             "today_status": today_status,
             "active_crop_cards": active_crop_cards,
             "weather_impacts": weather_impacts,
@@ -682,6 +731,7 @@ class FarmIntelligenceService:
             "data_quality": data_quality,
             "last_updated": datetime.now(timezone.utc).isoformat(),
         }
+
 
     def _get_field_for_crop(self, crop: models.CropPlanting, fields: List[models.Field]) -> Optional[models.Field]:
         for f in fields:
@@ -1300,6 +1350,7 @@ class FarmIntelligenceService:
 
     def _calculate_data_quality(
         self,
+        profile: models.FarmerProfile,
         farms: List[models.Farm],
         fields: List[models.Field],
         crops: List[models.CropPlanting],
@@ -1307,16 +1358,57 @@ class FarmIntelligenceService:
         market_watch: List[Dict[str, Any]],
     ) -> Dict[str, Any]:
         missing = []
-        if not farms:
+        total_points = 8
+        points = 0
+
+        # 1. Profile completeness
+        if profile.full_name and (profile.phone or profile.email):
+            points += 1
+        else:
+            missing.append("Farmer phone/email contact details")
+
+        # 2. Location completeness
+        if profile.location or (farms and farms[0].location_name):
+            points += 1
+        else:
+            missing.append("Farm / Profile residence location")
+
+        # 3. Farm configuration
+        if farms:
+            points += 1
+        else:
             missing.append("Farm profile")
-        if not fields:
-            missing.append("Field records")
-        if not crops:
+
+        # 4. Field boundaries & mapping
+        if fields:
+            points += 1
+        else:
+            missing.append("Field boundary records")
+
+        # 5. Crop cultivation
+        if crops:
+            points += 1
+        else:
             missing.append("Active crop cultivation")
 
+        # 6. Soil lab test measurements
         soil_tested = any(f.soil_test_available for f in fields) if fields else False
-        if not soil_tested:
-            missing.append("Soil test lab measurements")
+        if soil_tested:
+            points += 1
+        else:
+            missing.append("Measured soil test lab results")
+
+        # 7. Weather telemetry
+        if current_wx:
+            points += 1
+        else:
+            missing.append("Live weather telemetry stream")
+
+        # 8. Market tracking
+        if market_watch and any(m.get("available") for m in market_watch):
+            points += 1
+        else:
+            missing.append("Mandi market price tracking")
 
         npk_count = 0
         if fields:
@@ -1324,15 +1416,6 @@ class FarmIntelligenceService:
             if f0.nitrogen is not None: npk_count += 1
             if f0.phosphorus is not None: npk_count += 1
             if f0.potassium is not None: npk_count += 1
-
-        total_points = 6
-        points = 0
-        if farms: points += 1
-        if fields: points += 1
-        if crops: points += 1
-        if current_wx: points += 1
-        if soil_tested: points += 1
-        if market_watch: points += 1
 
         completeness_pct = round((points / total_points) * 100.0, 1)
 
@@ -1345,3 +1428,4 @@ class FarmIntelligenceService:
             "profile_completeness_pct": completeness_pct,
             "missing_fields": missing,
         }
+
